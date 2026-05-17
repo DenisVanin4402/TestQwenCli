@@ -28,20 +28,19 @@
 - JDK 21, установленный и доступный в `PATH`
 - Maven 3.9+ (`mvn`)
 
-### Команды
+# Локальные команды
 
 ```bash
-# Запустить все тесты
-mvn test
+# Сборка и тестирование
+mvn clean compile                   # Очистить и скомпилировать
+mvn test                            # Запустить все тесты
+mvn test -Dtest=ClassName           # Запустить один тестовый класс
+mvn package                         # Собрать JAR
+mvn spring-boot:run                 # Запустить приложение
 
-# Запустить приложение
-mvn spring-boot:run
-
-# Собрать JAR-пакет
-mvn package
-
-# Очистить артефакты сборки
-mvn clean
+# SDD-проверки (spec lint)
+bash scripts/sdd-lint.sh            # Spec lint (Linux/macOS)
+scripts\sdd-lint.bat               # Spec lint (Windows)
 ```
 
 ### IntelliJ IDEA
@@ -54,21 +53,59 @@ mvn clean
 
 ```
 TestQwenCli/
-├── pom.xml                          # Maven-конфигурация, родитель — Spring Boot 3.4.3
+├── AGENTS.md                         # Инструкции для AI coding-агентов (cross-tool)
+├── CONVENTIONS.md                    # Соглашения, локальные команды, структура
+├── QWEN.md                           # Данный файл — Qwen CLI project memory
+├── pom.xml                           # Maven-конфигурация
 ├── src/
-│   ├── main/
-│   │   ├── java/com/example/testqwencli/
-│   │   │   ├── TestQwenCliApplication.java   # Точка входа Spring Boot
-│   │   │   └── HomeController.java           # REST-контроллер (GET /)
-│   │   └── resources/
-│   │       └── application.properties        # Конфигурация приложения
+│   ├── main/java/com/example/testqwencli/
+│   │   ├── TestQwenCliApplication.java
+│   │   └── HomeController.java
+│   ├── main/resources/
+│   │   └── application.properties
 │   └── test/java/com/example/testqwencli/
-│       └── TestQwenCliApplicationTests.java  # Интеграционные тесты с MockMvc
+│       └── TestQwenCliApplicationTests.java
 ├── docs/
-│   ├── agentic-sdd-research.md      # Исследование SDD для AI coding-агентов
-│   └── sdd-plan.md                  # План внедрения SDD-процесса
-├── target/                          # Артефакты сборки (игнорируется в git)
-└── .idea/                           # Файлы проекта IntelliJ (игнорируется в git)
+│   ├── adr/                          # Architectural Decision Records
+│   │   ├── 0001-record-architecture-decisions.md
+│   │   └── _template.md
+│   ├── specs/                        # Feature specifications (SDD artefacts)
+│   │   ├── _template/                # Шаблон для новых spec
+│   │   │   ├── spec.md
+│   │   │   ├── requirements.md
+│   │   │   ├── plan.md
+│   │   │   ├── research.md
+│   │   │   ├── data-model.md
+│   │   │   ├── test-plan.md
+│   │   │   ├── tasks.md
+│   │   │   ├── quickstart.md
+│   │   │   ├── task-state.md
+│   │   │   ├── work-log.md
+│   │   │   ├── handoff.md
+│   │   │   └── contracts/README.md
+│   │   └── 0001-sdd-bootstrap/      # Spec для SDD bootstrap (dogfooding)
+│   │       ├── spec.md
+│   │       ├── plan.md
+│   │       ├── tasks.md
+│   │       ├── test-plan.md
+│   │       ├── task-state.md
+│   │       ├── work-log.md
+│   │       └── handoff.md
+│   └── sdd/                          # SDD governance docs
+│       ├── constitution.md           # Непереговорные принципы
+│       ├── workflow.md               # SDD процесс и фазы
+│       ├── gates.md                  # Definition of Ready/Done
+│       └── context-management.md     # Политика контекста
+├── scripts/
+│   ├── sdd-lint.sh                   # Spec lint (Linux/Mac)
+│   └── sdd-lint.bat                  # Spec lint (Windows)
+├── .qwen/
+│   ├── commands/
+│   │   └── sdd/                      # SDD команды: specify, clarify, plan, tasks, implement, review
+│   ├── skills/                       # SDD навыки: spec-review, plan, task-slice, test-gap, review
+│   └── agents/                       # Роли агентов: planner, implementer, reviewer, security-reviewer
+├── target/                           # Артефакты сборки (git-ignore)
+└── .idea/                            # Файлы IDE (git-ignore)
 ```
 
 ## Обзор приложения

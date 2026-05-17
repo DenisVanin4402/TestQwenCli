@@ -10,6 +10,35 @@
 Intake -> Specify -> Clarify -> Plan -> Decide(ADR) -> Task -> Test-first -> Implement -> Evaluate -> Learn
 ```
 
+## Точки входа (Entry Points)
+
+SDD-фреймворк поддерживает два способа начать новую задачу:
+
+### Из запроса (From Prompt)
+
+```
+User request → /sdd:specify → spec.md (полная спецификация)
+                                    ↓
+         Clarify → Plan → Tasks → Tests → Implement → Review
+```
+
+### Из diff MR аналитика (From Diff)
+
+```
+Analyst MR → /sdd:from-diff → delta-spec.md (только изменения)
+                                         ↓ (тот же pipeline)
+                              Plan → Tasks → Tests → Implement → Review
+```
+
+**Альтернатива A: User request** — пользователь описывает что хочет. Создаётся полная спецификация с нуля через `/sdd:specify`.
+
+**Альтернатива B: Analyst MR** — аналитик внёс изменения в документацию/контракты/код. Извлекается diff, генерируется delta-spec через `/sdd:from-diff`. Delta-spec содержит ТОЛЬКО изменения, не полную документацию.
+
+После создания spec/delta-spec оба пути сходятся в единый pipeline:
+```
+Clarify → Plan → Tasks → Tests → Implement → Review
+```
+
 ## Фазы
 
 ### 1. Intake — Сбор требований
@@ -162,6 +191,7 @@ Intake -> Specify -> Clarify -> Plan -> Decide(ADR) -> Task -> Test-first -> Imp
 | Команда | Описание |
 |---------|----------|
 | `/sdd:specify` | Создать или обновить спецификацию |
+| `/sdd:from-diff` | Сгенерировать delta-spec из git diff MR аналитика |
 | `/sdd:clarify` | Сгенерировать вопросы для уточнения требований |
 | `/sdd:plan` | Создать технический план из спецификации |
 | `/sdd:tasks` | Разбить план на проверяемые задачи |

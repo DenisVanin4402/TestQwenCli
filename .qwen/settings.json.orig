@@ -5,8 +5,7 @@
       "Bash(bash *)",
       "Bash(d *)",
       "Bash(@echo.)",
-      "Bash(echo *)",
-      "Bash(mvn *)"
+      "Bash(echo *)"
     ]
   },
   "$version": 4

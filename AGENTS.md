@@ -49,6 +49,43 @@ bash scripts/sdd-lint.sh
 spec -> plan -> tasks -> tests -> implementation -> verification
 ```
 
+## Delta-Spec — работа с изменениями из MR
+
+Delta-spec (`delta-spec.md`) — это спецификация содержащая ТОЛЬКО изменения из MR аналитика,
+а не полную документацию проекта. Используется при сценарии "Spec from Diff".
+
+### Правила работы с delta-spec
+
+1. **Delta-spec — source of truth для delta-изменений.** Содержит только REQ-NEW-* и AC-NEW-*,
+   а также ссылки на затронутые существующие требования.
+2. **Не читать все MR-файлы напрямую.** Сначала читать `diff-summary.md` (структурированное резюме)
+   и `impact-map.md` (карта влияния), затем целевые изменённые файлы.
+3. **При генерации из diff:** выполнить diff-extractor, прочитать результаты,
+   заполнить delta-spec по шаблону `docs/specs/_template/delta-spec.md`.
+4. **При реализации из delta-spec:** REQ-NEW-* и AC-NEW-* — цели для implementation.
+   При слиянии в основной spec номера заменяются на сквозные REQ-N.
+
+### Верификация delta-spec
+
+```bash
+# Компиляция
+mvn compile
+
+# Все тесты
+mvn test
+
+# Упаковка
+mvn package
+
+# Проверка SDD-артефактов
+bash scripts/sdd-lint.sh
+
+# Извлечение diff (для нового анализа)
+bash scripts/sdd-diff-extract.sh <ref1> <ref2>
+# или Windows:
+scripts\sdd-diff-extract.bat <ref1> <ref2>
+```
+
 ## Отчёт о завершении задачи
 
 При завершении задачи предоставить:

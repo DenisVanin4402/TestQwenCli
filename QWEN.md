@@ -167,6 +167,89 @@ mvn test -Dtest=ClassName         # Один класс тестов
 - Безопасность, нефункциональные требования и критерии приёмки определяются до реализации
 - Верификация: матрица трассировки, test-first для критических путей
 
+## Рабочий SDD pipeline
+
+Для существенных задач используйте цепочку:
+
+```text
+/sdd:specify -> /sdd:clarify -> /sdd:plan -> /sdd:tasks -> /sdd:implement -> /sdd:review
+```
+
+Если входом является MR системного аналитика с изменениями в Markdown-документации, OpenAPI или DBML, используйте diff-driven цепочку:
+
+```text
+/sdd:intake-diff -> /sdd:impact-map -> /sdd:synthesize-spec -> /sdd:clarify -> /sdd:plan -> /sdd:tasks -> /sdd:implement -> /sdd:review
+```
+
+Файловый источник истины находится в `docs/specs/<id>-<slug>/`. Общие правила и gates находятся в `docs/sdd/`, шаблон новой задачи — в `docs/specs/_template/`.
+
+### Qwen commands
+
+- `.qwen/commands/sdd/specify.md` - создает или обновляет спецификацию.
+- `.qwen/commands/sdd/clarify.md` - закрывает критические уточнения.
+- `.qwen/commands/sdd/intake-diff.md` - строит intake и diff map по MR аналитика.
+- `.qwen/commands/sdd/impact-map.md` - строит impact map и source context.
+- `.qwen/commands/sdd/synthesize-spec.md` - синтезирует change-spec из diff и контекста.
+- `.qwen/commands/sdd/plan.md` - формирует технический план.
+- `.qwen/commands/sdd/tasks.md` - строит task graph с ownership.
+- `.qwen/commands/sdd/implement.md` - реализует bounded task.
+- `.qwen/commands/sdd/review.md` - выполняет read-only review.
+
+### Qwen skills
+
+- `sdd-spec-review` - проверка запроса или diff против спеки.
+- `sdd-plan` - техническое планирование.
+- `sdd-task-slice` - нарезка задач.
+- `sdd-test-gap` - поиск gaps в traceability и тестах.
+- `sdd-review` - независимый review.
+- `sdd-diff-intake` - анализ analyst MR diff.
+- `sdd-impact-map` - direct/indirect impact analysis.
+- `sdd-openapi-diff` - анализ OpenAPI changes.
+- `sdd-dbml-diff` - анализ DBML changes.
+- `sdd-spec-synthesis` - сборка synthesized change-spec.
+
+### Qwen agents
+
+- `sdd-orchestrator` - держит фазу, gates и context packet.
+- `sdd-spec-writer` - пишет требования и acceptance criteria.
+- `sdd-planner` - готовит plan, research и ADR-кандидаты.
+- `sdd-builder` - реализует bounded task.
+- `sdd-test-engineer` - закрывает тестовые gaps.
+- `sdd-reviewer` - read-only review.
+- `sdd-security-reviewer` - read-only security/privacy review.
+- `sdd-doc-diff-analyst` - анализ Markdown diff.
+- `sdd-contract-analyst` - анализ OpenAPI diff.
+- `sdd-data-model-analyst` - анализ DBML diff.
+- `sdd-spec-synthesizer` - синтез итоговой change-spec.
+
+### Context packet
+
+Перед реализацией или review используйте короткий context packet:
+
+```md
+# Context Packet
+
+## Goal
+<REQ/TASK и цель>
+
+## Source of truth
+- Spec: docs/specs/<id>-<slug>/spec.md
+- Plan: docs/specs/<id>-<slug>/plan.md
+- Tasks: docs/specs/<id>-<slug>/tasks.md
+
+## Acceptance criteria
+- AC-...
+
+## Constraints
+- <ownership, contracts, security>
+
+## Relevant files
+- <path>
+
+## Verification commands
+- mvn test
+```
+
 ## Конфигурация
 
 ### Maven (pom.xml)
@@ -185,9 +268,7 @@ spring.application.name=test-qwen-cli
 
 ## Планы на будущее
 
-- Внедрить SDD-процесс согласно `docs/sdd-plan.md`
-- Добавить Qwen CLI команды и навыки для фаз SDD
-- Создать `AGENTS.md` с переносимыми инструкциями для агентов
-- Добавить `docs/specs/_template/` с шаблонами артефактов
-- Ввести процесс ADR для архитектурных решений
+- Проверить SDD-процесс на первой реальной задаче через полный Qwen pipeline
+- Добавить легкий spec lint для обязательных секций и traceability
+- Уточнить Qwen commands и skills по итогам пилота
 - Расширить покрытие тестами по мере добавления функций

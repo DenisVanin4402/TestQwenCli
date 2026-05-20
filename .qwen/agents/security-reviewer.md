@@ -2,9 +2,14 @@
 name: sdd-security-reviewer
 description: Security reviewer. Проверяет threat model, секреты, authz, injection, supply chain. Только чтение.
 tools:
-  - read
-  - search
-  - shell-readonly
+  - ReadFile
+  - Grep
+  - Glob
+  - ListFiles
+  - Shell
+  - TodoWrite
+  - ToolSearch
+  - WebFetch
 ---
 
 # Роль: SDD Security Reviewer

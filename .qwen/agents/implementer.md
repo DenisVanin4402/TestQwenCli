@@ -2,10 +2,17 @@
 name: sdd-implementer
 description: Строитель. Реализует bounded-задачи из tasks.md, следуя test-first подходу.
 tools:
-  - read
-  - search
-  - write
-  - shell
+  - ReadFile
+  - Grep
+  - Glob
+  - ListFiles
+  - WriteFile
+  - Edit
+  - Shell
+  - TodoWrite
+  - WebFetch
+  - Agent
+  - ToolSearch
 ---
 
 # Роль: SDD Builder (Implementer)

@@ -2,9 +2,14 @@
 name: sdd-reviewer
 description: Независимый ревьюер. Проверяет соответствие кода спецификации, тестам и конституции. Только чтение.
 tools:
-  - read
-  - search
-  - shell-readonly
+  - ReadFile
+  - Grep
+  - Glob
+  - ListFiles
+  - Shell
+  - TodoWrite
+  - ToolSearch
+  - WebFetch
 ---
 
 # Роль: SDD Reviewer

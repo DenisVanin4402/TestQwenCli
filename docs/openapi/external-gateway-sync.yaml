@@ -1,0 +1,216 @@
+openapi: 3.1.0
+info:
+  title: External Service Gateway Sync API
+  version: 0.1.0
+  description: |
+    Синхронный API внутреннего gateway-сервиса для вызова внешнего сервиса
+    с глобальным ограничением 5 concurrent calls.
+servers:
+  - url: http://external-service-gateway.internal
+    description: Internal service DNS
+tags:
+  - name: Sync
+    description: Синхронные вызовы внешнего сервиса
+paths:
+  /v1/external/sync:
+    post:
+      tags:
+        - Sync
+      operationId: callExternalSync
+      summary: Выполнить синхронный вызов внешнего сервиса
+      description: |
+        Gateway пытается получить sync-slot, выполняет upstream HTTP-вызов
+        и возвращает результат в рамках исходного HTTP-запроса.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSyncRequest'
+            examples:
+              investPay:
+                summary: Запрос от invest-pay
+                value:
+                  externalId: 4c48a4dc-3226-4e63-8597-4ee793fc3c3c
+                  clientService: invest-pay
+                  payload:
+                    operation: calculate
+                    amount: 1000.50
+                    currency: RUB
+      responses:
+        '200':
+          description: Внешний сервис успешно обработал запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalSyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '408':
+          description: Истекло время ожидания ответа внешнего сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Gateway не смог получить слот в рамках sync SLA
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Рекомендованная задержка перед повтором, секунды
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Внешний сервис вернул ошибку или некорректный ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Gateway или координатор лимитов временно недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation id от вызывающего сервиса
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      description: |
+        Ключ идемпотентности. Обязателен для sync-вызовов, если upstream
+        операция меняет состояние.
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Не пройдена service-to-service аутентификация
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Сервис-клиент не имеет права вызывать gateway
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ExternalSyncRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - externalId
+        - clientService
+        - payload
+      properties:
+        externalId:
+          type: string
+          format: uuid
+          description: Идентификатор запроса на стороне вызывающего сервиса
+        clientService:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: |
+            Имя сервиса-клиента. Gateway сверяет это значение с
+            аутентифицированной service-to-service identity; несовпадение
+            считается ошибкой авторизации или валидации.
+          examples:
+            - invest-pay
+            - user-expertise
+        payload:
+          type: object
+          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
+    ExternalSyncResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - externalId
+        - status
+        - result
+        - durationMs
+      properties:
+        externalId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - SUCCEEDED
+        result:
+          $ref: '#/components/schemas/ResultMap'
+        upstreamStatus:
+          type: integer
+          minimum: 100
+          maximum: 599
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        upstreamTraceId:
+          type:
+            - string
+            - 'null'
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          examples:
+            - NO_SLOT_AVAILABLE
+            - UPSTREAM_TIMEOUT
+        message:
+          type: string
+        retryable:
+          type: boolean
+        requestId:
+          type:
+            - string
+            - 'null'
+        details:
+          type:
+            - object
+            - 'null'
+    ResultMap:
+      type: object
+      additionalProperties:
+        type: string
+      description: Результат выполнения upstream-запроса в формате Map<String, String>
+      examples:
+        - decision: APPROVED
+          score: '82'
+          reasonCode: OK

@@ -1,0 +1,247 @@
+openapi: 3.1.0
+info:
+  title: External Service Gateway Callback API
+  version: 0.1.0
+  description: |
+    Контракт endpoint'а, который должны реализовать сервисы-клиенты
+    для получения результата async-задачи от external-service-gateway.
+servers:
+  - url: http://user-expertise.internal
+    description: Example client service DNS
+tags:
+  - name: Callback
+    description: Callback от gateway в сервис-клиент
+paths:
+  /internal/external-gateway/callbacks:
+    post:
+      tags:
+        - Callback
+      operationId: receiveExternalGatewayCallback
+      summary: Принять результат async-задачи
+      description: |
+        Gateway вызывает этот endpoint после финального статуса async-задачи.
+        Endpoint должен быть идемпотентным: повторная доставка того же taskId/status
+        должна возвращать успешный ответ и не создавать дублей.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCallbackAttempt'
+        - $ref: '#/components/parameters/XGatewaySignature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalGatewayCallback'
+            examples:
+              done:
+                summary: Успешный результат
+                value:
+                  eventId: 9eab8bb2-b8e4-4c6e-a1d9-e0d4b7b0d77a
+                  taskId: 12345
+                  externalId: 4c48a4dc-3226-4e63-8597-4ee793fc3c3c
+                  clientService: user-expertise
+                  status: DONE
+                  result:
+                    decision: APPROVED
+                    score: '82'
+                    reasonCode: OK
+                  error: null
+                  finishedAt: '2026-05-21T20:30:00Z'
+              failed:
+                summary: Retry upstream исчерпаны
+                value:
+                  eventId: 33e72e4a-48f2-4140-9f22-9c7339b789ce
+                  taskId: 12346
+                  externalId: 1aaac57e-7922-4f68-bc01-d0b795e0e661
+                  clientService: user-expertise
+                  status: DEAD
+                  result: null
+                  error:
+                    code: UPSTREAM_TIMEOUT
+                    message: External service timeout
+                    retryable: true
+                  finishedAt: '2026-05-21T20:31:00Z'
+      responses:
+        '200':
+          description: Callback принят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackAck'
+        '204':
+          description: Callback принят, тело ответа не требуется
+        '400':
+          description: Некорректный callback payload. Gateway считает ошибку постоянной.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Не пройдена аутентификация gateway
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Конфликт состояния. Использовать только для настоящего конфликта; повтор уже обработанного callback должен возвращать 200/204.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Сервис-клиент временно перегружен. Gateway повторит callback позже.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+        '500':
+          description: Временная ошибка сервиса-клиента. Gateway повторит callback позже.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Сервис-клиент временно недоступен. Gateway повторит callback позже.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation id callback-доставки
+    XCallbackAttempt:
+      name: X-Callback-Attempt
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Номер попытки доставки callback
+    XGatewaySignature:
+      name: X-Gateway-Signature
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Подпись тела callback, если выбран HMAC-based auth
+  schemas:
+    ExternalGatewayCallback:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - taskId
+        - externalId
+        - clientService
+        - status
+        - result
+        - error
+        - finishedAt
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор попытки доставки callback
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        externalId:
+          type: string
+          format: uuid
+          description: Идентификатор задачи на стороне сервиса-клиента
+        clientService:
+          type: string
+          examples:
+            - user-expertise
+            - invest-pay
+        status:
+          $ref: '#/components/schemas/AsyncTaskStatus'
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/ResultMap'
+            - type: 'null'
+          description: |
+            Для DONE содержит Map<String, String>. Для FAILED, DEAD и
+            CANCELLED равно null, а причина передается в error.
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/CallbackError'
+            - type: 'null'
+          description: |
+            Для DONE равно null. Для FAILED, DEAD и CANCELLED содержит
+            структурированную причину финального статуса.
+        finishedAt:
+          type: string
+          format: date-time
+    ResultMap:
+      type: object
+      additionalProperties:
+        type: string
+      description: Результат выполнения запроса во внешний сервис в формате Map<String, String>
+      examples:
+        - decision: APPROVED
+          score: '82'
+          reasonCode: OK
+    AsyncTaskStatus:
+      type: string
+      enum:
+        - DONE
+        - FAILED
+        - DEAD
+        - CANCELLED
+      description: |
+        FAILED означает финальную неретраибельную ошибку.
+        DEAD означает, что retry upstream исчерпаны.
+        CANCELLED означает отмену до старта upstream-вызова.
+    CallbackError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean
+          description: Возможность ручного retry; автоматические retry upstream уже завершены до финального callback.
+    CallbackAck:
+      type: object
+      additionalProperties: false
+      required:
+        - accepted
+      properties:
+        accepted:
+          type: boolean
+          examples:
+            - true
+        message:
+          type:
+            - string
+            - 'null'
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        retryable:
+          type: boolean

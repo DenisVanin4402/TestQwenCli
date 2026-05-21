@@ -1,0 +1,475 @@
+openapi: 3.1.0
+info:
+  title: External Service Gateway Async API
+  version: 0.1.0
+  description: |
+    Асинхронный API внутреннего gateway-сервиса для постановки задач,
+    чтения результата, отмены и ручного retry.
+servers:
+  - url: http://external-service-gateway.internal
+    description: Internal service DNS
+tags:
+  - name: Async
+    description: Асинхронные задачи внешнего сервиса
+paths:
+  /v1/external/async:
+    post:
+      tags:
+        - Async
+      operationId: submitExternalAsync
+      summary: Поставить async-задачу на обработку
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalAsyncRequest'
+            examples:
+              lowPriority:
+                summary: Низкоприоритетная async-задача
+                value:
+                  externalId: 4c48a4dc-3226-4e63-8597-4ee793fc3c3c
+                  clientService: user-expertise
+                  priority: LOW
+                  deliveryMode: CALLBACK
+                  payload:
+                    operation: enrich-profile
+                    userId: 100500
+      responses:
+        '202':
+          description: Задача принята или уже существовала по idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncSubmitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Конфликт idempotency key с другим payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload превышает допустимый размер
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/external/async/{taskId}:
+    get:
+      tags:
+        - Async
+      operationId: getExternalAsyncTask
+      summary: Получить состояние async-задачи
+      description: |
+        Gateway определяет clientService из аутентифицированной service identity
+        и возвращает задачу только этому сервису-клиенту.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Текущее состояние задачи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Async
+      operationId: cancelExternalAsyncTask
+      summary: Отменить async-задачу, если она еще не выполняется
+      description: |
+        Gateway определяет clientService из аутентифицированной service identity
+        и отменяет только задачу этого сервиса-клиента.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Задача отменена или уже была в финальном статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Задачу нельзя отменить в текущем статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/external/async/by-external-id/{externalId}:
+    get:
+      tags:
+        - Async
+      operationId: getExternalAsyncTaskByExternalId
+      summary: Получить async-задачу по externalId
+      description: |
+        Gateway определяет clientService из аутентифицированной service identity
+        и ищет задачу по паре clientService + externalId.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - name: externalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние задачи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/external/async/{taskId}/retry:
+    post:
+      tags:
+        - Async
+      operationId: retryExternalAsyncTask
+      summary: Вернуть задачу в обработку вручную
+      description: |
+        Gateway определяет clientService из аутентифицированной service identity.
+        Ручной retry разрешен только для задач этого сервиса-клиента.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '202':
+          description: Задача возвращена в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Задачу нельзя повторить в текущем статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation id от вызывающего сервиса
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      description: |
+        Ключ идемпотентности. Если не передан, gateway использует externalId.
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Не пройдена service-to-service аутентификация
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Сервис-клиент не имеет права вызывать gateway
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Задача не найдена
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ExternalAsyncRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - externalId
+        - clientService
+        - priority
+        - payload
+      properties:
+        externalId:
+          type: string
+          format: uuid
+          description: Идемпотентный идентификатор задачи на стороне вызывающего сервиса
+        clientService:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: |
+            Имя сервиса-клиента. Gateway сверяет это значение с
+            аутентифицированной service-to-service identity; несовпадение
+            считается ошибкой авторизации или валидации.
+          examples:
+            - invest-pay
+            - user-expertise
+        priority:
+          $ref: '#/components/schemas/AsyncPriority'
+        deliveryMode:
+          $ref: '#/components/schemas/AsyncDeliveryMode'
+        payload:
+          type: object
+          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
+    AsyncSubmitResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - taskId
+        - externalId
+        - status
+        - statusUrl
+        - deliveryMode
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        externalId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/AsyncTaskStatus'
+        deliveryMode:
+          $ref: '#/components/schemas/AsyncDeliveryMode'
+        statusUrl:
+          type: string
+          example: /v1/external/async/12345
+        alreadyExisted:
+          type: boolean
+          default: false
+    AsyncTask:
+      type: object
+      additionalProperties: false
+      required:
+        - taskId
+        - externalId
+        - clientService
+        - priority
+        - deliveryMode
+        - status
+        - result
+        - error
+        - attempts
+        - maxAttempts
+        - createdAt
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        externalId:
+          type: string
+          format: uuid
+        clientService:
+          type: string
+        priority:
+          $ref: '#/components/schemas/AsyncPriority'
+        deliveryMode:
+          $ref: '#/components/schemas/AsyncDeliveryMode'
+        status:
+          $ref: '#/components/schemas/AsyncTaskStatus'
+        callbackDeliveryStatus:
+          oneOf:
+            - $ref: '#/components/schemas/CallbackDeliveryStatus'
+            - type: 'null'
+          description: |
+            Статус доставки callback. Для deliveryMode=POLLING значение
+            равно NOT_REQUIRED.
+        attempts:
+          type: integer
+          minimum: 0
+        maxAttempts:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        availableAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        finishedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/ResultMap'
+            - type: 'null'
+          description: |
+            Ответ внешнего сервиса для статуса DONE. Для FAILED, DEAD и
+            CANCELLED значение равно null, а причина передается в error.
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/TaskError'
+            - type: 'null'
+          description: |
+            Для DONE равно null. Для FAILED, DEAD и CANCELLED содержит
+            структурированную причину финального статуса.
+        lastError:
+          type:
+            - string
+            - 'null'
+          description: Диагностическое краткое описание последней ошибки; структурированный контракт находится в поле error.
+        retryable:
+          type: boolean
+          default: false
+          description: Возможность ручного retry; автоматические retry уже завершены для финального статуса.
+    AsyncPriority:
+      type: string
+      enum:
+        - HIGH
+        - LOW
+      description: |
+        Приоритет async-задачи. SYNC не принимается через async API,
+        так как sync имеет отдельный endpoint.
+        Внутренняя очередь использует числовой вес: HIGH = 100, LOW = 10,
+        и сортирует задачи по priority_weight DESC, available_at ASC, id ASC.
+    AsyncDeliveryMode:
+      type: string
+      enum:
+        - CALLBACK
+        - POLLING
+      default: CALLBACK
+      description: |
+        Способ доставки async-результата. CALLBACK означает, что gateway
+        отправит результат в заранее настроенный endpoint сервиса-клиента.
+        POLLING означает, что сервис-клиент заберет результат через GET.
+        Для POLLING callback-доставка не создается, а callbackDeliveryStatus
+        равен NOT_REQUIRED. Callback URL не передается в запросе и выбирается
+        gateway по clientService для режима CALLBACK.
+    AsyncTaskStatus:
+      type: string
+      enum:
+        - PENDING
+        - IN_PROGRESS
+        - DONE
+        - FAILED
+        - DEAD
+        - CANCELLED
+      description: |
+        FAILED означает финальную неретраибельную ошибку.
+        DEAD означает, что retry upstream исчерпаны.
+        CANCELLED означает отмену до старта upstream-вызова.
+    CallbackDeliveryStatus:
+      type: string
+      enum:
+        - NOT_REQUIRED
+        - PENDING
+        - DELIVERING
+        - DELIVERED
+        - RETRY
+        - DEAD
+    TaskError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          examples:
+            - UPSTREAM_TIMEOUT
+            - VALIDATION_FAILED
+        message:
+          type: string
+        retryable:
+          type: boolean
+          description: Возможность ручного retry; автоматические retry upstream уже завершены для финального статуса.
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          examples:
+            - TASK_NOT_FOUND
+            - IDEMPOTENCY_CONFLICT
+        message:
+          type: string
+        retryable:
+          type: boolean
+        requestId:
+          type:
+            - string
+            - 'null'
+        details:
+          type:
+            - object
+            - 'null'
+    ResultMap:
+      type: object
+      additionalProperties:
+        type: string
+      description: Результат выполнения upstream-запроса в формате Map<String, String>
+      examples:
+        - decision: APPROVED
+          score: '82'
+          reasonCode: OK

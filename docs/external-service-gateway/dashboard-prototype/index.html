@@ -1,0 +1,1530 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>External Gateway Test Dashboard</title>
+	<style>
+		:root {
+			--ink: #161612;
+			--muted: #68685f;
+			--paper: #f4f0e6;
+			--panel: #fffaf0;
+			--panel-strong: #fcf5e6;
+			--line: #d9d1bf;
+			--line-strong: #282821;
+			--coal: #20211c;
+			--coal-2: #2d2e27;
+			--acid: #a8ff3e;
+			--cyan: #00a5b8;
+			--amber: #ffb020;
+			--rose: #e04961;
+			--green: #188a4c;
+			--violet: #6d57d8;
+			--shadow: 0 16px 44px rgba(34, 32, 23, 0.12);
+			--radius: 8px;
+			--mono: "Cascadia Mono", "JetBrains Mono", "Consolas", monospace;
+			--display: "Bahnschrift Condensed", "Bahnschrift", "Aptos", "Segoe UI", sans-serif;
+			--body: "Aptos", "Segoe UI", Tahoma, sans-serif;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html {
+			min-width: 320px;
+			background:
+				linear-gradient(rgba(22, 22, 18, 0.05) 1px, transparent 1px),
+				linear-gradient(90deg, rgba(22, 22, 18, 0.04) 1px, transparent 1px),
+				var(--paper);
+			background-size: 32px 32px;
+			color: var(--ink);
+			font-family: var(--body);
+		}
+
+		body {
+			min-height: 100vh;
+			margin: 0;
+		}
+
+		button,
+		input,
+		select {
+			font: inherit;
+		}
+
+		button {
+			cursor: pointer;
+		}
+
+		.shell {
+			width: min(1680px, calc(100% - 32px));
+			margin: 0 auto;
+			padding: 24px 0 40px;
+		}
+
+		.topbar {
+			display: grid;
+			grid-template-columns: minmax(260px, 1fr) auto;
+			gap: 16px;
+			align-items: start;
+			border: 2px solid var(--line-strong);
+			background: var(--panel);
+			box-shadow: var(--shadow);
+			padding: 18px;
+			border-radius: var(--radius);
+		}
+
+		.brand {
+			display: grid;
+			gap: 8px;
+			min-width: 0;
+		}
+
+		.kicker {
+			width: fit-content;
+			padding: 4px 8px;
+			border: 1px solid var(--line-strong);
+			background: var(--acid);
+			color: var(--ink);
+			font-family: var(--mono);
+			font-size: 12px;
+			font-weight: 800;
+			letter-spacing: 0;
+			text-transform: uppercase;
+		}
+
+		h1 {
+			margin: 0;
+			font-family: var(--display);
+			font-size: clamp(34px, 6vw, 78px);
+			font-weight: 900;
+			line-height: 0.9;
+			letter-spacing: 0;
+			text-transform: uppercase;
+		}
+
+		.subtitle {
+			max-width: 860px;
+			margin: 0;
+			color: var(--muted);
+			font-size: 16px;
+			line-height: 1.45;
+		}
+
+		.status-stack {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(96px, 1fr));
+			gap: 8px;
+			min-width: min(100%, 380px);
+		}
+
+		.status-tile {
+			min-height: 74px;
+			padding: 10px;
+			border: 1px solid var(--line-strong);
+			background: #f8f1df;
+			border-radius: var(--radius);
+		}
+
+		.status-tile strong {
+			display: block;
+			font-family: var(--mono);
+			font-size: 22px;
+			line-height: 1;
+		}
+
+		.status-tile span {
+			display: block;
+			margin-top: 8px;
+			color: var(--muted);
+			font-size: 12px;
+			line-height: 1.2;
+		}
+
+		.toolbar {
+			position: sticky;
+			top: 0;
+			z-index: 10;
+			display: grid;
+			grid-template-columns: minmax(280px, 1fr) auto auto;
+			gap: 10px;
+			align-items: center;
+			margin: 16px 0;
+			padding: 12px;
+			border: 1px solid var(--line-strong);
+			background: rgba(244, 240, 230, 0.94);
+			backdrop-filter: blur(12px);
+			border-radius: var(--radius);
+		}
+
+		.segmented,
+		.action-row,
+		.profile-row {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			align-items: center;
+		}
+
+		.tab-button,
+		.profile-button,
+		.icon-button,
+		.primary-button,
+		.secondary-button {
+			min-height: 38px;
+			border: 1px solid var(--line-strong);
+			border-radius: var(--radius);
+			background: var(--panel);
+			color: var(--ink);
+			font-weight: 800;
+			transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+		}
+
+		.tab-button,
+		.profile-button {
+			padding: 8px 11px;
+			font-size: 13px;
+		}
+
+		.tab-button.active {
+			background: var(--coal);
+			color: var(--paper);
+		}
+
+		.profile-button.active {
+			background: var(--acid);
+		}
+
+		.primary-button,
+		.secondary-button {
+			padding: 9px 14px;
+			white-space: nowrap;
+		}
+
+		.primary-button {
+			background: var(--coal);
+			color: var(--paper);
+		}
+
+		.primary-button.running {
+			background: var(--rose);
+			color: white;
+		}
+
+		.secondary-button {
+			background: var(--panel-strong);
+		}
+
+		.icon-button {
+			width: 42px;
+			padding: 0;
+			font-family: var(--mono);
+			font-size: 18px;
+			line-height: 1;
+		}
+
+		button:hover {
+			transform: translateY(-1px);
+			box-shadow: 4px 4px 0 var(--line-strong);
+		}
+
+		button:active {
+			transform: translateY(0);
+			box-shadow: none;
+		}
+
+		.api-mode {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			min-height: 38px;
+			padding: 7px 10px;
+			border: 1px solid var(--line-strong);
+			background: var(--panel);
+			border-radius: var(--radius);
+			white-space: nowrap;
+		}
+
+		.api-mode input {
+			width: 16px;
+			height: 16px;
+			accent-color: var(--coal);
+		}
+
+		.view {
+			display: none;
+		}
+
+		.view.active {
+			display: block;
+		}
+
+		.overview-grid {
+			display: grid;
+			grid-template-columns: minmax(260px, 340px) minmax(420px, 1fr) minmax(300px, 420px);
+			gap: 16px;
+			align-items: start;
+		}
+
+		.panel {
+			border: 1px solid var(--line-strong);
+			background: var(--panel);
+			border-radius: var(--radius);
+			box-shadow: var(--shadow);
+			overflow: hidden;
+		}
+
+		.panel-header {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			align-items: center;
+			min-height: 54px;
+			padding: 12px 14px;
+			border-bottom: 1px solid var(--line-strong);
+			background: var(--panel-strong);
+		}
+
+		.panel-title {
+			margin: 0;
+			font-family: var(--display);
+			font-size: 24px;
+			font-weight: 900;
+			line-height: 1;
+			letter-spacing: 0;
+			text-transform: uppercase;
+		}
+
+		.panel-note {
+			color: var(--muted);
+			font-size: 12px;
+			line-height: 1.25;
+			text-align: right;
+		}
+
+		.panel-body {
+			padding: 14px;
+		}
+
+		.control-group {
+			display: grid;
+			gap: 12px;
+			padding-bottom: 14px;
+			margin-bottom: 14px;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.control-group:last-child {
+			padding-bottom: 0;
+			margin-bottom: 0;
+			border-bottom: 0;
+		}
+
+		.field {
+			display: grid;
+			gap: 6px;
+		}
+
+		.field-label {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			color: var(--ink);
+			font-weight: 800;
+			font-size: 13px;
+		}
+
+		.field-label output {
+			font-family: var(--mono);
+			color: var(--cyan);
+		}
+
+		input[type="range"] {
+			width: 100%;
+			accent-color: var(--coal);
+		}
+
+		.split-inputs {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 8px;
+		}
+
+		.select,
+		.number-input,
+		.text-input {
+			width: 100%;
+			min-height: 38px;
+			padding: 8px 10px;
+			border: 1px solid var(--line-strong);
+			background: #fffdf7;
+			border-radius: var(--radius);
+			color: var(--ink);
+		}
+
+		.metric-grid {
+			display: grid;
+			grid-template-columns: repeat(4, minmax(120px, 1fr));
+			gap: 10px;
+			margin-bottom: 14px;
+		}
+
+		.metric-card {
+			min-height: 116px;
+			border: 1px solid var(--line-strong);
+			background: #fffdf7;
+			border-radius: var(--radius);
+			padding: 11px;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.metric-card::before {
+			content: "";
+			position: absolute;
+			inset: 0 auto 0 0;
+			width: 6px;
+			background: var(--accent, var(--cyan));
+		}
+
+		.metric-label {
+			margin: 0 0 10px 0;
+			padding-left: 8px;
+			color: var(--muted);
+			font-size: 12px;
+			font-weight: 800;
+			line-height: 1.2;
+			text-transform: uppercase;
+		}
+
+		.metric-value {
+			display: block;
+			padding-left: 8px;
+			font-family: var(--mono);
+			font-size: clamp(24px, 3vw, 36px);
+			font-weight: 900;
+			line-height: 1;
+			white-space: nowrap;
+		}
+
+		.metric-extra {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			padding-left: 8px;
+			margin-top: 12px;
+			color: var(--muted);
+			font-size: 12px;
+			line-height: 1.25;
+		}
+
+		.pill {
+			display: inline-flex;
+			align-items: center;
+			min-height: 22px;
+			padding: 2px 7px;
+			border: 1px solid var(--line-strong);
+			background: #fffdf7;
+			border-radius: 999px;
+			color: var(--ink);
+			font-family: var(--mono);
+			font-size: 11px;
+			font-weight: 800;
+			white-space: nowrap;
+		}
+
+		.pill.ok {
+			background: #dff7df;
+		}
+
+		.pill.warn {
+			background: #ffe3a6;
+		}
+
+		.pill.bad {
+			background: #ffd2d8;
+		}
+
+		.chart-shell {
+			display: grid;
+			gap: 10px;
+			min-height: 300px;
+			border: 1px solid var(--line-strong);
+			background: #14140f;
+			color: var(--paper);
+			border-radius: var(--radius);
+			padding: 12px;
+		}
+
+		.chart-head {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			align-items: center;
+		}
+
+		.chart-title {
+			margin: 0;
+			font-family: var(--display);
+			font-size: 24px;
+			line-height: 1;
+			text-transform: uppercase;
+		}
+
+		.legend {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+			font-family: var(--mono);
+			font-size: 11px;
+		}
+
+		.legend span {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+		}
+
+		.legend i {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			display: inline-block;
+			background: var(--legend-color);
+		}
+
+		canvas {
+			display: block;
+			width: 100%;
+			height: 230px;
+		}
+
+		.slot-grid {
+			display: grid;
+			grid-template-columns: repeat(5, minmax(0, 1fr));
+			gap: 8px;
+			margin-top: 14px;
+		}
+
+		.slot {
+			min-height: 64px;
+			display: grid;
+			place-items: center;
+			border: 1px solid var(--line-strong);
+			background: #e6f7f2;
+			border-radius: var(--radius);
+			font-family: var(--mono);
+			font-size: 12px;
+			font-weight: 900;
+			text-align: center;
+		}
+
+		.slot.sync {
+			background: #d7f0ff;
+		}
+
+		.slot.async {
+			background: #efe0ff;
+		}
+
+		.slot.reserve {
+			background: #fff0bf;
+		}
+
+		.slot.busy {
+			color: white;
+			background: var(--coal);
+		}
+
+		.health-list {
+			display: grid;
+			gap: 10px;
+		}
+
+		.health-row {
+			display: grid;
+			grid-template-columns: minmax(120px, 1fr) auto;
+			gap: 10px;
+			align-items: center;
+			min-height: 54px;
+			padding: 10px;
+			border: 1px solid var(--line-strong);
+			background: #fffdf7;
+			border-radius: var(--radius);
+		}
+
+		.health-name {
+			display: grid;
+			gap: 4px;
+			min-width: 0;
+		}
+
+		.health-name strong {
+			font-size: 13px;
+			line-height: 1.2;
+		}
+
+		.health-name span {
+			color: var(--muted);
+			font-size: 12px;
+			line-height: 1.2;
+		}
+
+		.health-value {
+			font-family: var(--mono);
+			font-size: 22px;
+			font-weight: 900;
+			white-space: nowrap;
+		}
+
+		.bar {
+			height: 8px;
+			overflow: hidden;
+			border: 1px solid var(--line-strong);
+			background: #ece5d4;
+			border-radius: 99px;
+		}
+
+		.bar span {
+			display: block;
+			height: 100%;
+			width: var(--fill, 40%);
+			background: var(--bar-color, var(--cyan));
+		}
+
+		.scenario-grid,
+		.contract-grid {
+			display: grid;
+			grid-template-columns: repeat(3, minmax(220px, 1fr));
+			gap: 14px;
+		}
+
+		.scenario-card,
+		.contract-card,
+		.timeline-card {
+			border: 1px solid var(--line-strong);
+			background: var(--panel);
+			border-radius: var(--radius);
+			box-shadow: var(--shadow);
+			padding: 14px;
+		}
+
+		.scenario-card h3,
+		.contract-card h3,
+		.timeline-card h3 {
+			margin: 0 0 10px 0;
+			font-family: var(--display);
+			font-size: 26px;
+			line-height: 1;
+			text-transform: uppercase;
+		}
+
+		.scenario-card p,
+		.contract-card p,
+		.timeline-card p {
+			margin: 0 0 12px 0;
+			color: var(--muted);
+			font-size: 14px;
+			line-height: 1.4;
+		}
+
+		.contract-card code,
+		.timeline-card code {
+			display: block;
+			width: 100%;
+			overflow-wrap: anywhere;
+			padding: 8px;
+			border: 1px solid var(--line-strong);
+			background: #14140f;
+			color: var(--acid);
+			border-radius: var(--radius);
+			font-family: var(--mono);
+			font-size: 12px;
+			line-height: 1.35;
+		}
+
+		.event-log {
+			display: grid;
+			gap: 8px;
+			max-height: 340px;
+			overflow: auto;
+			padding-right: 4px;
+		}
+
+		.event {
+			display: grid;
+			grid-template-columns: 82px 1fr auto;
+			gap: 8px;
+			align-items: center;
+			min-height: 42px;
+			padding: 8px;
+			border: 1px solid var(--line-strong);
+			background: #fffdf7;
+			border-radius: var(--radius);
+			font-size: 12px;
+		}
+
+		.event time {
+			font-family: var(--mono);
+			color: var(--muted);
+		}
+
+		.event strong {
+			overflow-wrap: anywhere;
+		}
+
+		.toast {
+			position: fixed;
+			right: 18px;
+			bottom: 18px;
+			z-index: 20;
+			max-width: min(420px, calc(100vw - 36px));
+			padding: 12px 14px;
+			border: 1px solid var(--line-strong);
+			background: var(--coal);
+			color: var(--paper);
+			border-radius: var(--radius);
+			box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.25);
+			transform: translateY(24px);
+			opacity: 0;
+			pointer-events: none;
+			transition: transform 180ms ease, opacity 180ms ease;
+		}
+
+		.toast.visible {
+			transform: translateY(0);
+			opacity: 1;
+		}
+
+		.toast strong {
+			display: block;
+			margin-bottom: 4px;
+			font-family: var(--mono);
+			font-size: 12px;
+			color: var(--acid);
+		}
+
+		@media (max-width: 1280px) {
+			.overview-grid {
+				grid-template-columns: minmax(260px, 360px) minmax(420px, 1fr);
+			}
+
+			.health-panel {
+				grid-column: 1 / -1;
+			}
+
+			.metric-grid {
+				grid-template-columns: repeat(2, minmax(120px, 1fr));
+			}
+		}
+
+		@media (max-width: 900px) {
+			.shell {
+				width: min(100% - 20px, 760px);
+				padding-top: 10px;
+			}
+
+			.topbar,
+			.toolbar,
+			.overview-grid {
+				grid-template-columns: 1fr;
+			}
+
+			.status-stack {
+				grid-template-columns: repeat(3, 1fr);
+				min-width: 0;
+			}
+
+			.scenario-grid,
+			.contract-grid {
+				grid-template-columns: 1fr;
+			}
+
+			.toolbar {
+				position: static;
+			}
+		}
+
+		@media (max-width: 560px) {
+			.status-stack,
+			.metric-grid,
+			.split-inputs {
+				grid-template-columns: 1fr;
+			}
+
+			.slot-grid {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+
+			.event {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="shell">
+		<header class="topbar">
+			<div class="brand">
+				<span class="kicker">Prototype v0 / local simulator</span>
+				<h1>Gateway Test Dashboard</h1>
+				<p class="subtitle">Панель для управляемой нагрузки на sync/async gateway, контроля upstream-симуляции и наблюдения за очередями, callback-доставкой и слотами в одном экране.</p>
+			</div>
+			<div class="status-stack" aria-label="Краткий статус стенда">
+				<div class="status-tile">
+					<strong id="topMode">IDLE</strong>
+					<span>режим нагрузки</span>
+				</div>
+				<div class="status-tile">
+					<strong id="topHealth">OK</strong>
+					<span>здоровье gateway</span>
+				</div>
+				<div class="status-tile">
+					<strong id="topSlots">5/5</strong>
+					<span>свободно слотов</span>
+				</div>
+			</div>
+		</header>
+
+		<nav class="toolbar" aria-label="Навигация и управление">
+			<div class="segmented" role="tablist">
+				<button class="tab-button active" data-view="overview" type="button">Обзор</button>
+				<button class="tab-button" data-view="scenarios" type="button">Сценарии</button>
+				<button class="tab-button" data-view="contracts" type="button">API-контракты</button>
+			</div>
+			<label class="api-mode">
+				<input id="apiToggle" type="checkbox">
+				<span>живой API</span>
+			</label>
+			<div class="action-row">
+				<button id="startStop" class="primary-button" type="button">Старт нагрузки</button>
+				<button id="resetButton" class="secondary-button" type="button">Сброс</button>
+			</div>
+		</nav>
+
+		<main>
+			<section id="overview" class="view active" aria-label="Обзор дашборда">
+				<div class="overview-grid">
+					<aside class="panel">
+						<div class="panel-header">
+							<h2 class="panel-title">Нагрузка</h2>
+							<span class="panel-note">профиль можно менять на лету</span>
+						</div>
+						<div class="panel-body">
+							<div class="control-group">
+								<div class="profile-row" aria-label="Пресеты нагрузки">
+									<button class="profile-button active" data-preset="steady" type="button">Ровный фон</button>
+									<button class="profile-button" data-preset="syncStorm" type="button">Sync storm</button>
+									<button class="profile-button" data-preset="asyncBacklog" type="button">Async backlog</button>
+									<button class="profile-button" data-preset="callbackFail" type="button">Callback fail</button>
+								</div>
+							</div>
+
+							<div class="control-group">
+								<label class="field">
+									<span class="field-label">Sync RPS <output id="syncRpsValue">18</output></span>
+									<input id="syncRps" type="range" min="0" max="120" value="18">
+								</label>
+								<label class="field">
+									<span class="field-label">Async submit RPS <output id="asyncRpsValue">28</output></span>
+									<input id="asyncRps" type="range" min="0" max="180" value="28">
+								</label>
+								<label class="field">
+									<span class="field-label">HIGH priority async <output id="priorityValue">35%</output></span>
+									<input id="priorityShare" type="range" min="0" max="100" value="35">
+								</label>
+							</div>
+
+							<div class="control-group">
+								<label class="field">
+									<span class="field-label">Latency upstream <output id="latencyValue">120 мс</output></span>
+									<input id="latency" type="range" min="10" max="1200" value="120">
+								</label>
+								<label class="field">
+									<span class="field-label">Jitter <output id="jitterValue">45 мс</output></span>
+									<input id="jitter" type="range" min="0" max="600" value="45">
+								</label>
+								<label class="field">
+									<span class="field-label">Ошибки upstream <output id="errorRateValue">2%</output></span>
+									<input id="errorRate" type="range" min="0" max="60" value="2">
+								</label>
+								<label class="field">
+									<span class="field-label">Размер ответа <output id="responseSizeValue">8 КБ</output></span>
+									<input id="responseSize" type="range" min="1" max="256" value="8">
+								</label>
+							</div>
+
+							<div class="control-group">
+								<div class="split-inputs">
+									<label class="field">
+										<span class="field-label">Слоты</span>
+										<input id="slotsTotal" class="number-input" type="number" min="1" max="30" value="5">
+									</label>
+									<label class="field">
+										<span class="field-label">Sync reserve</span>
+										<input id="syncReserve" class="number-input" type="number" min="0" max="10" value="1">
+									</label>
+								</div>
+								<label class="field">
+									<span class="field-label">Sync timeout <output id="timeoutValue">1500 мс</output></span>
+									<input id="timeoutMs" type="range" min="100" max="5000" step="100" value="1500">
+								</label>
+								<label class="field">
+									<span class="field-label">Ошибки callback <output id="callbackErrorValue">0%</output></span>
+									<input id="callbackError" type="range" min="0" max="80" value="0">
+								</label>
+							</div>
+						</div>
+					</aside>
+
+					<section class="panel">
+						<div class="panel-header">
+							<h2 class="panel-title">Пульс</h2>
+							<span class="panel-note">обновление каждые 850 мс</span>
+						</div>
+						<div class="panel-body">
+							<div class="metric-grid" aria-label="Realtime метрики нагрузки">
+								<div class="metric-card" style="--accent: var(--cyan)">
+									<p class="metric-label">Sync success</p>
+									<strong id="syncSuccess" class="metric-value">0</strong>
+									<span class="metric-extra"><span id="syncActual" class="pill ok">0 rps</span> факт</span>
+								</div>
+								<div class="metric-card" style="--accent: var(--rose)">
+									<p class="metric-label">Sync timeout</p>
+									<strong id="syncTimeout" class="metric-value">0</strong>
+									<span class="metric-extra"><span id="noSlotCount" class="pill">0</span> no slot</span>
+								</div>
+								<div class="metric-card" style="--accent: var(--violet)">
+									<p class="metric-label">Async accepted</p>
+									<strong id="asyncAccepted" class="metric-value">0</strong>
+									<span class="metric-extra"><span id="asyncActual" class="pill ok">0 rps</span> submit</span>
+								</div>
+								<div class="metric-card" style="--accent: var(--amber)">
+									<p class="metric-label">Async no answer</p>
+									<strong id="asyncNoAnswer" class="metric-value">0</strong>
+									<span class="metric-extra"><span id="retryCount" class="pill warn">0</span> retry</span>
+								</div>
+							</div>
+
+							<div class="chart-shell">
+								<div class="chart-head">
+									<h3 class="chart-title">Throughput / latency / errors</h3>
+									<div class="legend" aria-label="Легенда графика">
+										<span><i style="--legend-color: var(--acid)"></i>rps</span>
+										<span><i style="--legend-color: var(--cyan)"></i>p95</span>
+										<span><i style="--legend-color: var(--rose)"></i>errors</span>
+									</div>
+								</div>
+								<canvas id="pulseChart" width="900" height="260" aria-label="Realtime график" role="img"></canvas>
+							</div>
+
+							<div class="slot-grid" id="slotGrid" aria-label="Пул слотов"></div>
+						</div>
+					</section>
+
+					<aside class="panel health-panel">
+						<div class="panel-header">
+							<h2 class="panel-title">Здоровье</h2>
+							<span id="repositoryMode" class="pill">memory</span>
+						</div>
+						<div class="panel-body">
+							<div class="health-list">
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Async queue</strong>
+										<span>pending + in progress</span>
+										<div class="bar"><span id="asyncQueueBar" style="--bar-color: var(--violet)"></span></div>
+									</div>
+									<strong id="asyncQueue" class="health-value">0</strong>
+								</div>
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Callback backlog</strong>
+										<span>pending + retry delivery</span>
+										<div class="bar"><span id="callbackBacklogBar" style="--bar-color: var(--amber)"></span></div>
+									</div>
+									<strong id="callbackBacklog" class="health-value">0</strong>
+								</div>
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Sync waiters</strong>
+										<span>ожидают свободный слот</span>
+										<div class="bar"><span id="syncWaitersBar" style="--bar-color: var(--cyan)"></span></div>
+									</div>
+									<strong id="syncWaiters" class="health-value">0</strong>
+								</div>
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Slot headroom</strong>
+										<span>free + sync reserve</span>
+										<div class="bar"><span id="slotHeadroomBar" style="--bar-color: var(--green)"></span></div>
+									</div>
+									<strong id="slotHeadroom" class="health-value">5</strong>
+								</div>
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Oldest async age</strong>
+										<span>возраст старшей задачи</span>
+										<div class="bar"><span id="oldestAgeBar" style="--bar-color: var(--rose)"></span></div>
+									</div>
+									<strong id="oldestAge" class="health-value">0с</strong>
+								</div>
+								<div class="health-row">
+									<div class="health-name">
+										<strong>Expired leases</strong>
+										<span>за текущую сессию</span>
+										<div class="bar"><span id="expiredLeasesBar" style="--bar-color: var(--rose)"></span></div>
+									</div>
+									<strong id="expiredLeases" class="health-value">0</strong>
+								</div>
+							</div>
+						</div>
+					</aside>
+				</div>
+			</section>
+
+			<section id="scenarios" class="view" aria-label="Сценарии нагрузки">
+				<div class="scenario-grid">
+					<article class="scenario-card">
+						<h3>Ровный фон</h3>
+						<p>Умеренная смесь sync и async, проверяет базовый throughput, latency и отсутствие накопления очередей.</p>
+						<button class="primary-button scenario-apply" data-preset="steady" type="button">Применить</button>
+					</article>
+					<article class="scenario-card">
+						<h3>Sync storm</h3>
+						<p>Высокий sync RPS при небольшом async фоне, нужен для проверки waiters, no slot и резерва под sync.</p>
+						<button class="primary-button scenario-apply" data-preset="syncStorm" type="button">Применить</button>
+					</article>
+					<article class="scenario-card">
+						<h3>Async backlog</h3>
+						<p>Большой поток async submit при медленном upstream, показывает рост очереди, retry и возраст задач.</p>
+						<button class="primary-button scenario-apply" data-preset="asyncBacklog" type="button">Применить</button>
+					</article>
+					<article class="scenario-card">
+						<h3>Callback fail</h3>
+						<p>Нагрузка с ошибками callback endpoint, чтобы увидеть неотправленные ответы и retry callback-доставки.</p>
+						<button class="primary-button scenario-apply" data-preset="callbackFail" type="button">Применить</button>
+					</article>
+					<article class="timeline-card">
+						<h3>План прогона</h3>
+						<p>UI будет отправлять профиль нагрузки в backend, а backend будет менять runners без рестарта приложения.</p>
+						<code>PUT /dashboard/api/load/profile</code>
+					</article>
+					<article class="timeline-card">
+						<h3>События</h3>
+						<div id="eventLog" class="event-log" aria-live="polite"></div>
+					</article>
+				</div>
+			</section>
+
+			<section id="contracts" class="view" aria-label="Будущие API-контракты">
+				<div class="contract-grid">
+					<article class="contract-card">
+						<h3>Snapshot</h3>
+						<p>Единый снимок состояния для polling-режима и первоначальной загрузки страницы.</p>
+						<code>GET /dashboard/api/snapshot</code>
+					</article>
+					<article class="contract-card">
+						<h3>Realtime stream</h3>
+						<p>SSE-канал для пульса нагрузки, очередей, слотов и health-событий.</p>
+						<code>GET /dashboard/api/stream</code>
+					</article>
+					<article class="contract-card">
+						<h3>Load control</h3>
+						<p>Старт, остановка и изменение активного профиля нагрузки.</p>
+						<code>POST /dashboard/api/load/start
+POST /dashboard/api/load/stop
+PUT /dashboard/api/load/profile</code>
+					</article>
+					<article class="contract-card">
+						<h3>Upstream simulation</h3>
+						<p>Latency, jitter, error rate и response size для управляемого поведения внешнего сервиса.</p>
+						<code>GET /dashboard/api/upstream-simulation
+PUT /dashboard/api/upstream-simulation</code>
+					</article>
+					<article class="contract-card">
+						<h3>Gateway health</h3>
+						<p>Очереди, callback backlog, waiters, retry, слоты и dispatcher-состояние.</p>
+						<code>GET /dashboard/api/health</code>
+					</article>
+					<article class="contract-card">
+						<h3>Events</h3>
+						<p>Короткий журнал смены профиля, перегруза, timeout-всплесков и восстановления.</p>
+						<code>GET /dashboard/api/events</code>
+					</article>
+				</div>
+			</section>
+		</main>
+	</div>
+
+	<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+	<script>
+		const $ = (selector) => document.querySelector(selector);
+		const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+		const presets = {
+			steady: {
+				label: "Ровный фон",
+				syncRps: 18,
+				asyncRps: 28,
+				priorityShare: 35,
+				latency: 120,
+				jitter: 45,
+				errorRate: 2,
+				responseSize: 8,
+				timeoutMs: 1500,
+				callbackError: 0,
+				slotsTotal: 5,
+				syncReserve: 1
+			},
+			syncStorm: {
+				label: "Sync storm",
+				syncRps: 95,
+				asyncRps: 12,
+				priorityShare: 20,
+				latency: 210,
+				jitter: 140,
+				errorRate: 4,
+				responseSize: 18,
+				timeoutMs: 1200,
+				callbackError: 0,
+				slotsTotal: 5,
+				syncReserve: 1
+			},
+			asyncBacklog: {
+				label: "Async backlog",
+				syncRps: 12,
+				asyncRps: 145,
+				priorityShare: 70,
+				latency: 620,
+				jitter: 220,
+				errorRate: 8,
+				responseSize: 96,
+				timeoutMs: 1800,
+				callbackError: 6,
+				slotsTotal: 5,
+				syncReserve: 1
+			},
+			callbackFail: {
+				label: "Callback fail",
+				syncRps: 20,
+				asyncRps: 90,
+				priorityShare: 55,
+				latency: 190,
+				jitter: 80,
+				errorRate: 3,
+				responseSize: 32,
+				timeoutMs: 1500,
+				callbackError: 55,
+				slotsTotal: 5,
+				syncReserve: 1
+			}
+		};
+
+		const state = {
+			running: false,
+			apiMode: false,
+			preset: "steady",
+			ticks: 0,
+			totals: {
+				syncSuccess: 0,
+				syncTimeout: 0,
+				noSlot: 0,
+				asyncAccepted: 0,
+				asyncDone: 0,
+				retries: 0,
+				expiredLeases: 0
+			},
+			health: {
+				asyncQueue: 0,
+				callbackBacklog: 0,
+				syncWaiters: 0,
+				oldestAge: 0
+			},
+			slots: {
+				syncBusy: 0,
+				asyncBusy: 0,
+				reserve: 1,
+				free: 5
+			},
+			chart: []
+		};
+
+		const fields = {
+			syncRps: $("#syncRps"),
+			asyncRps: $("#asyncRps"),
+			priorityShare: $("#priorityShare"),
+			latency: $("#latency"),
+			jitter: $("#jitter"),
+			errorRate: $("#errorRate"),
+			responseSize: $("#responseSize"),
+			timeoutMs: $("#timeoutMs"),
+			callbackError: $("#callbackError"),
+			slotsTotal: $("#slotsTotal"),
+			syncReserve: $("#syncReserve")
+		};
+
+		function numberValue(id) {
+			return Number(fields[id].value);
+		}
+
+		function readProfile() {
+			const slotsTotal = Math.max(1, numberValue("slotsTotal"));
+			const syncReserve = Math.min(Math.max(0, numberValue("syncReserve")), Math.max(0, slotsTotal - 1));
+			fields.syncReserve.value = syncReserve;
+			return {
+				syncRps: numberValue("syncRps"),
+				asyncRps: numberValue("asyncRps"),
+				priorityShare: numberValue("priorityShare"),
+				latency: numberValue("latency"),
+				jitter: numberValue("jitter"),
+				errorRate: numberValue("errorRate"),
+				responseSize: numberValue("responseSize"),
+				timeoutMs: numberValue("timeoutMs"),
+				callbackError: numberValue("callbackError"),
+				slotsTotal,
+				syncReserve
+			};
+		}
+
+		function applyPreset(name, announce = true) {
+			const preset = presets[name];
+			if (!preset) {
+				return;
+			}
+			Object.entries(preset).forEach(([key, value]) => {
+				if (fields[key]) {
+					fields[key].value = value;
+				}
+			});
+			state.preset = name;
+			$$(".profile-button").forEach((button) => button.classList.toggle("active", button.dataset.preset === name));
+			updateOutputs();
+			if (announce) {
+				logEvent("profile", `Применен профиль: ${preset.label}`, "ok");
+				showToast("Профиль нагрузки", `Активен сценарий "${preset.label}".`);
+			}
+		}
+
+		function updateOutputs() {
+			const profile = readProfile();
+			$("#syncRpsValue").textContent = profile.syncRps;
+			$("#asyncRpsValue").textContent = profile.asyncRps;
+			$("#priorityValue").textContent = `${profile.priorityShare}%`;
+			$("#latencyValue").textContent = `${profile.latency} мс`;
+			$("#jitterValue").textContent = `${profile.jitter} мс`;
+			$("#errorRateValue").textContent = `${profile.errorRate}%`;
+			$("#responseSizeValue").textContent = `${profile.responseSize} КБ`;
+			$("#timeoutValue").textContent = `${profile.timeoutMs} мс`;
+			$("#callbackErrorValue").textContent = `${profile.callbackError}%`;
+		}
+
+		function randomBetween(min, max) {
+			return min + Math.random() * (max - min);
+		}
+
+		function damp(current, target, factor = 0.22) {
+			return current + (target - current) * factor;
+		}
+
+		function nextSimulation() {
+			const profile = readProfile();
+			const active = state.running ? 1 : 0;
+			const latencyPressure = (profile.latency + profile.jitter * 0.55 + profile.responseSize * 1.8) / 1000;
+			const capacityRps = Math.max(1, profile.slotsTotal / Math.max(0.04, latencyPressure));
+			const requestedRps = profile.syncRps + profile.asyncRps * 0.72;
+			const saturation = active ? Math.min(1.8, requestedRps / capacityRps) : 0;
+			const syncShare = profile.syncRps / Math.max(1, profile.syncRps + profile.asyncRps);
+			const rawSyncBusy = active ? Math.min(profile.slotsTotal, Math.round(saturation * profile.slotsTotal * Math.max(0.35, syncShare + 0.18))) : 0;
+			const freeAfterSync = Math.max(0, profile.slotsTotal - rawSyncBusy);
+			const asyncAllowed = Math.max(0, freeAfterSync - profile.syncReserve);
+			const rawAsyncBusy = active ? Math.min(asyncAllowed, Math.round(saturation * profile.slotsTotal * (1 - syncShare))) : 0;
+			const reserveSlots = Math.min(profile.syncReserve, Math.max(0, profile.slotsTotal - rawSyncBusy - rawAsyncBusy));
+			const freeSlots = Math.max(0, profile.slotsTotal - rawSyncBusy - rawAsyncBusy - reserveSlots);
+
+			state.slots.syncBusy = damp(state.slots.syncBusy, rawSyncBusy);
+			state.slots.asyncBusy = damp(state.slots.asyncBusy, rawAsyncBusy);
+			state.slots.reserve = reserveSlots;
+			state.slots.free = freeSlots;
+
+			const syncActual = active ? Math.max(0, profile.syncRps * randomBetween(0.82, 1.08)) : 0;
+			const asyncActual = active ? Math.max(0, profile.asyncRps * randomBetween(0.86, 1.05)) : 0;
+			const overload = Math.max(0, saturation - 0.86);
+			const timeoutRisk = Math.min(0.92, overload * 0.42 + profile.errorRate / 160 + (profile.latency > profile.timeoutMs ? 0.25 : 0));
+			const callbackRisk = profile.callbackError / 100;
+			const syncOk = syncActual * Math.max(0, 1 - timeoutRisk) * 0.85;
+			const syncTimeouts = syncActual * timeoutRisk * randomBetween(0.25, 0.72);
+			const noSlot = syncActual * Math.max(0, saturation - 1) * randomBetween(0.18, 0.52);
+			const asyncProcessing = active ? Math.max(0, rawAsyncBusy * (1000 / Math.max(30, profile.latency + profile.jitter * 0.35))) : 0;
+			const asyncAccepted = asyncActual * (active ? 0.94 : 0);
+			const asyncDone = Math.min(state.health.asyncQueue + asyncAccepted, asyncProcessing * randomBetween(0.55, 1.15));
+			const newRetries = active ? asyncDone * (profile.errorRate / 100) * randomBetween(0.5, 1.4) : 0;
+			const callbackFailures = asyncDone * callbackRisk * randomBetween(0.45, 1.05);
+
+			state.totals.syncSuccess += syncOk / 1.2;
+			state.totals.syncTimeout += syncTimeouts / 1.2;
+			state.totals.noSlot += noSlot / 1.2;
+			state.totals.asyncAccepted += asyncAccepted / 1.2;
+			state.totals.asyncDone += asyncDone / 1.2;
+			state.totals.retries += newRetries / 1.2;
+
+			const queueTarget = Math.max(0, state.health.asyncQueue + asyncAccepted - asyncDone + newRetries * 0.6);
+			state.health.asyncQueue = damp(state.health.asyncQueue, active ? queueTarget : Math.max(0, queueTarget - 8), 0.34);
+			state.health.callbackBacklog = damp(
+				state.health.callbackBacklog,
+				Math.max(0, state.health.callbackBacklog + callbackFailures - Math.max(0, asyncDone * (1 - callbackRisk) * 0.52)),
+				0.3
+			);
+			state.health.syncWaiters = damp(state.health.syncWaiters, active ? Math.max(0, syncActual * overload * 0.65) : 0, 0.28);
+			state.health.oldestAge = active && state.health.asyncQueue > 5
+				? Math.min(900, state.health.oldestAge + Math.max(1, saturation * 2.4))
+				: Math.max(0, state.health.oldestAge - 6);
+			if (active && overload > 0.65 && Math.random() > 0.86) {
+				state.totals.expiredLeases += 1;
+				logEvent("lease", "Reap expired lease: слот освобожден планировщиком", "warn");
+			}
+
+			const p95 = profile.latency + profile.jitter * 1.7 + overload * 480 + profile.responseSize * 1.4;
+			const errorPercent = Math.min(100, profile.errorRate + timeoutRisk * 100 + callbackRisk * 18);
+			const throughput = syncActual + asyncActual;
+			state.chart.push({ throughput, p95, errorPercent });
+			if (state.chart.length > 72) {
+				state.chart.shift();
+			}
+
+			if (active && overload > 0.9 && state.ticks % 8 === 0) {
+				logEvent("overload", "Высокое насыщение: sync waiters и no slot растут", "bad");
+			}
+			if (active && callbackRisk > 0.35 && state.ticks % 7 === 0) {
+				logEvent("callback", "Callback delivery уходит в retry", "warn");
+			}
+
+			state.ticks += 1;
+			render({
+				profile,
+				syncActual,
+				asyncActual,
+				p95,
+				errorPercent,
+				saturation
+			});
+		}
+
+		function render(runtime) {
+			const profile = runtime.profile;
+			const free = Math.round(state.slots.free);
+			const syncBusy = Math.round(state.slots.syncBusy);
+			const asyncBusy = Math.round(state.slots.asyncBusy);
+			const headroom = Math.max(0, free + state.slots.reserve);
+			const asyncNoAnswer = Math.round(state.health.asyncQueue + state.health.callbackBacklog);
+			const healthWarn = runtime.saturation > 1 || state.health.callbackBacklog > 30 || state.health.oldestAge > 120;
+			const healthBad = runtime.saturation > 1.35 || state.health.callbackBacklog > 120 || state.health.oldestAge > 420;
+
+			$("#topMode").textContent = state.running ? "RUN" : "IDLE";
+			$("#topHealth").textContent = healthBad ? "RISK" : healthWarn ? "WARN" : "OK";
+			$("#topSlots").textContent = `${free}/${profile.slotsTotal}`;
+			$("#startStop").textContent = state.running ? "Стоп нагрузки" : "Старт нагрузки";
+			$("#startStop").classList.toggle("running", state.running);
+			$("#repositoryMode").textContent = state.apiMode ? "api" : "memory";
+
+			$("#syncSuccess").textContent = Math.round(state.totals.syncSuccess).toLocaleString("ru-RU");
+			$("#syncTimeout").textContent = Math.round(state.totals.syncTimeout).toLocaleString("ru-RU");
+			$("#noSlotCount").textContent = Math.round(state.totals.noSlot).toLocaleString("ru-RU");
+			$("#asyncAccepted").textContent = Math.round(state.totals.asyncAccepted).toLocaleString("ru-RU");
+			$("#asyncNoAnswer").textContent = asyncNoAnswer.toLocaleString("ru-RU");
+			$("#retryCount").textContent = Math.round(state.totals.retries).toLocaleString("ru-RU");
+			$("#syncActual").textContent = `${Math.round(runtime.syncActual)} rps`;
+			$("#asyncActual").textContent = `${Math.round(runtime.asyncActual)} rps`;
+
+			$("#asyncQueue").textContent = Math.round(state.health.asyncQueue).toLocaleString("ru-RU");
+			$("#callbackBacklog").textContent = Math.round(state.health.callbackBacklog).toLocaleString("ru-RU");
+			$("#syncWaiters").textContent = Math.round(state.health.syncWaiters).toLocaleString("ru-RU");
+			$("#slotHeadroom").textContent = headroom.toLocaleString("ru-RU");
+			$("#oldestAge").textContent = `${Math.round(state.health.oldestAge)}с`;
+			$("#expiredLeases").textContent = Math.round(state.totals.expiredLeases).toLocaleString("ru-RU");
+
+			setFill("#asyncQueueBar", state.health.asyncQueue, 220);
+			setFill("#callbackBacklogBar", state.health.callbackBacklog, 160);
+			setFill("#syncWaitersBar", state.health.syncWaiters, 80);
+			setFill("#slotHeadroomBar", headroom, profile.slotsTotal);
+			setFill("#oldestAgeBar", state.health.oldestAge, 420);
+			setFill("#expiredLeasesBar", state.totals.expiredLeases, 12);
+
+			renderSlots(profile.slotsTotal, syncBusy, asyncBusy, state.slots.reserve);
+			drawChart();
+		}
+
+		function setFill(selector, value, max) {
+			const pct = Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100));
+			$(selector).style.setProperty("--fill", `${pct}%`);
+		}
+
+		function renderSlots(total, syncBusy, asyncBusy, reserve) {
+			const grid = $("#slotGrid");
+			grid.innerHTML = "";
+			for (let index = 0; index < total; index += 1) {
+				const node = document.createElement("div");
+				node.className = "slot";
+				let label = "FREE";
+				if (index < syncBusy) {
+					node.classList.add("sync", "busy");
+					label = "SYNC";
+				} else if (index < syncBusy + asyncBusy) {
+					node.classList.add("async", "busy");
+					label = "ASYNC";
+				} else if (index < syncBusy + asyncBusy + reserve) {
+					node.classList.add("reserve");
+					label = "RESERVE";
+				}
+				node.textContent = `${index + 1}\n${label}`;
+				grid.appendChild(node);
+			}
+		}
+
+		function drawChart() {
+			const canvas = $("#pulseChart");
+			const ctx = canvas.getContext("2d");
+			const width = canvas.width;
+			const height = canvas.height;
+			ctx.clearRect(0, 0, width, height);
+			ctx.fillStyle = "#14140f";
+			ctx.fillRect(0, 0, width, height);
+
+			ctx.strokeStyle = "rgba(244, 240, 230, 0.14)";
+			ctx.lineWidth = 1;
+			for (let y = 36; y < height; y += 44) {
+				ctx.beginPath();
+				ctx.moveTo(0, y);
+				ctx.lineTo(width, y);
+				ctx.stroke();
+			}
+
+			if (state.chart.length < 2) {
+				return;
+			}
+
+			const maxRps = Math.max(80, ...state.chart.map((point) => point.throughput));
+			const maxLatency = Math.max(500, ...state.chart.map((point) => point.p95));
+			drawLine(ctx, "throughput", maxRps, "#a8ff3e", width, height, 2.4);
+			drawLine(ctx, "p95", maxLatency, "#00c0d4", width, height, 2);
+			drawLine(ctx, "errorPercent", 100, "#e04961", width, height, 2);
+
+			const last = state.chart[state.chart.length - 1];
+			ctx.fillStyle = "rgba(244, 240, 230, 0.88)";
+			ctx.font = "12px Cascadia Mono, Consolas, monospace";
+			ctx.fillText(`${Math.round(last.throughput)} rps`, 14, 22);
+			ctx.fillText(`p95 ${Math.round(last.p95)} ms`, 118, 22);
+			ctx.fillText(`${Math.round(last.errorPercent)}% errors`, 238, 22);
+		}
+
+		function drawLine(ctx, key, max, color, width, height, lineWidth) {
+			ctx.strokeStyle = color;
+			ctx.lineWidth = lineWidth;
+			ctx.beginPath();
+			state.chart.forEach((point, index) => {
+				const x = (index / Math.max(1, state.chart.length - 1)) * width;
+				const y = height - 22 - Math.min(1, point[key] / max) * (height - 48);
+				if (index === 0) {
+					ctx.moveTo(x, y);
+				} else {
+					ctx.lineTo(x, y);
+				}
+			});
+			ctx.stroke();
+		}
+
+		function logEvent(type, text, tone = "ok") {
+			const log = $("#eventLog");
+			const event = document.createElement("div");
+			event.className = "event";
+			const time = new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+			const pillTone = tone === "bad" ? "bad" : tone === "warn" ? "warn" : "ok";
+			event.innerHTML = `<time>${time}</time><strong>${text}</strong><span class="pill ${pillTone}">${type}</span>`;
+			log.prepend(event);
+			while (log.children.length > 24) {
+				log.lastElementChild.remove();
+			}
+		}
+
+		function showToast(title, message) {
+			const toast = $("#toast");
+			toast.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+			toast.classList.add("visible");
+			window.clearTimeout(showToast.timeout);
+			showToast.timeout = window.setTimeout(() => toast.classList.remove("visible"), 2400);
+		}
+
+		function resetCounters() {
+			state.totals = {
+				syncSuccess: 0,
+				syncTimeout: 0,
+				noSlot: 0,
+				asyncAccepted: 0,
+				asyncDone: 0,
+				retries: 0,
+				expiredLeases: 0
+			};
+			state.health = {
+				asyncQueue: 0,
+				callbackBacklog: 0,
+				syncWaiters: 0,
+				oldestAge: 0
+			};
+			state.chart = [];
+			logEvent("reset", "Счетчики локального прототипа сброшены", "ok");
+			showToast("Сброс", "Метрики прототипа очищены.");
+			nextSimulation();
+		}
+
+		function switchView(name) {
+			$$(".view").forEach((view) => view.classList.toggle("active", view.id === name));
+			$$(".tab-button").forEach((button) => button.classList.toggle("active", button.dataset.view === name));
+		}
+
+		function bindEvents() {
+			$$(".tab-button").forEach((button) => {
+				button.addEventListener("click", () => switchView(button.dataset.view));
+			});
+			$$(".profile-button").forEach((button) => {
+				button.addEventListener("click", () => applyPreset(button.dataset.preset));
+			});
+			$$(".scenario-apply").forEach((button) => {
+				button.addEventListener("click", () => {
+					applyPreset(button.dataset.preset);
+					switchView("overview");
+				});
+			});
+			Object.values(fields).forEach((field) => {
+				field.addEventListener("input", () => {
+					updateOutputs();
+					$$(".profile-button").forEach((button) => button.classList.remove("active"));
+				});
+			});
+			$("#startStop").addEventListener("click", () => {
+				state.running = !state.running;
+				logEvent("load", state.running ? "Нагрузка запущена" : "Нагрузка остановлена", state.running ? "warn" : "ok");
+				showToast("Нагрузка", state.running ? "Локальная симуляция начала генерировать поток." : "Генератор остановлен.");
+				nextSimulation();
+			});
+			$("#resetButton").addEventListener("click", resetCounters);
+			$("#apiToggle").addEventListener("change", (event) => {
+				state.apiMode = event.target.checked;
+				const message = state.apiMode
+					? "В прототипе включен режим будущего API. Если endpoint недоступен, данные останутся локальными."
+					: "Возврат к локальной симуляции данных.";
+				logEvent("api", message, state.apiMode ? "warn" : "ok");
+				showToast("Источник данных", message);
+			});
+		}
+
+		bindEvents();
+		applyPreset("steady", false);
+		logEvent("ready", "UI-прототип готов к просмотру", "ok");
+		nextSimulation();
+		window.setInterval(nextSimulation, 850);
+	</script>
+</body>
+</html>

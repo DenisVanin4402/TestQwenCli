@@ -1,0 +1,176 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: Live dashboard / Spring Boot
+        - heading "Gateway Test Dashboard" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Панель для управляемой нагрузки на sync/async gateway, контроля upstream-симуляции и наблюдения за очередями, callback-доставкой и слотами в одном экране.
+      - generic "Краткий статус стенда" [ref=e8]:
+        - generic [ref=e9]:
+          - strong [ref=e10]: IDLE
+          - generic [ref=e11]: режим нагрузки
+        - generic [ref=e12]:
+          - strong [ref=e13]: OK
+          - generic [ref=e14]: здоровье gateway
+        - generic [ref=e15]:
+          - strong [ref=e16]: 5/5
+          - generic [ref=e17]: свободно слотов
+    - navigation "Навигация и управление" [ref=e18]:
+      - tablist [ref=e19]:
+        - button "Обзор" [ref=e20] [cursor=pointer]
+        - button "Сценарии" [ref=e21] [cursor=pointer]
+        - button "API-контракты" [ref=e22] [cursor=pointer]
+      - generic [ref=e23]:
+        - checkbox "живой API" [checked] [ref=e24]
+        - generic [ref=e25]: живой API
+      - generic [ref=e26]:
+        - button "Старт нагрузки" [ref=e27] [cursor=pointer]
+        - button "Сброс" [ref=e28] [cursor=pointer]
+    - main [ref=e29]:
+      - region "Обзор дашборда" [ref=e30]:
+        - generic [ref=e31]:
+          - complementary [ref=e32]:
+            - generic [ref=e33]:
+              - heading "Нагрузка" [level=2] [ref=e34]
+              - generic [ref=e35]: профиль можно менять на лету
+            - generic [ref=e36]:
+              - generic "Пресеты нагрузки" [ref=e38]:
+                - button "Ровный фон" [ref=e39] [cursor=pointer]
+                - button "Sync storm" [ref=e40] [cursor=pointer]
+                - button "Async backlog" [ref=e41] [cursor=pointer]
+                - button "Callback fail" [ref=e42] [cursor=pointer]
+              - generic [ref=e43]:
+                - generic [ref=e44]:
+                  - generic [ref=e45]:
+                    - text: Sync RPS
+                    - status "Sync RPS 18" [ref=e46]: "18"
+                  - slider [ref=e47]: "18"
+                - generic [ref=e48]:
+                  - generic [ref=e49]:
+                    - text: Async submit RPS
+                    - status "Async submit RPS 28" [ref=e50]: "28"
+                  - slider [ref=e51]: "28"
+                - generic [ref=e52]:
+                  - generic [ref=e53]:
+                    - text: HIGH priority async
+                    - status "HIGH priority async 35" [ref=e54]: 35%
+                  - slider [ref=e55]: "35"
+              - generic [ref=e56]:
+                - generic [ref=e57]:
+                  - generic [ref=e58]:
+                    - text: Latency upstream
+                    - status "Latency upstream 120" [ref=e59]: 25 мс
+                  - slider [ref=e60]: "25"
+                - generic [ref=e61]:
+                  - generic [ref=e62]:
+                    - text: Jitter
+                    - status "Jitter 45" [ref=e63]: 10 мс
+                  - slider [ref=e64]: "10"
+                - generic [ref=e65]:
+                  - generic [ref=e66]:
+                    - text: Ошибки upstream
+                    - status "Ошибки upstream 2" [ref=e67]: 0%
+                  - slider [ref=e68]: "0"
+                - generic [ref=e69]:
+                  - generic [ref=e70]:
+                    - text: Размер ответа
+                    - status "Размер ответа 8" [ref=e71]: 8 КБ
+                  - slider [ref=e72]: "8"
+              - generic [ref=e73]:
+                - generic [ref=e74]:
+                  - generic [ref=e75]:
+                    - generic [ref=e76]: Слоты
+                    - spinbutton "Слоты" [ref=e77]: "5"
+                  - generic [ref=e78]:
+                    - generic [ref=e79]: Sync reserve
+                    - spinbutton "Sync reserve" [ref=e80]: "1"
+                - generic [ref=e81]:
+                  - generic [ref=e82]:
+                    - text: Sync timeout
+                    - status "Sync timeout 1500" [ref=e83]: 1500 мс
+                  - slider [ref=e84]: "1500"
+                - generic [ref=e85]:
+                  - generic [ref=e86]:
+                    - text: Ошибки callback
+                    - status "Ошибки callback 0" [ref=e87]: 0%
+                  - slider [ref=e88]: "0"
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - heading "Пульс" [level=2] [ref=e91]
+              - generic [ref=e92]: обновление каждые 850 мс
+            - generic [ref=e93]:
+              - generic "Realtime метрики нагрузки" [ref=e94]:
+                - generic [ref=e95]:
+                  - paragraph [ref=e96]: Sync success
+                  - strong [ref=e97]: "0"
+                  - generic [ref=e98]:
+                    - generic [ref=e99]: 0 rps
+                    - text: факт
+                - generic [ref=e100]:
+                  - paragraph [ref=e101]: Sync timeout
+                  - strong [ref=e102]: "0"
+                  - generic [ref=e103]:
+                    - generic [ref=e104]: "0"
+                    - text: no slot
+                - generic [ref=e105]:
+                  - paragraph [ref=e106]: Async accepted
+                  - strong [ref=e107]: "0"
+                  - generic [ref=e108]:
+                    - generic [ref=e109]: 0 rps
+                    - text: submit
+                - generic [ref=e110]:
+                  - paragraph [ref=e111]: Async no answer
+                  - strong [ref=e112]: "0"
+                  - generic [ref=e113]:
+                    - generic [ref=e114]: "0"
+                    - text: retry
+              - generic [ref=e115]:
+                - generic [ref=e116]:
+                  - heading "Throughput / latency / errors" [level=3] [ref=e117]
+                  - generic "Легенда графика" [ref=e118]:
+                    - generic [ref=e119]: rps
+                    - generic [ref=e121]: p95
+                    - generic [ref=e123]: errors
+                - img "Realtime график" [ref=e125]
+              - generic "Пул слотов" [ref=e126]:
+                - generic [ref=e127]: 1 RESERVE
+                - generic [ref=e128]: 2 FREE
+                - generic [ref=e129]: 3 FREE
+                - generic [ref=e130]: 4 FREE
+                - generic [ref=e131]: 5 FREE
+          - complementary [ref=e132]:
+            - generic [ref=e133]:
+              - heading "Здоровье" [level=2] [ref=e134]
+              - generic [ref=e135]: memory
+            - generic [ref=e137]:
+              - generic [ref=e138]:
+                - generic [ref=e139]:
+                  - strong [ref=e140]: Async queue
+                  - generic [ref=e141]: pending + in progress
+                - strong [ref=e143]: "0"
+              - generic [ref=e144]:
+                - generic [ref=e145]:
+                  - strong [ref=e146]: Callback backlog
+                  - generic [ref=e147]: pending + retry delivery
+                - strong [ref=e149]: "0"
+              - generic [ref=e150]:
+                - generic [ref=e151]:
+                  - strong [ref=e152]: Sync waiters
+                  - generic [ref=e153]: ожидают свободный слот
+                - strong [ref=e155]: "0"
+              - generic [ref=e156]:
+                - generic [ref=e157]:
+                  - strong [ref=e158]: Slot headroom
+                  - generic [ref=e159]: free + sync reserve
+                - strong [ref=e162]: "6"
+              - generic [ref=e163]:
+                - generic [ref=e164]:
+                  - strong [ref=e165]: Oldest async age
+                  - generic [ref=e166]: возраст старшей задачи
+                - strong [ref=e168]: 0с
+              - generic [ref=e169]:
+                - generic [ref=e170]:
+                  - strong [ref=e171]: Expired leases
+                  - generic [ref=e172]: за текущую сессию
+                - strong [ref=e174]: "0"
+  - status

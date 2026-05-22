@@ -1,5 +1,7 @@
 package com.example.testqwencli;
 
+import com.example.testqwencli.gateway.slot.postgres.PostgresSlotReleaseNotificationListener;
+import com.example.testqwencli.gateway.slot.postgres.PostgresSlotReleaseNotificationPublisher;
 import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,8 @@ class TestQwenCliApplicationTests {
 	void memoryModeDoesNotCreatePostgresInfrastructure() {
 		assertThat(applicationContext.getBeansOfType(DataSource.class)).isEmpty();
 		assertThat(applicationContext.getBeansOfType(SpringLiquibase.class)).isEmpty();
+		assertThat(applicationContext.getBeansOfType(PostgresSlotReleaseNotificationListener.class)).isEmpty();
+		assertThat(applicationContext.getBeansOfType(PostgresSlotReleaseNotificationPublisher.class)).isEmpty();
 	}
 
 	@Test

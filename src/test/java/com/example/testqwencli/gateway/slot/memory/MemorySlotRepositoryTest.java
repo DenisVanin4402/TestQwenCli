@@ -2,6 +2,7 @@ package com.example.testqwencli.gateway.slot.memory;
 
 import com.example.testqwencli.gateway.slot.SlotKind;
 import com.example.testqwencli.gateway.slot.SlotLease;
+import com.example.testqwencli.gateway.slot.SyncAcquireWaitMode;
 import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,7 @@ class MemorySlotRepositoryTest {
 
 	private final MemorySlotRepository repository = new MemorySlotRepository(
 			new ExternalGatewaySlotProperties(5, 1, Duration.ofSeconds(30), Duration.ofSeconds(5),
-					Duration.ofMillis(10)));
+					Duration.ofMillis(10), SyncAcquireWaitMode.POLLING));
 
 	@Test
 	void acquireSyncSlotAllowsMaximumFiveSlots() {

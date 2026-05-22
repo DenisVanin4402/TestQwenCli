@@ -13,6 +13,8 @@ import com.example.testqwencli.gateway.callback.config.ExternalGatewayCallbackPr
 import com.example.testqwencli.gateway.callback.config.ExternalGatewayClientsProperties;
 import com.example.testqwencli.gateway.callback.memory.MemoryCallbackDeliveryRepository;
 import com.example.testqwencli.gateway.slot.SlotManager;
+import com.example.testqwencli.gateway.slot.PollingSyncSlotWaitStrategy;
+import com.example.testqwencli.gateway.slot.SyncAcquireWaitMode;
 import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties;
 import com.example.testqwencli.gateway.slot.memory.MemorySlotRepository;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamClient;
@@ -188,8 +190,9 @@ class CallbackDeliveryFlowTest {
 			RecordingUpstreamClient upstreamClient
 	) {
 		ExternalGatewaySlotProperties slotProperties = slotProperties();
-		SlotManager slotManager = new SlotManager(new MemorySlotRepository(slotProperties), clock, duration -> {
-		}, slotProperties);
+		SlotManager slotManager = new SlotManager(new MemorySlotRepository(slotProperties), clock,
+				new PollingSyncSlotWaitStrategy(duration -> {
+				}), slotProperties);
 		CallbackDeliveryPlanner planner = new CallbackDeliveryPlanner(deliveryRepository, taskRepository,
 				callbackProperties(2), clientsProperties, clock);
 		return new ExternalAsyncDispatcher(taskRepository, slotManager, upstreamClient, asyncProperties(), clock,
@@ -241,7 +244,7 @@ class CallbackDeliveryFlowTest {
 
 	private static ExternalGatewaySlotProperties slotProperties() {
 		return new ExternalGatewaySlotProperties(2, 0, Duration.ofSeconds(30), Duration.ofSeconds(5),
-				Duration.ofMillis(10));
+				Duration.ofMillis(10), SyncAcquireWaitMode.POLLING);
 	}
 
 	private static final class RecordingUpstreamClient implements ExternalUpstreamClient {

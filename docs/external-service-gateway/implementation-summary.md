@@ -52,6 +52,8 @@
    - описаны таблицы `ext_slots`, `ext_sync_waiters`, `ext_request_queue`, `ext_callback_delivery`;
    - добавлены JDBC-репозитории для slots, async queue и callback delivery;
    - PostgreSQL mode включается только через `external-gateway.repository.type=postgres`;
+   - для sync waiters добавлен режим `external-gateway.slots.sync-acquire-wait-mode=listen_notify`,
+     который использует канал PostgreSQL `external_gateway_slot_released` и fallback polling;
    - memory mode остается дефолтом и не требует PostgreSQL.
 
 ## Что можно проверять сейчас
@@ -78,7 +80,7 @@ mvn test
 
 ```text
 BUILD SUCCESS
-Tests run: 36, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 ## Как запустить локально
@@ -229,6 +231,8 @@ external-gateway.postgres.username=external_gateway
 external-gateway.postgres.password=change-me
 external-gateway.postgres.schema=external_gateway
 external-gateway.postgres.liquibase-enabled=true
+# Опционально: быстрее будить sync waiters после release/reap через PostgreSQL LISTEN/NOTIFY.
+external-gateway.slots.sync-acquire-wait-mode=listen_notify
 ```
 
 Условия:

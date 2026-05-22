@@ -4,6 +4,7 @@ import com.example.testqwencli.gateway.postgres.ExternalGatewayPostgresPropertie
 import com.example.testqwencli.gateway.postgres.PostgresTableNames;
 import com.example.testqwencli.gateway.slot.SlotKind;
 import com.example.testqwencli.gateway.slot.SlotLease;
+import com.example.testqwencli.gateway.slot.SlotReleaseNotificationPublisher;
 import com.example.testqwencli.gateway.slot.SlotRepository;
 import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties;
 import org.springframework.jdbc.core.RowMapper;
@@ -37,12 +38,14 @@ public final class PostgresSlotRepository implements SlotRepository {
 	private final int targetFreeSyncSlots;
 	private final Duration leaseTtl;
 	private final Duration syncWaiterTtl;
+	private final SlotReleaseNotificationPublisher notificationPublisher;
 
 	public PostgresSlotRepository(
 			NamedParameterJdbcTemplate jdbc,
 			TransactionTemplate transactionTemplate,
 			ExternalGatewayPostgresProperties postgresProperties,
-			ExternalGatewaySlotProperties slotProperties
+			ExternalGatewaySlotProperties slotProperties,
+			SlotReleaseNotificationPublisher notificationPublisher
 	) {
 		this.jdbc = Objects.requireNonNull(jdbc, "jdbc must not be null");
 		this.transactionTemplate = Objects.requireNonNull(transactionTemplate, "transactionTemplate must not be null");
@@ -53,6 +56,8 @@ public final class PostgresSlotRepository implements SlotRepository {
 		this.targetFreeSyncSlots = slotProperties.targetFreeSyncSlots();
 		this.leaseTtl = slotProperties.leaseTtl();
 		this.syncWaiterTtl = slotProperties.syncWaiterTtl();
+		this.notificationPublisher = Objects.requireNonNull(notificationPublisher,
+				"notificationPublisher must not be null");
 	}
 
 	@Override
@@ -86,6 +91,9 @@ public final class PostgresSlotRepository implements SlotRepository {
 	@Override
 	public boolean release(int slotId, UUID leaseId) {
 		Objects.requireNonNull(leaseId, "leaseId must not be null");
+		if (!isConfiguredSlot(slotId)) {
+			return false;
+		}
 		String sql = """
 				UPDATE %s
 				SET lease_id = NULL,
@@ -100,13 +108,20 @@ public final class PostgresSlotRepository implements SlotRepository {
 		MapSqlParameterSource params = new MapSqlParameterSource()
 				.addValue("slotId", slotId)
 				.addValue("leaseId", leaseId);
-		return jdbc.update(sql, params) > 0;
+		boolean released = jdbc.update(sql, params) > 0;
+		if (released) {
+			notificationPublisher.publishSlotReleased();
+		}
+		return released;
 	}
 
 	@Override
 	public Optional<SlotLease> heartbeat(int slotId, UUID leaseId, Instant now) {
 		Objects.requireNonNull(leaseId, "leaseId must not be null");
 		Objects.requireNonNull(now, "now must not be null");
+		if (!isConfiguredSlot(slotId)) {
+			return Optional.empty();
+		}
 		String sql = """
 				UPDATE %s
 				SET expires_at = :expiresAt
@@ -130,10 +145,14 @@ public final class PostgresSlotRepository implements SlotRepository {
 				SELECT COUNT(*)
 				FROM %s
 				WHERE lease_id IS NOT NULL
+				  AND slot_id <= :totalSlots
 				  AND kind = :kind
 				  AND expires_at > CURRENT_TIMESTAMP
 				""".formatted(tables.slots());
-		return jdbc.queryForObject(sql, new MapSqlParameterSource("kind", kind.name()), Long.class);
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("kind", kind.name())
+				.addValue("totalSlots", totalSlots);
+		return jdbc.queryForObject(sql, params, Long.class);
 	}
 
 	@Override
@@ -148,9 +167,17 @@ public final class PostgresSlotRepository implements SlotRepository {
 				    expires_at = NULL,
 				    task_id = NULL
 				WHERE lease_id IS NOT NULL
+				  AND slot_id <= :totalSlots
 				  AND expires_at <= :now
 				""".formatted(tables.slots());
-		return jdbc.update(sql, new MapSqlParameterSource("now", timestamp(now)));
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("now", timestamp(now))
+				.addValue("totalSlots", totalSlots);
+		int reaped = jdbc.update(sql, params);
+		if (reaped > 0) {
+			notificationPublisher.publishSlotReleased();
+		}
+		return reaped;
 	}
 
 	@Override
@@ -196,8 +223,8 @@ public final class PostgresSlotRepository implements SlotRepository {
 				WITH candidate AS (
 				    SELECT slot_id
 				    FROM %s
-				    WHERE lease_id IS NULL
-				       OR expires_at <= :now
+				    WHERE slot_id <= :totalSlots
+				      AND (lease_id IS NULL OR expires_at <= :now)
 				    ORDER BY slot_id
 				    FOR UPDATE SKIP LOCKED
 				    LIMIT 1
@@ -219,14 +246,21 @@ public final class PostgresSlotRepository implements SlotRepository {
 				.addValue("kind", kind.name())
 				.addValue("taskId", taskId)
 				.addValue("now", timestamp(now))
+				.addValue("totalSlots", totalSlots)
 				.addValue("acquiredAt", timestamp(now))
 				.addValue("expiresAt", timestamp(now.plus(leaseTtl)));
 		return queryLease(sql, params);
 	}
 
 	private void lockSlotRows() {
-		String sql = "SELECT slot_id FROM %s ORDER BY slot_id FOR UPDATE".formatted(tables.slots());
-		jdbc.getJdbcOperations().query(sql, rs -> {
+		String sql = """
+				SELECT slot_id
+				FROM %s
+				WHERE slot_id <= :totalSlots
+				ORDER BY slot_id
+				FOR UPDATE
+				""".formatted(tables.slots());
+		jdbc.query(sql, new MapSqlParameterSource("totalSlots", totalSlots), rs -> {
 		});
 	}
 
@@ -235,12 +269,14 @@ public final class PostgresSlotRepository implements SlotRepository {
 				SELECT COUNT(*)
 				FROM %s
 				WHERE lease_id IS NOT NULL
+				  AND slot_id <= :totalSlots
 				  AND kind = :kind
 				  AND expires_at > :now
 				""".formatted(tables.slots());
 		MapSqlParameterSource params = new MapSqlParameterSource()
 				.addValue("kind", kind.name())
-				.addValue("now", timestamp(now));
+				.addValue("now", timestamp(now))
+				.addValue("totalSlots", totalSlots);
 		return jdbc.queryForObject(sql, params, Long.class);
 	}
 
@@ -284,6 +320,10 @@ public final class PostgresSlotRepository implements SlotRepository {
 		if (owner.isBlank()) {
 			throw new IllegalArgumentException("Владелец lease не должен быть пустым");
 		}
+	}
+
+	private boolean isConfiguredSlot(int slotId) {
+		return slotId >= 1 && slotId <= totalSlots;
 	}
 
 	@FunctionalInterface

@@ -26,12 +26,12 @@
 - ожидаемая нагрузка небольшая: около 1500 запросов/день, пики 10-20/мин;
 - нужны транзакции, идемпотентность и persistent queue;
 - `FOR UPDATE SKIP LOCKED` подходит для конкурентного claim;
-- `LISTEN/NOTIFY` уменьшает latency без отдельного broker.
+- `LISTEN/NOTIFY` в режиме ожидания sync-слота уменьшает latency после освобождения слота без отдельного broker.
 
 Последствия:
 
 - нужно следить за autovacuum и очисткой старых задач;
-- PostgreSQL не является message broker, поэтому NOTIFY используется только как wake-up;
+- PostgreSQL не является message broker, поэтому `NOTIFY external_gateway_slot_released` используется только как wake-up для повторной проверки `ext_slots`;
 - при росте нагрузки можно заменить queue layer на RabbitMQ/Kafka/Temporal, сохранив gateway API.
 
 ## ADR-003. Lease-запись вместо долгого DB lock

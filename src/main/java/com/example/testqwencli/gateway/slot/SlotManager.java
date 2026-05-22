@@ -19,18 +19,18 @@ public final class SlotManager {
 
 	private final SlotRepository slotRepository;
 	private final Clock clock;
-	private final SlotAcquireSleeper sleeper;
+	private final SyncSlotWaitStrategy waitStrategy;
 	private final Duration syncAcquirePollInterval;
 
 	public SlotManager(
 			SlotRepository slotRepository,
 			Clock clock,
-			SlotAcquireSleeper sleeper,
+			SyncSlotWaitStrategy waitStrategy,
 			ExternalGatewaySlotProperties properties
 	) {
 		this.slotRepository = Objects.requireNonNull(slotRepository, "slotRepository must not be null");
 		this.clock = Objects.requireNonNull(clock, "clock must not be null");
-		this.sleeper = Objects.requireNonNull(sleeper, "sleeper must not be null");
+		this.waitStrategy = Objects.requireNonNull(waitStrategy, "waitStrategy must not be null");
 		Objects.requireNonNull(properties, "properties must not be null");
 		this.syncAcquirePollInterval = properties.syncAcquirePollInterval();
 	}
@@ -89,6 +89,7 @@ public final class SlotManager {
 	}
 
 	private Optional<SlotLease> waitForSyncSlot(String owner, Instant deadline) {
+		long observedSignalVersion = waitStrategy.currentSignalVersion();
 		while (true) {
 			Instant now = clock.instant();
 			Optional<SlotLease> lease = slotRepository.acquireSyncSlot(owner, now);
@@ -99,21 +100,22 @@ public final class SlotManager {
 				log.debug("Истекло ожидание sync-слота: owner={}", owner);
 				return Optional.empty();
 			}
-			if (!sleepUntilNextAttempt(now, deadline)) {
+			Optional<Long> nextSignalVersion = waitUntilNextAttempt(observedSignalVersion, now, deadline);
+			if (nextSignalVersion.isEmpty()) {
 				return Optional.empty();
 			}
+			observedSignalVersion = nextSignalVersion.orElseThrow();
 		}
 	}
 
-	private boolean sleepUntilNextAttempt(Instant now, Instant deadline) {
+	private Optional<Long> waitUntilNextAttempt(long observedSignalVersion, Instant now, Instant deadline) {
 		try {
-			sleeper.sleep(nextPause(now, deadline));
-			return true;
+			return Optional.of(waitStrategy.waitBeforeRetry(observedSignalVersion, nextPause(now, deadline)));
 		}
 		catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
 			log.debug("Ожидание sync-слота прервано", exception);
-			return false;
+			return Optional.empty();
 		}
 	}
 

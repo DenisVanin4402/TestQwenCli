@@ -2,7 +2,9 @@ package com.example.testqwencli.gateway.async;
 
 import com.example.testqwencli.gateway.async.config.ExternalGatewayAsyncProperties;
 import com.example.testqwencli.gateway.async.memory.MemoryAsyncTaskRepository;
+import com.example.testqwencli.gateway.slot.PollingSyncSlotWaitStrategy;
 import com.example.testqwencli.gateway.slot.SlotManager;
+import com.example.testqwencli.gateway.slot.SyncAcquireWaitMode;
 import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties;
 import com.example.testqwencli.gateway.slot.memory.MemorySlotRepository;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamClient;
@@ -127,8 +129,9 @@ class ExternalAsyncDispatcherTest {
 			Clock clock
 	) {
 		ExternalGatewaySlotProperties slotProperties = slotProperties();
-		SlotManager slotManager = new SlotManager(slotRepository, clock, duration -> {
-		}, slotProperties);
+		SlotManager slotManager = new SlotManager(slotRepository, clock,
+				new PollingSyncSlotWaitStrategy(duration -> {
+				}), slotProperties);
 		return new ExternalAsyncDispatcher(repository, slotManager, upstreamClient, asyncProperties(), clock,
 				java.util.Optional.empty());
 	}
@@ -146,7 +149,7 @@ class ExternalAsyncDispatcherTest {
 
 	private static ExternalGatewaySlotProperties slotProperties() {
 		return new ExternalGatewaySlotProperties(2, 0, Duration.ofSeconds(30), Duration.ofSeconds(5),
-				Duration.ofMillis(10));
+				Duration.ofMillis(10), SyncAcquireWaitMode.POLLING);
 	}
 
 	private static final class RecordingUpstreamClient implements ExternalUpstreamClient {

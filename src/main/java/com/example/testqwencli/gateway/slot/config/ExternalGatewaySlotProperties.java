@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.slot.config;
 
+import com.example.testqwencli.gateway.slot.SyncAcquireWaitMode;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,13 +17,15 @@ public record ExternalGatewaySlotProperties(
 		@Min(0) int targetFreeSyncSlots,
 		@NotNull Duration leaseTtl,
 		@NotNull Duration syncWaiterTtl,
-		@NotNull @DefaultValue("10ms") Duration syncAcquirePollInterval
+		@NotNull @DefaultValue("10ms") Duration syncAcquirePollInterval,
+		@NotNull @DefaultValue("POLLING") SyncAcquireWaitMode syncAcquireWaitMode
 ) {
 
 	public ExternalGatewaySlotProperties {
 		Objects.requireNonNull(leaseTtl, "leaseTtl must not be null");
 		Objects.requireNonNull(syncWaiterTtl, "syncWaiterTtl must not be null");
 		Objects.requireNonNull(syncAcquirePollInterval, "syncAcquirePollInterval must not be null");
+		Objects.requireNonNull(syncAcquireWaitMode, "syncAcquireWaitMode must not be null");
 		if (total < 1) {
 			throw new IllegalArgumentException("Общее число слотов должно быть положительным");
 		}

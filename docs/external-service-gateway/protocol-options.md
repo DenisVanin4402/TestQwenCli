@@ -1,15 +1,15 @@
-# Протокол REST/OpenAPI
+# REST/OpenAPI Protocol
 
 ## Контекст
 
-`external-service-gateway` обслуживает внутренние сервисы `invest-pay`, `user-expertise` и будущих клиентов. У внешнего сервиса есть ограничение `5` одновременных вызовов, поэтому все sync- и async-вызовы проходят через общее управление слотами. Постоянная очередь используется только для асинхронных задач; sync-запросы ждут слот через короткоживущие `sync waiters`.
+`external-service-gateway` обслуживает внутренние сервисы `invest-pay`, `user-expertise` и будущих клиентов. У внешнего сервиса есть ограничение `5 concurrent calls`, поэтому все sync и async вызовы проходят через общий Slot Manager. Persistent queue используется только для async-задач; sync-запросы ждут слот через короткоживущие `sync waiters`.
 
 Документация v1 фиксирует один интеграционный вариант:
 
 ```text
-REST/OpenAPI для постановки sync/async-запросов и чтения результата
-HTTP-обратный вызов для доставки async-результата
-GET result как резервное чтение
+REST/OpenAPI для sync и async submit/result
+HTTP callback для доставки async-результата
+GET result как fallback
 ```
 
 Контракты описаны в OpenAPI:
@@ -18,17 +18,17 @@ GET result как резервное чтение
 - `../openapi/external-gateway-async.yaml`
 - `../openapi/external-gateway-callback.yaml`
 
-## Синхронный API
+## Sync API
 
 ```http
 POST /v1/external/sync
 ```
 
-Шлюз ждет слот, выполняет HTTP-вызов внешнего сервиса и возвращает ответ в рамках исходного HTTP-запроса.
+Gateway ждет слот, выполняет upstream HTTP-вызов и возвращает ответ в рамках исходного HTTP-запроса.
 
-Для `POST /v1/external/sync` шлюз проверяет, что `clientService` в теле запроса совпадает с межсервисной идентичностью вызывающего сервиса. Несовпадение считается ошибкой авторизации или валидации.
+Для `POST /v1/external/sync` gateway проверяет, что `clientService` в теле запроса совпадает с service-to-service identity вызывающего сервиса. Несовпадение считается ошибкой авторизации или валидации.
 
-Если слот не получен до истечения `syncWaitTimeout`, шлюз возвращает `429 Too Many Requests`. `503 Service Unavailable` используется для недоступности шлюза или координатора лимитов, а не как обычный ответ на исчерпание sync SLA.
+Если slot не получен до истечения `syncWaitTimeout`, gateway возвращает `429 Too Many Requests`. `503 Service Unavailable` используется для недоступности gateway или координатора лимитов, а не как обычный ответ на исчерпание sync SLA.
 
 Пример запроса:
 
@@ -61,7 +61,7 @@ POST /v1/external/sync
 
 `result` в успешном sync-ответе нормализуется в `Map<String, String>`.
 
-## API постановки async-задачи
+## Async Submit API
 
 ```http
 POST /v1/external/async
@@ -82,7 +82,7 @@ POST /v1/external/async
 }
 ```
 
-Шлюз возвращает:
+Gateway возвращает:
 
 ```json
 {
@@ -95,7 +95,7 @@ POST /v1/external/async
 }
 ```
 
-Для `POST /v1/external/async` шлюз проверяет, что `clientService` в теле запроса совпадает с межсервисной идентичностью вызывающего сервиса. Это значение определяет область идемпотентности и выбор URL обратного вызова из списка разрешений, но не является самостоятельным источником доверия.
+Для `POST /v1/external/async` gateway проверяет, что `clientService` в теле запроса совпадает с service-to-service identity вызывающего сервиса. Это значение определяет scope идемпотентности и выбор callback URL из allow-list, но не является самостоятельным источником доверия.
 
 Приоритеты в публичном API задаются строками:
 
@@ -106,9 +106,9 @@ LOW  -> priority_weight = 10
 
 Внутренняя очередь сортируется по `priority_weight DESC, available_at ASC, id ASC`.
 
-## Обратный вызов async-задачи
+## Async Callback
 
-Шлюз вызывает эндпоинт сервиса-клиента:
+Gateway вызывает endpoint сервиса-клиента:
 
 ```http
 POST /internal/external-gateway/callbacks
@@ -120,10 +120,10 @@ POST /internal/external-gateway/callbacks
 
 Опциональные заголовки:
 
-- `X-Request-Id` - идентификатор корреляции доставки;
-- `X-Gateway-Signature` - подпись тела обратного вызова, если выбрана аутентификация на основе HMAC.
+- `X-Request-Id` - correlation id доставки;
+- `X-Gateway-Signature` - подпись тела callback, если выбран HMAC-based auth.
 
-Пример успешного обратного вызова:
+Пример успешного callback:
 
 ```json
 {
@@ -142,7 +142,7 @@ POST /internal/external-gateway/callbacks
 }
 ```
 
-Пример обратного вызова после исчерпания повторов внешнего сервиса:
+Пример callback после исчерпания retry upstream:
 
 ```json
 {
@@ -154,45 +154,45 @@ POST /internal/external-gateway/callbacks
   "result": null,
   "error": {
     "code": "UPSTREAM_TIMEOUT",
-    "message": "Таймаут внешнего сервиса",
+    "message": "External service timeout",
     "retryable": true
   },
   "finishedAt": "2026-05-21T20:31:00Z"
 }
 ```
 
-Для `DONE` поле `result` содержит `Map<String, String>`, а `error` равно `null`. Для `FAILED`, `DEAD` и `CANCELLED` поле `result` равно `null`, а причина передается в структурированном поле `error`. Поле `retryable` означает возможность ручного повтора; автоматические повторы внешнего вызова уже завершены до финального обратного вызова.
+Для `DONE` поле `result` содержит `Map<String, String>`, а `error` равно `null`. Для `FAILED`, `DEAD` и `CANCELLED` поле `result` равно `null`, а причина передается в структурированном поле `error`. Поле `retryable` означает возможность ручного retry; автоматические retry upstream уже завершены до финального callback.
 
-Эндпоинт обратного вызова должен быть идемпотентным. Повторная доставка того же `taskId` и статуса должна возвращать `200` или `204` и не создавать дублей в сервисе-клиенте.
+Callback endpoint должен быть идемпотентным. Повторная доставка того же `taskId` и статуса должна возвращать `200` или `204` и не создавать дублей в сервисе-клиенте.
 
-## Резервное чтение async-результата
+## Async Fallback API
 
-Если обратный вызов не доставлен или сервису-клиенту нужно перечитать результат:
+Если callback не доставлен или сервису-клиенту нужно перечитать результат:
 
 ```http
 GET /v1/external/async/{taskId}
 GET /v1/external/async/by-external-id/{externalId}
 ```
 
-Для `GET`, `DELETE` и `POST /v1/external/async/{taskId}/retry` шлюз не принимает `clientService` из параметров запроса. Сервис-клиент определяется из межсервисной идентичности, а доступ к задаче ограничивается этим значением.
+Для `GET`, `DELETE` и `POST /v1/external/async/{taskId}/retry` gateway не принимает `clientService` из параметров запроса. Сервис-клиент определяется из service-to-service identity, а доступ к задаче ограничивается этим значением.
 
-Резервное чтение идет через HTTP API шлюза, а не через общую схему БД. GET возвращает тот же структурированный `error`, который отправляется в обратном вызове; `lastError`, если он присутствует в реализации, остается только диагностической строкой.
+Fallback идет через HTTP API gateway, а не через общую схему БД. GET возвращает тот же структурированный `error`, который отправляется в callback; `lastError`, если он присутствует в реализации, остается только диагностической строкой.
 
-Если при постановке задачи выбран `deliveryMode=POLLING`, шлюз не создает доставку обратного вызова и не требует эндпоинта обратного вызова. Результат читается только через GET, а `callbackDeliveryStatus` равен `NOT_REQUIRED`. Значение по умолчанию для `deliveryMode` в v1 - `CALLBACK`, поэтому сервисы без эндпоинта обратного вызова должны явно передавать `POLLING`.
+Если при постановке задачи выбран `deliveryMode=POLLING`, gateway не создает callback-доставку и не требует callback endpoint. Результат читается только через GET, а `callbackDeliveryStatus` равен `NOT_REQUIRED`. Значение по умолчанию для `deliveryMode` в v1 - `CALLBACK`, поэтому сервисы без callback endpoint должны явно передавать `POLLING`.
 
-## Статусы async-задач
+## Статусы Async-Задач
 
 ```text
-PENDING     - задача ожидает доступного слота или задержки перед повтором
-IN_PROGRESS - выполняется вызов внешнего сервиса
-DONE        - вызов внешнего сервиса успешно завершен, result заполнен
-FAILED      - финальная неретраибельная ошибка внешнего сервиса или валидации
-DEAD        - повторы вызова внешнего сервиса исчерпаны
-CANCELLED   - задача отменена до старта вызова внешнего сервиса
+PENDING     - задача ожидает доступного слота или backoff
+IN_PROGRESS - upstream-вызов выполняется
+DONE        - upstream-вызов успешно завершен, result заполнен
+FAILED      - финальная неретраибельная ошибка upstream или валидации
+DEAD        - retry upstream исчерпаны
+CANCELLED   - задача отменена до старта upstream-вызова
 ```
 
-Обратный вызов отправляется только после финального статуса `DONE`, `FAILED`, `DEAD` или `CANCELLED`, если для задачи выбран `deliveryMode=CALLBACK`.
+Callback отправляется только после финального статуса `DONE`, `FAILED`, `DEAD` или `CANCELLED`, если для задачи выбран `deliveryMode=CALLBACK`.
 
-## Итоговое решение
+## Итоговое Решение
 
-Для v1 шлюз использует REST/OpenAPI и HTTP-обратный вызов. Эта модель покрывает текущую нагрузку, поддерживает генерацию клиентов по OpenAPI, сохраняет простую диагностику через HTTP-инструменты и не требует дополнительной протокольной инфраструктуры.
+Для v1 gateway использует REST/OpenAPI и HTTP callback. Эта модель покрывает текущую нагрузку, поддерживает генерацию клиентов по OpenAPI, сохраняет простую диагностику через HTTP tooling и не требует дополнительной протокольной инфраструктуры.

@@ -1,6 +1,6 @@
 # Итог реализации external-service-gateway
 
-Документ фиксирует текущее состояние Java-реализации шлюза, способы запуска и проверки, а также оставшиеся ограничения.
+Документ фиксирует текущее состояние Java-реализации gateway, способы запуска и проверки, а также оставшиеся ограничения.
 
 ## Что сделано
 
@@ -8,65 +8,65 @@
 
 1. Слой слотов и лимитов:
    - добавлены `SlotRepository`, `SlotManager`, `SlotLease`, `SlotKind`;
-   - репозиторий в памяти эмулирует PostgreSQL-семантику lease;
-   - освобождение и продление аренды работают только по паре `slotId + leaseId`;
-   - реализован sync-резерв для async: `asyncAllowed = max(0, totalSlots - syncBusy - targetFreeSyncSlots)`;
-   - async не стартует при наличии живых ожидающих sync-запросов.
+   - memory-репозиторий эмулирует PostgreSQL lease-семантику;
+   - release и heartbeat работают только по паре `slotId + leaseId`;
+   - реализован sync reserve для async: `asyncAllowed = max(0, totalSlots - syncBusy - targetFreeSyncSlots)`;
+   - async не стартует при наличии живых sync waiters.
 
-2. Синхронный API:
+2. Sync API:
    - реализован `POST /v1/external/sync`;
    - запрос проходит через `SlotManager`;
    - при нехватке слота возвращается `429 NO_SLOT_AVAILABLE`;
-   - внешний сервис пока симулирован и возвращает стабильный `Map<String, String>`.
+   - upstream пока симулирован и возвращает стабильный `Map<String, String>`.
 
-3. Асинхронный API:
+3. Async API:
    - реализованы:
      - `POST /v1/external/async`;
      - `GET /v1/external/async/{taskId}`;
      - `GET /v1/external/async/by-external-id/{externalId}`;
      - `DELETE /v1/external/async/{taskId}`;
      - `POST /v1/external/async/{taskId}/retry`;
-   - очередь в памяти поддерживает идемпотентность по `clientService + externalId`;
-   - повтор с той же полезной нагрузкой возвращает существующую задачу;
-   - повтор с другой полезной нагрузкой, priority или deliveryMode возвращает `409 IDEMPOTENCY_CONFLICT`;
+   - memory-очередь поддерживает idempotency по `clientService + externalId`;
+   - повтор с тем же payload возвращает существующую задачу;
+   - повтор с другим payload, priority или deliveryMode возвращает `409 IDEMPOTENCY_CONFLICT`;
    - `deliveryMode=POLLING` выставляет `callbackDeliveryStatus=NOT_REQUIRED`.
 
-4. Асинхронный диспетчер:
+4. Async dispatcher:
    - выбирает задачи по `priorityWeight DESC, availableAt ASC, taskId ASC`;
    - переводит `PENDING -> IN_PROGRESS -> DONE`;
-   - вызывает симулированный внешний сервис вне блокировки/репозиторной секции;
+   - вызывает simulated upstream вне lock/репозиторной секции;
    - использует async slot через `SlotManager`;
-   - при ошибках переводит задачу в повтор с задержкой или `DEAD`;
-   - планировщик выключен по умолчанию.
+   - при ошибках переводит задачу в retry/backoff или `DEAD`;
+   - scheduler выключен по умолчанию.
 
-5. Доставка обратных вызовов:
-   - доставка создается только для `deliveryMode=CALLBACK`;
-   - URL обратного вызова берется из списка разрешений `external-gateway.clients.<clientService>.callback-url`;
-   - произвольный `callbackUrl` из полезной нагрузки не используется;
-   - ошибка доставки обратного вызова не меняет итоговый статус async-задачи;
-   - доставка поддерживает `PENDING`, `DELIVERING`, `DELIVERED`, `RETRY`, `DEAD`;
-   - планировщик выключен по умолчанию.
+5. Callback delivery:
+   - callback создается только для `deliveryMode=CALLBACK`;
+   - callback URL берется из allow-list `external-gateway.clients.<clientService>.callback-url`;
+   - произвольный `callbackUrl` из payload не используется;
+   - ошибка доставки callback не меняет итоговый статус async-задачи;
+   - delivery поддерживает `PENDING`, `DELIVERING`, `DELIVERED`, `RETRY`, `DEAD`;
+   - scheduler выключен по умолчанию.
 
-6. Слой, готовый к PostgreSQL:
-   - добавлен файл изменений Liquibase `src/main/resources/db/changelog/external-gateway/db.changelog-master.yaml`;
+6. PostgreSQL-ready слой:
+   - добавлен Liquibase changelog `src/main/resources/db/changelog/external-gateway/db.changelog-master.yaml`;
    - описаны таблицы `ext_slots`, `ext_sync_waiters`, `ext_request_queue`, `ext_callback_delivery`;
-   - добавлены JDBC-репозитории для слотов, асинхронной очереди и доставки обратных вызовов;
-   - режим PostgreSQL включается только через `external-gateway.repository.type=postgres`;
-   - режим памяти остается значением по умолчанию и не требует PostgreSQL.
+   - добавлены JDBC-репозитории для slots, async queue и callback delivery;
+   - PostgreSQL mode включается только через `external-gateway.repository.type=postgres`;
+   - memory mode остается дефолтом и не требует PostgreSQL.
 
 ## Что можно проверять сейчас
 
 Можно проверять без установленного PostgreSQL:
 
-- старт приложения Spring Boot в режиме памяти;
-- дымовая проверка эндпоинта `/`;
-- синхронный эндпоинт `/v1/external/sync`;
-- асинхронный API постановки, чтения, отмены и повтора;
-- идемпотентность async-постановки;
+- старт Spring Boot приложения в memory mode;
+- smoke endpoint `/`;
+- sync endpoint `/v1/external/sync`;
+- async submit/get/cancel/retry API;
+- idempotency async постановки;
 - лимит слотов через тесты;
-- асинхронный диспетчер и доставка обратных вызовов через модульные/интеграционные тесты;
-- отсутствие `DataSource` и `SpringLiquibase` в режиме памяти;
-- наличие файла изменений Liquibase.
+- async dispatcher и callback delivery через unit/integration tests;
+- отсутствие `DataSource` и `SpringLiquibase` в memory mode;
+- наличие Liquibase changelog.
 
 Полный набор автотестов на текущий момент:
 
@@ -89,7 +89,7 @@ Tests run: 36, Failures: 0, Errors: 0, Skipped: 0
 mvn spring-boot:run
 ```
 
-По умолчанию приложение стартует в режиме памяти:
+По умолчанию приложение стартует в memory mode:
 
 ```properties
 external-gateway.repository.type=memory
@@ -97,7 +97,7 @@ external-gateway.repository.type=memory
 
 PostgreSQL при таком запуске не нужен.
 
-Дымовая проверка:
+Smoke-проверка:
 
 ```powershell
 Invoke-RestMethod -Method Get -Uri "http://localhost:8080/"
@@ -109,7 +109,7 @@ Invoke-RestMethod -Method Get -Uri "http://localhost:8080/"
 TestQwenCli is running
 ```
 
-## Как проверить синхронный API
+## Как проверить sync API
 
 ```powershell
 $body = @{
@@ -130,7 +130,7 @@ Invoke-RestMethod `
   -Body $body
 ```
 
-Ожидаемо вернется `status = SUCCEEDED`, `upstreamStatus = 200` и результат вида:
+Ожидаемо вернется `status = SUCCEEDED`, `upstreamStatus = 200` и result вида:
 
 ```json
 {
@@ -140,7 +140,7 @@ Invoke-RestMethod `
 }
 ```
 
-## Как проверить асинхронный API
+## Как проверить async API
 
 Создать задачу:
 
@@ -175,9 +175,9 @@ Invoke-RestMethod `
   -Headers @{ "X-Client-Service" = "invest-pay" }
 ```
 
-Повторный `POST` с тем же `clientService + externalId` и той же полезной нагрузкой должен вернуть тот же `taskId` и `alreadyExisted = true`.
+Повторный `POST` с тем же `clientService + externalId` и тем же payload должен вернуть тот же `taskId` и `alreadyExisted = true`.
 
-Отменить задачу в статусе `PENDING`:
+Отменить pending-задачу:
 
 ```powershell
 Invoke-RestMethod `
@@ -186,39 +186,39 @@ Invoke-RestMethod `
   -Headers @{ "X-Client-Service" = "invest-pay" }
 ```
 
-## Как проверить диспетчер вручную
+## Как проверить dispatcher вручную
 
-По умолчанию асинхронный диспетчер выключен:
+По умолчанию async dispatcher выключен:
 
 ```properties
 external-gateway.async.dispatcher-enabled=false
 ```
 
-Для ручной проверки обработки async-задач можно запустить приложение с включенным диспетчером:
+Для ручной проверки обработки async-задач можно запустить приложение с включенным dispatcher:
 
 ```powershell
 mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.async.dispatcher-enabled=true"
 ```
 
-После этого новые async-задачи будут фоново переводиться из `PENDING` в `DONE` через симулированный внешний сервис.
+После этого новые async-задачи будут фоново переводиться из `PENDING` в `DONE` через simulated upstream.
 
-Планировщик доставки обратных вызовов по умолчанию выключен:
+Callback delivery scheduler по умолчанию выключен:
 
 ```properties
 external-gateway.callback.delivery-enabled=false
 ```
 
-Это безопасно для локального запуска: доставка обратного вызова будет создана, но приложение не будет пытаться отправлять HTTP-обратный вызов в `invest-pay` или `user-expertise`.
+Это безопасно для локального запуска: callback delivery будет создана, но приложение не будет пытаться отправлять HTTP callback в `invest-pay` или `user-expertise`.
 
-Если нужно проверить HTTP-обратный вызов вручную, поднимите локальный имитационный эндпоинт и переопределите URL обратного вызова, например:
+Если нужно проверить HTTP callback вручную, поднимите локальный mock endpoint и переопределите callback URL, например:
 
 ```powershell
 mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.async.dispatcher-enabled=true --external-gateway.callback.delivery-enabled=true --external-gateway.clients.invest-pay.callback-url=http://localhost:9090/internal/external-gateway/callbacks"
 ```
 
-## Как включить режим PostgreSQL позже
+## Как включить PostgreSQL mode позже
 
-Режим PostgreSQL не проверялся на живой БД в этой среде, потому что PostgreSQL локально не установлен. Код и миграции подготовлены для подключения.
+PostgreSQL mode не проверялся на живой БД в этой среде, потому что PostgreSQL локально не установлен. Код и миграции подготовлены для подключения.
 
 Минимальные настройки:
 
@@ -234,39 +234,39 @@ external-gateway.postgres.liquibase-enabled=true
 Условия:
 
 - база данных должна существовать;
-- пользователь должен иметь права на создание схемы, таблиц, индексов и ограничений;
-- если `external-gateway.postgres.liquibase-enabled=false`, файл изменений должен быть применен заранее.
+- пользователь должен иметь права на создание schema, таблиц, индексов и constraints;
+- если `external-gateway.postgres.liquibase-enabled=false`, changelog должен быть применен заранее.
 
 ## Что не доделано
 
 Оставшиеся рабочие пункты:
 
-1. Реальный HTTP-клиент внешнего сервиса:
-   - сейчас используется симулированный клиент;
-   - не реализованы таймауты соединения/чтения, автоматический выключатель и политика повторов для настоящего внешнего сервиса.
+1. Реальный upstream HTTP client:
+   - сейчас используется simulated client;
+   - не реализованы connect/read timeout, circuit breaker и retry policy для настоящего внешнего сервиса.
 
-2. Межсервисная безопасность:
-   - `clientService` пока берется из запроса/заголовка;
-   - реальные mTLS/JWT, сервисная идентичность и сверка идентичности вызывающего сервиса не внедрены.
+2. Service-to-service security:
+   - `clientService` пока берется из request/header;
+   - реальные mTLS/JWT/service identity и сверка caller identity не внедрены.
 
-3. Полная идемпотентность sync:
-   - `Idempotency-Key` принимается sync-эндпоинтом, но строгая логика хранения и сравнения sync-запросов не реализована.
+3. Полная idempotency sync:
+   - `Idempotency-Key` принимается sync endpoint'ом, но строгая логика хранения и сравнения sync-запросов не реализована.
 
-4. Реальная проверка режима PostgreSQL:
-   - JDBC-репозитории и файл изменений Liquibase добавлены;
+4. Реальная проверка PostgreSQL mode:
+   - JDBC-репозитории и Liquibase changelog добавлены;
    - интеграционный прогон на живом PostgreSQL или Testcontainers не выполнялся.
 
-5. Наблюдаемость:
-   - нет полного набора метрик Micrometer, панелей и оповещений;
-   - логи есть, но структурированное логирование не доведено до промышленного формата.
+5. Observability:
+   - нет полного набора Micrometer metrics, dashboards и alerts;
+   - логи есть, но structured logging не доведен до production-формата.
 
-6. Задачи восстановления:
-   - восстановитель lease-записей и механика повторов есть на уровне сервисов/репозиториев;
-   - отдельные плановые задачи восстановления промышленного уровня для зависших задач `IN_PROGRESS` и доставок обратных вызовов еще не оформлены полностью.
+6. Recovery jobs:
+   - lease reaper и retry-механика есть на уровне сервисов/репозиториев;
+   - отдельные production-grade scheduled recovery jobs для зависших `IN_PROGRESS` задач и callback deliveries еще не оформлены полностью.
 
-7. Развертывание:
-   - нет Dockerfile, Helm-чарта и манифестов k8s;
-   - нет проверенного плана отката и нагрузочных сценариев против кластера.
+7. Deployment:
+   - нет Dockerfile/helm/k8s manifests;
+   - нет проверенного rollback-плана и нагрузочных сценариев против кластера.
 
 ## Быстрая команда проверки перед передачей
 
@@ -274,4 +274,4 @@ external-gateway.postgres.liquibase-enabled=true
 mvn test
 ```
 
-Если тесты зеленые, поведение в режиме памяти и текущие API-контракты находятся в рабочем состоянии.
+Если тесты зеленые, memory-mode поведение и текущие API-контракты находятся в рабочем состоянии.

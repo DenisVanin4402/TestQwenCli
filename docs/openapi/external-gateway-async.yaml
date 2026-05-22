@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
-  title: Асинхронный API external-service-gateway
+  title: External Service Gateway Async API
   version: 0.1.0
   description: |
-    Асинхронный API внутреннего сервиса-шлюза для постановки задач,
-    чтения результата, отмены и ручного повтора.
+    Асинхронный API внутреннего gateway-сервиса для постановки задач,
+    чтения результата, отмены и ручного retry.
 servers:
   - url: http://external-service-gateway.internal
-    description: DNS внутреннего сервиса
+    description: Internal service DNS
 tags:
   - name: Async
     description: Асинхронные задачи внешнего сервиса
@@ -40,7 +40,7 @@ paths:
                     userId: 100500
       responses:
         '202':
-          description: Задача принята или уже существовала по ключу идемпотентности
+          description: Задача принята или уже существовала по idempotency key
           content:
             application/json:
               schema:
@@ -52,13 +52,13 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Конфликт ключа идемпотентности с другой полезной нагрузкой
+          description: Конфликт idempotency key с другим payload
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '413':
-          description: Полезная нагрузка превышает допустимый размер
+          description: Payload превышает допустимый размер
           content:
             application/json:
               schema:
@@ -70,7 +70,7 @@ paths:
       operationId: getExternalAsyncTask
       summary: Получить состояние async-задачи
       description: |
-        Шлюз определяет clientService из аутентифицированной сервисной идентичности
+        Gateway определяет clientService из аутентифицированной service identity
         и возвращает задачу только этому сервису-клиенту.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -94,7 +94,7 @@ paths:
       operationId: cancelExternalAsyncTask
       summary: Отменить async-задачу, если она еще не выполняется
       description: |
-        Шлюз определяет clientService из аутентифицированной сервисной идентичности
+        Gateway определяет clientService из аутентифицированной service identity
         и отменяет только задачу этого сервиса-клиента.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -125,7 +125,7 @@ paths:
       operationId: getExternalAsyncTaskByExternalId
       summary: Получить async-задачу по externalId
       description: |
-        Шлюз определяет clientService из аутентифицированной сервисной идентичности
+        Gateway определяет clientService из аутентифицированной service identity
         и ищет задачу по паре clientService + externalId.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -155,8 +155,8 @@ paths:
       operationId: retryExternalAsyncTask
       summary: Вернуть задачу в обработку вручную
       description: |
-        Шлюз определяет clientService из аутентифицированной сервисной идентичности.
-        Ручной повтор разрешен только для задач этого сервиса-клиента.
+        Gateway определяет clientService из аутентифицированной service identity.
+        Ручной retry разрешен только для задач этого сервиса-клиента.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/TaskId'
@@ -188,7 +188,7 @@ components:
       schema:
         type: string
         maxLength: 128
-      description: Идентификатор корреляции от вызывающего сервиса
+      description: Correlation id от вызывающего сервиса
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -198,7 +198,7 @@ components:
         minLength: 8
         maxLength: 128
       description: |
-        Ключ идемпотентности. Если не передан, шлюз использует externalId.
+        Ключ идемпотентности. Если не передан, gateway использует externalId.
     TaskId:
       name: taskId
       in: path
@@ -215,13 +215,13 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: Не пройдена межсервисная аутентификация
+      description: Не пройдена service-to-service аутентификация
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: Сервис-клиент не имеет права вызывать шлюз
+      description: Сервис-клиент не имеет права вызывать gateway
       content:
         application/json:
           schema:
@@ -251,8 +251,8 @@ components:
           minLength: 2
           maxLength: 80
           description: |
-            Имя сервиса-клиента. Шлюз сверяет это значение с
-            аутентифицированной межсервисной идентичностью; несовпадение
+            Имя сервиса-клиента. Gateway сверяет это значение с
+            аутентифицированной service-to-service identity; несовпадение
             считается ошибкой авторизации или валидации.
           examples:
             - invest-pay
@@ -263,7 +263,7 @@ components:
           $ref: '#/components/schemas/AsyncDeliveryMode'
         payload:
           type: object
-          description: Данные, которые шлюз передаст во внешний сервис после валидации маршрута
+          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
     AsyncSubmitResponse:
       type: object
       additionalProperties: false
@@ -327,7 +327,7 @@ components:
             - $ref: '#/components/schemas/CallbackDeliveryStatus'
             - type: 'null'
           description: |
-            Статус доставки обратного вызова. Для deliveryMode=POLLING значение
+            Статус доставки callback. Для deliveryMode=POLLING значение
             равно NOT_REQUIRED.
         attempts:
           type: integer
@@ -375,7 +375,7 @@ components:
         retryable:
           type: boolean
           default: false
-          description: Возможность ручного повтора; автоматические повторы уже завершены для финального статуса.
+          description: Возможность ручного retry; автоматические retry уже завершены для финального статуса.
     AsyncPriority:
       type: string
       enum:
@@ -383,7 +383,7 @@ components:
         - LOW
       description: |
         Приоритет async-задачи. SYNC не принимается через async API,
-        так как sync имеет отдельный эндпоинт.
+        так как sync имеет отдельный endpoint.
         Внутренняя очередь использует числовой вес: HIGH = 100, LOW = 10,
         и сортирует задачи по priority_weight DESC, available_at ASC, id ASC.
     AsyncDeliveryMode:
@@ -393,12 +393,12 @@ components:
         - POLLING
       default: CALLBACK
       description: |
-        Способ доставки async-результата. CALLBACK означает, что шлюз
-        отправит результат в заранее настроенный эндпоинт сервиса-клиента.
+        Способ доставки async-результата. CALLBACK означает, что gateway
+        отправит результат в заранее настроенный endpoint сервиса-клиента.
         POLLING означает, что сервис-клиент заберет результат через GET.
-        Для POLLING доставка обратного вызова не создается, а callbackDeliveryStatus
-        равен NOT_REQUIRED. URL обратного вызова не передается в запросе и выбирается
-        шлюзом по clientService для режима CALLBACK.
+        Для POLLING callback-доставка не создается, а callbackDeliveryStatus
+        равен NOT_REQUIRED. Callback URL не передается в запросе и выбирается
+        gateway по clientService для режима CALLBACK.
     AsyncTaskStatus:
       type: string
       enum:
@@ -410,8 +410,8 @@ components:
         - CANCELLED
       description: |
         FAILED означает финальную неретраибельную ошибку.
-        DEAD означает, что повторы вызова внешнего сервиса исчерпаны.
-        CANCELLED означает отмену до старта вызова внешнего сервиса.
+        DEAD означает, что retry upstream исчерпаны.
+        CANCELLED означает отмену до старта upstream-вызова.
     CallbackDeliveryStatus:
       type: string
       enum:
@@ -438,7 +438,7 @@ components:
           type: string
         retryable:
           type: boolean
-          description: Возможность ручного повтора; автоматические повторы вызова внешнего сервиса уже завершены для финального статуса.
+          description: Возможность ручного retry; автоматические retry upstream уже завершены для финального статуса.
     ErrorResponse:
       type: object
       additionalProperties: false
@@ -468,7 +468,7 @@ components:
       type: object
       additionalProperties:
         type: string
-      description: Результат выполнения запроса во внешний сервис в формате Map<String, String>
+      description: Результат выполнения upstream-запроса в формате Map<String, String>
       examples:
         - decision: APPROVED
           score: '82'

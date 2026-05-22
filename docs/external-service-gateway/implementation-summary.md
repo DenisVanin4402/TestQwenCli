@@ -1,32 +1,26 @@
 # Итог реализации external-service-gateway
 
-Документ фиксирует текущее состояние Java-реализации gateway, способы запуска и проверки, а также оставшиеся ограничения.
+Документ фиксирует текущее состояние Java-реализации gateway и команды проверки. Описание сфокусировано на PostgreSQL-варианте, который является целевой историей для кластерного лимита и устойчивой async-очереди.
 
 ## Что сделано
 
-Реализация выполнена по шагам, с проверкой тестами после каждого среза.
-
 1. Слой слотов и лимитов:
    - добавлены `SlotRepository`, `SlotManager`, `SlotLease`, `SlotKind`;
-   - memory-репозиторий эмулирует PostgreSQL lease-семантику;
+   - PostgreSQL-репозиторий управляет lease-слотами в `ext_slots`;
    - release и heartbeat работают только по паре `slotId + leaseId`;
    - реализован sync reserve для async: `asyncAllowed = max(0, totalSlots - syncBusy - targetFreeSyncSlots)`;
    - async не стартует при наличии живых sync waiters.
 
 2. Sync API:
    - реализован `POST /v1/external/sync`;
-   - запрос проходит через `SlotManager`;
-   - при нехватке слота возвращается `429 NO_SLOT_AVAILABLE`;
-   - upstream пока симулирован и возвращает стабильный `Map<String, String>`.
+   - запрос получает `SYNC` слот через `SlotManager`;
+   - при нехватке слота возвращается `429 NO_SLOT_AVAILABLE` и `Retry-After: 1`;
+   - слот освобождается в `finally` после успешного или ошибочного upstream-вызова;
+   - `Idempotency-Key` принимается и передается upstream adapter'у, но не хранится gateway'ем.
 
 3. Async API:
-   - реализованы:
-     - `POST /v1/external/async`;
-     - `GET /v1/external/async/{taskId}`;
-     - `GET /v1/external/async/by-external-id/{externalId}`;
-     - `DELETE /v1/external/async/{taskId}`;
-     - `POST /v1/external/async/{taskId}/retry`;
-   - memory-очередь поддерживает idempotency по `clientService + externalId`;
+   - реализованы `POST`, `GET by taskId`, `GET by externalId`, `DELETE cancel`, `POST retry`;
+   - идемпотентность submit реализована по `clientService + externalId`;
    - повтор с тем же payload возвращает существующую задачу;
    - повтор с другим payload, priority или deliveryMode возвращает `409 IDEMPOTENCY_CONFLICT`;
    - `deliveryMode=POLLING` выставляет `callbackDeliveryStatus=NOT_REQUIRED`.
@@ -34,70 +28,53 @@
 4. Async dispatcher:
    - выбирает задачи по `priorityWeight DESC, availableAt ASC, taskId ASC`;
    - переводит `PENDING -> IN_PROGRESS -> DONE`;
-   - вызывает simulated upstream вне lock/репозиторной секции;
+   - вызывает upstream adapter вне DB lock;
    - использует async slot через `SlotManager`;
-   - при ошибках переводит задачу в retry/backoff или `DEAD`;
-   - scheduler выключен по умолчанию.
+   - при runtime-ошибках возвращает задачу в retry/backoff или переводит в `DEAD`;
+   - scheduler включается свойством `external-gateway.async.dispatcher-enabled=true`.
 
 5. Callback delivery:
    - callback создается только для `deliveryMode=CALLBACK`;
    - callback URL берется из allow-list `external-gateway.clients.<clientService>.callback-url`;
-   - произвольный `callbackUrl` из payload не используется;
+   - произвольный `callbackUrl` из payload игнорируется;
    - ошибка доставки callback не меняет итоговый статус async-задачи;
    - delivery поддерживает `PENDING`, `DELIVERING`, `DELIVERED`, `RETRY`, `DEAD`;
-   - scheduler выключен по умолчанию.
+   - scheduler включается свойством `external-gateway.callback.delivery-enabled=true`.
 
 6. PostgreSQL-ready слой:
    - добавлен Liquibase changelog `src/main/resources/db/changelog/external-gateway/db.changelog-master.yaml`;
-   - описаны таблицы `ext_slots`, `ext_sync_waiters`, `ext_request_queue`, `ext_callback_delivery`;
+   - созданы таблицы `ext_slots`, `ext_sync_waiters`, `ext_request_queue`, `ext_callback_delivery`;
    - добавлены JDBC-репозитории для slots, async queue и callback delivery;
-   - PostgreSQL mode включается только через `external-gateway.repository.type=postgres`;
-   - для sync waiters добавлен режим `external-gateway.slots.sync-acquire-wait-mode=listen_notify`,
-     который использует канал PostgreSQL `external_gateway_slot_released` и fallback polling;
-   - memory mode остается дефолтом и не требует PostgreSQL.
+   - PostgreSQL mode включается через `external-gateway.repository.type=postgres`;
+   - для sync waiters добавлен режим `external-gateway.slots.sync-acquire-wait-mode=listen_notify`, который использует канал `external_gateway_slot_released` и fallback polling.
 
-## Что можно проверять сейчас
+## Как Запустить С PostgreSQL
 
-Можно проверять без установленного PostgreSQL:
+Минимальные настройки:
 
-- старт Spring Boot приложения в memory mode;
-- smoke endpoint `/`;
-- sync endpoint `/v1/external/sync`;
-- async submit/get/cancel/retry API;
-- idempotency async постановки;
-- лимит слотов через тесты;
-- async dispatcher и callback delivery через unit/integration tests;
-- отсутствие `DataSource` и `SpringLiquibase` в memory mode;
-- наличие Liquibase changelog.
-
-Полный набор автотестов на текущий момент:
-
-```powershell
-mvn test
+```properties
+external-gateway.repository.type=postgres
+external-gateway.postgres.jdbc-url=jdbc:postgresql://localhost:5432/external_gateway
+external-gateway.postgres.username=external_gateway
+external-gateway.postgres.password=change-me
+external-gateway.postgres.schema=external_gateway
+external-gateway.postgres.liquibase-enabled=true
+external-gateway.slots.sync-acquire-wait-mode=listen_notify
+external-gateway.async.dispatcher-enabled=true
+external-gateway.callback.delivery-enabled=true
 ```
-
-Ожидаемый результат:
-
-```text
-BUILD SUCCESS
-Tests run: 40, Failures: 0, Errors: 0, Skipped: 0
-```
-
-## Как запустить локально
 
 Запуск из корня репозитория:
 
 ```powershell
-mvn spring-boot:run
+mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.repository.type=postgres --external-gateway.postgres.jdbc-url=jdbc:postgresql://localhost:5432/external_gateway --external-gateway.postgres.username=external_gateway --external-gateway.postgres.password=change-me --external-gateway.slots.sync-acquire-wait-mode=listen_notify --external-gateway.async.dispatcher-enabled=true --external-gateway.callback.delivery-enabled=true"
 ```
 
-По умолчанию приложение стартует в memory mode:
+Условия:
 
-```properties
-external-gateway.repository.type=memory
-```
-
-PostgreSQL при таком запуске не нужен.
+- база данных должна существовать;
+- пользователь должен иметь права на создание schema, таблиц, индексов и constraints;
+- если `external-gateway.postgres.liquibase-enabled=false`, changelog должен быть применен заранее.
 
 Smoke-проверка:
 
@@ -111,7 +88,7 @@ Invoke-RestMethod -Method Get -Uri "http://localhost:8080/"
 TestQwenCli is running
 ```
 
-## Как проверить sync API
+## Как Проверить Sync API
 
 ```powershell
 $body = @{
@@ -142,7 +119,7 @@ Invoke-RestMethod `
 }
 ```
 
-## Как проверить async API
+## Как Проверить Async API
 
 Создать задачу:
 
@@ -188,94 +165,67 @@ Invoke-RestMethod `
   -Headers @{ "X-Client-Service" = "invest-pay" }
 ```
 
-## Как проверить dispatcher вручную
+## Как Проверить Dispatchers
 
-По умолчанию async dispatcher выключен:
+Async dispatcher:
 
 ```properties
-external-gateway.async.dispatcher-enabled=false
+external-gateway.async.dispatcher-enabled=true
 ```
 
-Для ручной проверки обработки async-задач можно запустить приложение с включенным dispatcher:
+Callback delivery dispatcher:
+
+```properties
+external-gateway.callback.delivery-enabled=true
+```
+
+Если нужно проверить HTTP callback вручную, поднимите локальный mock endpoint и переопределите callback URL:
 
 ```powershell
-mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.async.dispatcher-enabled=true"
+mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.repository.type=postgres --external-gateway.postgres.jdbc-url=jdbc:postgresql://localhost:5432/external_gateway --external-gateway.postgres.username=external_gateway --external-gateway.postgres.password=change-me --external-gateway.async.dispatcher-enabled=true --external-gateway.callback.delivery-enabled=true --external-gateway.clients.invest-pay.callback-url=http://localhost:9090/internal/external-gateway/callbacks"
 ```
 
-После этого новые async-задачи будут фоново переводиться из `PENDING` в `DONE` через simulated upstream.
-
-Callback delivery scheduler по умолчанию выключен:
-
-```properties
-external-gateway.callback.delivery-enabled=false
-```
-
-Это безопасно для локального запуска: callback delivery будет создана, но приложение не будет пытаться отправлять HTTP callback в `invest-pay` или `user-expertise`.
-
-Если нужно проверить HTTP callback вручную, поднимите локальный mock endpoint и переопределите callback URL, например:
+## Что Проверяется Автотестами
 
 ```powershell
-mvn spring-boot:run "-Dspring-boot.run.arguments=--external-gateway.async.dispatcher-enabled=true --external-gateway.callback.delivery-enabled=true --external-gateway.clients.invest-pay.callback-url=http://localhost:9090/internal/external-gateway/callbacks"
+mvn test
 ```
 
-## Как включить PostgreSQL mode позже
+Тесты проверяют:
 
-PostgreSQL mode не проверялся на живой БД в этой среде, потому что PostgreSQL локально не установлен. Код и миграции подготовлены для подключения.
+- sync happy path, validation error и `429 NO_SLOT_AVAILABLE`;
+- slot lease/release/heartbeat semantics;
+- async submit/get/cancel/retry и идемпотентность;
+- async dispatcher happy path, отсутствие async-слота и transient upstream failure;
+- callback delivery happy path, retry, `DEAD` и отсутствие allow-list URL;
+- условное создание PostgreSQL infrastructure только для PostgreSQL mode;
+- наличие Liquibase changelog.
 
-Минимальные настройки:
-
-```properties
-external-gateway.repository.type=postgres
-external-gateway.postgres.jdbc-url=jdbc:postgresql://localhost:5432/external_gateway
-external-gateway.postgres.username=external_gateway
-external-gateway.postgres.password=change-me
-external-gateway.postgres.schema=external_gateway
-external-gateway.postgres.liquibase-enabled=true
-# Опционально: быстрее будить sync waiters после release/reap через PostgreSQL LISTEN/NOTIFY.
-external-gateway.slots.sync-acquire-wait-mode=listen_notify
-```
-
-Условия:
-
-- база данных должна существовать;
-- пользователь должен иметь права на создание schema, таблиц, индексов и constraints;
-- если `external-gateway.postgres.liquibase-enabled=false`, changelog должен быть применен заранее.
-
-## Что не доделано
-
-Оставшиеся рабочие пункты:
+## Что Не Доделано
 
 1. Реальный upstream HTTP client:
-   - сейчас используется simulated client;
-   - не реализованы connect/read timeout, circuit breaker и retry policy для настоящего внешнего сервиса.
+   - сейчас используется simulated adapter;
+   - connect/read timeout, circuit breaker и retry policy для настоящего внешнего сервиса не реализованы.
 
 2. Service-to-service security:
-   - `clientService` пока берется из request/header;
-   - реальные mTLS/JWT/service identity и сверка caller identity не внедрены.
+   - `clientService` пока берется из request body или `X-Client-Service`;
+   - mTLS/JWT/service identity и сверка caller identity не внедрены.
 
 3. Полная idempotency sync:
    - `Idempotency-Key` принимается sync endpoint'ом, но строгая логика хранения и сравнения sync-запросов не реализована.
 
 4. Реальная проверка PostgreSQL mode:
    - JDBC-репозитории и Liquibase changelog добавлены;
-   - интеграционный прогон на живом PostgreSQL или Testcontainers не выполнялся.
+   - интеграционный прогон на живом PostgreSQL или Testcontainers нужно выполнить отдельно.
 
 5. Observability:
-   - нет полного набора Micrometer metrics, dashboards и alerts;
+   - полного набора Micrometer metrics, dashboards и alerts нет;
    - логи есть, но structured logging не доведен до production-формата.
 
 6. Recovery jobs:
-   - lease reaper и retry-механика есть на уровне сервисов/репозиториев;
-   - отдельные production-grade scheduled recovery jobs для зависших `IN_PROGRESS` задач и callback deliveries еще не оформлены полностью.
+   - lease cleanup доступен на уровне `SlotManager.reapExpiredLeases()`;
+   - отдельные scheduled jobs для зависших `IN_PROGRESS` задач и callback deliveries не оформлены.
 
 7. Deployment:
    - нет Dockerfile/helm/k8s manifests;
    - нет проверенного rollback-плана и нагрузочных сценариев против кластера.
-
-## Быстрая команда проверки перед передачей
-
-```powershell
-mvn test
-```
-
-Если тесты зеленые, memory-mode поведение и текущие API-контракты находятся в рабочем состоянии.

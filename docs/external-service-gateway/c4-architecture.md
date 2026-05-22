@@ -1,12 +1,6 @@
 # C4 Architecture View
 
-Документ фиксирует C4-представление `external-service-gateway`: от контекста системы до внутренних компонентов gateway. Диаграммы отражают текущие архитектурные решения:
-
-- отдельный gateway-сервис между доменными сервисами и внешним сервисом;
-- общий лимит `5 concurrent calls`;
-- скользящий sync reserve;
-- async callback в сервис-клиент;
-- PostgreSQL как координатор слотов, очереди и callback delivery.
+Документ фиксирует C4-представление текущего `external-service-gateway` в PostgreSQL-варианте: контекст, контейнеры, ключевые компоненты и динамические сценарии. Sequence-диаграммы показывают главных участников процесса; внутренние Java-классы намеренно не раскрываются.
 
 ## Level 1. System Context
 
@@ -14,11 +8,11 @@
 C4Context
     title External Service Gateway - System Context
 
-    Person_Ext(operator, "Support / Operations", "Monitors queues, dead tasks, callbacks and incidents")
+    Person_Ext(operator, "Support / Operations", "Monitors requests, queue state and incidents")
 
-    System(invest_pay, "invest-pay", "Domain service with its own database schema")
-    System(user_expertise, "user-expertise", "Domain service with its own database schema")
-    System(gateway, "external-service-gateway", "Internal Spring Boot gateway for prioritized and throttled calls")
+    System(invest_pay, "invest-pay", "Client service with its own data model")
+    System(user_expertise, "user-expertise", "Client service with its own data model")
+    System(gateway, "external-service-gateway", "Internal Spring Boot gateway for throttled and prioritized calls")
     System_Ext(external_service, "External Service", "Third-party service with max 5 concurrent calls")
 
     Rel(invest_pay, gateway, "Sync and async requests", "HTTP/JSON")
@@ -26,10 +20,10 @@ C4Context
     Rel(gateway, invest_pay, "Async result callback", "HTTP callback")
     Rel(gateway, user_expertise, "Async result callback", "HTTP callback")
     Rel(gateway, external_service, "Throttled upstream calls, max 5 in-flight", "HTTP")
-    Rel(operator, gateway, "Observes metrics, logs and task states")
+    Rel(operator, gateway, "Observes logs, errors and task states")
 ```
 
-Ключевой смысл контекста: `invest-pay` и `user-expertise` не делят общую схему БД. Они интегрируются только через API gateway. Все прямые вызовы внешнего сервиса должны быть удалены или запрещены сетевой политикой.
+`invest-pay` и `user-expertise` не обращаются к таблицам gateway напрямую. Интеграция идет только через HTTP API gateway и callback-контракт.
 
 ## Level 2. Container View
 
@@ -42,21 +36,19 @@ C4Container
     System_Ext(external_service, "External Service", "Max 5 concurrent calls")
 
     System_Boundary(gateway_boundary, "external-service-gateway") {
-        Container(api_app, "Gateway Application", "Spring Boot", "REST API, slot management, queue dispatching, callback delivery")
-        ContainerDb(pg, "Gateway PostgreSQL", "PostgreSQL", "Slots, async queue, sync waiters, callback delivery, audit")
+        Container(app, "Gateway Application", "Spring Boot 3 / Java 21", "REST API, slot coordination, async dispatching, callback delivery")
+        ContainerDb(pg, "Gateway PostgreSQL", "PostgreSQL", "ext_slots, ext_sync_waiters, ext_request_queue, ext_callback_delivery")
     }
 
-    Rel(invest_pay, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async result", "HTTP/JSON")
-    Rel(user_expertise, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async result", "HTTP/JSON")
-    Rel(api_app, invest_pay, "POST callback with result/error", "HTTP callback")
-    Rel(api_app, user_expertise, "POST callback with result/error", "HTTP callback")
-    Rel(api_app, pg, "Acquire slots, claim tasks, save results, track callbacks", "JDBC")
-    Rel(api_app, external_service, "Upstream calls", "HTTP")
+    Rel(invest_pay, app, "POST sync, POST async, GET async result", "HTTP/JSON")
+    Rel(user_expertise, app, "POST sync, POST async, GET async result", "HTTP/JSON")
+    Rel(app, invest_pay, "POST callback with result/error", "HTTP callback")
+    Rel(app, user_expertise, "POST callback with result/error", "HTTP callback")
+    Rel(app, pg, "Acquire leases, claim tasks, save results, track callback delivery", "JDBC")
+    Rel(app, external_service, "Upstream call after lease acquisition", "HTTP")
 ```
 
-`Gateway Application` может быть запущен в нескольких инстансах. Глобальный лимит обеспечивается не локальным пулом потоков, а общей PostgreSQL-схемой gateway.
-
-Если два датацентра/плеча не имеют общего координатора, глобальный лимит `5` невозможен без отдельного соглашения о квотах, например `3 + 2`.
+Глобальный лимит обеспечивается общей PostgreSQL-схемой, а не локальным состоянием инстанса приложения.
 
 ## Level 3. Gateway Component View
 
@@ -69,151 +61,216 @@ C4Component
     System(client_service, "Client Service", "invest-pay / user-expertise")
 
     Container_Boundary(app, "Gateway Application") {
-        Component(sync_api, "Sync API", "Spring MVC", "Accepts sync calls and waits for a slot")
-        Component(async_api, "Async API", "Spring MVC", "Accepts async tasks and exposes fallback result reads")
-        Component(slot_manager, "Slot Manager", "Service", "Maintains lease-based global slots and sliding sync reserve")
-        Component(queue_repo, "Queue Repository", "JDBC", "Persists async tasks and claims work with SKIP LOCKED")
-        Component(dispatcher, "Async Dispatcher", "Scheduled worker", "Starts async work only when priority policy allows it")
-        Component(sync_notifier, "Sync Slot Notifier", "PostgreSQL LISTEN/NOTIFY", "Wakes waiting sync calls when a slot may have been released")
-        Component(upstream_client, "Upstream Client", "Adapter", "Current implementation uses simulated upstream response")
-        Component(callback_delivery, "Callback Delivery", "Worker", "Sends async result callbacks and retries delivery")
-        Component(reaper, "Reaper", "Scheduled worker", "Restores stale leases, stuck tasks and stuck callbacks")
-        Component(metrics, "Observability", "Micrometer + structured logs", "Exports metrics and logs for operations")
+        Component(sync_api, "Sync API", "Spring MVC", "Accepts sync calls and waits for a SYNC lease")
+        Component(async_api, "Async API", "Spring MVC", "Submits tasks and exposes fallback reads, cancel and retry")
+        Component(slot_coordination, "Slot Coordination", "Service + JDBC", "Maintains lease-based global slots and sliding sync reserve")
+        Component(async_dispatcher, "Async Dispatcher", "Scheduled worker", "Claims async tasks and runs upstream calls")
+        Component(callback_dispatcher, "Callback Dispatcher", "Scheduled worker", "Delivers final async results to client services")
+        Component(listen_notify, "LISTEN/NOTIFY Worker", "PostgreSQL", "Wakes waiting sync requests when a slot may be free")
+        Component(upstream_client, "Upstream Client", "Adapter", "Current code uses simulated upstream response")
     }
 
-    Rel(client_service, sync_api, "Sync request")
-    Rel(client_service, async_api, "Async submit / fallback result read")
-    Rel(sync_api, slot_manager, "Acquire SYNC slot")
-    Rel(async_api, queue_repo, "Insert task")
-    Rel(dispatcher, queue_repo, "Claim next task")
-    Rel(dispatcher, slot_manager, "Acquire ASYNC slot by dynamic reserve")
-    Rel(slot_manager, pg, "Read/update ext_slots and ext_sync_waiters")
-    Rel(sync_notifier, pg, "LISTEN external_gateway_slot_released")
-    Rel(slot_manager, sync_notifier, "Wait for slot release signal in listen_notify mode")
-    Rel(queue_repo, pg, "Read/update ext_request_queue")
-    Rel(dispatcher, upstream_client, "Execute async upstream call")
-    Rel(sync_api, upstream_client, "Execute sync upstream call")
+    Rel(client_service, sync_api, "POST /v1/external/sync")
+    Rel(client_service, async_api, "POST/GET/DELETE/POST retry async")
+    Rel(sync_api, slot_coordination, "Acquire SYNC lease")
+    Rel(async_api, pg, "Insert/read/update async task")
+    Rel(async_dispatcher, pg, "Claim next task with SKIP LOCKED")
+    Rel(async_dispatcher, slot_coordination, "Acquire ASYNC lease")
+    Rel(slot_coordination, pg, "Read/update ext_slots and ext_sync_waiters")
+    Rel(listen_notify, pg, "LISTEN external_gateway_slot_released")
+    Rel(slot_coordination, listen_notify, "Wait for release signal in listen_notify mode")
+    Rel(sync_api, upstream_client, "Call upstream")
+    Rel(async_dispatcher, upstream_client, "Call upstream")
     Rel(upstream_client, external_service, "HTTP")
-    Rel(callback_delivery, client_service, "Callback with result Map<String,String>")
-    Rel(callback_delivery, pg, "Read/update ext_callback_delivery")
-    Rel(reaper, pg, "Recover stale records")
-    Rel(metrics, pg, "Read operational gauges")
+    Rel(callback_dispatcher, pg, "Claim/update ext_callback_delivery")
+    Rel(callback_dispatcher, client_service, "POST callback")
 ```
 
-Главный инвариант Slot Manager:
+Основной инвариант:
 
 ```text
 totalSlots = 5
 targetFreeSyncSlots = 1
 asyncAllowed = max(0, totalSlots - syncBusy - targetFreeSyncSlots)
+async стартует только если asyncBusy < asyncAllowed и нет живых sync waiters
 ```
 
-Async может стартовать только если:
-
-```text
-asyncBusy < asyncAllowed
-и нет живых sync waiters
-```
-
-## Dynamic View. Sync Immediate Success
+## Dynamic View. Sync Success
 
 ```mermaid
 sequenceDiagram
-    participant Client as invest-pay / user-expertise
-    participant API as Gateway Sync API
+    participant Client as Client service
+    participant Gateway as Gateway
     participant DB as PostgreSQL
     participant Upstream as External Service
 
-    Client->>API: POST /v1/external/sync
-    API->>DB: acquire SYNC lease
-    DB-->>API: slot_id + lease_id
-    API->>Upstream: HTTP call
-    Upstream-->>API: response
-    API->>DB: release slot by slot_id + lease_id
-    API-->>Client: 200 result
+    Client->>Gateway: POST /v1/external/sync
+    Gateway->>DB: acquire SYNC lease
+    DB-->>Gateway: slot_id + lease_id
+    Gateway->>Upstream: upstream call
+    Upstream-->>Gateway: result
+    Gateway->>DB: release slot
+    Gateway-->>Client: 200 SUCCEEDED
 ```
 
-## Dynamic View. Sync Success With LISTEN/NOTIFY
+## Dynamic View. Sync No Slot
 
 ```mermaid
 sequenceDiagram
-    participant Client as invest-pay / user-expertise
-    participant API as Gateway Sync API
+    participant Client as Client service
+    participant Gateway as Gateway
     participant DB as PostgreSQL
-    participant Notifier as Slot release notifier
-    participant Upstream as External Service
+    participant Timer as Timeout
 
-    Client->>API: POST /v1/external/sync
-    API->>DB: first acquire SYNC lease
-    DB-->>API: no slot
-    API->>DB: register sync waiter
-    API->>Notifier: wait for signal or fallback interval
-    Notifier-->>API: slot may be free
-    API->>DB: retry acquire SYNC lease
-    DB-->>API: slot_id + lease_id
-    API->>DB: remove sync waiter
-    API->>Upstream: HTTP call
-    Upstream-->>API: response
-    API->>DB: release slot by slot_id + lease_id
-    DB-->>Notifier: NOTIFY external_gateway_slot_released
-    API-->>Client: 200 result
+    Client->>Gateway: POST /v1/external/sync
+    Gateway->>DB: acquire SYNC lease
+    DB-->>Gateway: no slot
+    Gateway->>DB: register sync waiter
+    loop until sync timeout
+        Timer-->>Gateway: wait interval
+        Gateway->>DB: retry acquire SYNC lease
+        DB-->>Gateway: no slot
+    end
+    Gateway->>DB: remove sync waiter
+    Gateway-->>Client: 429 NO_SLOT_AVAILABLE
 ```
 
-Если слот не получен до `syncWaitTimeout`, gateway удаляет sync waiter и возвращает `429`. В режиме `polling` ожидание между попытками - обычный sleep. В режиме `listen_notify` ожидание завершается по `NOTIFY external_gateway_slot_released` или по fallback interval, после чего gateway все равно повторно проверяет PostgreSQL.
-
-## Dynamic View. Async Request With Callback
+## Dynamic View. Sync LISTEN/NOTIFY Fallback
 
 ```mermaid
 sequenceDiagram
-    participant Client as user-expertise
-    participant API as Gateway Async API
-    participant Dispatcher as Async Dispatcher
-    participant Slots as Slot Manager
+    participant Client as Client service
+    participant Gateway as Gateway
+    participant DB as PostgreSQL
+    participant Listener as LISTEN worker
+    participant Timer as Fallback timer
+    participant Upstream as External Service
+
+    Client->>Gateway: POST /v1/external/sync
+    Gateway->>DB: acquire SYNC lease
+    DB-->>Gateway: no slot
+    Gateway->>DB: register sync waiter
+    Gateway->>Listener: wait for NOTIFY
+    Note over DB,Listener: NOTIFY is missed or listener reconnects
+    Timer-->>Gateway: fallback interval elapsed
+    Gateway->>DB: retry acquire SYNC lease
+    DB-->>Gateway: slot_id + lease_id
+    Gateway->>DB: remove sync waiter
+    Gateway->>Upstream: upstream call
+    Upstream-->>Gateway: result
+    Gateway->>DB: release slot
+    Gateway-->>Client: 200 SUCCEEDED
+```
+
+## Dynamic View. Sync Upstream Failure
+
+```mermaid
+sequenceDiagram
+    participant Client as Client service
+    participant Gateway as Gateway
     participant DB as PostgreSQL
     participant Upstream as External Service
-    participant Callback as Callback Delivery
 
-    Client->>API: POST /v1/external/async deliveryMode=CALLBACK
-    API->>DB: insert task PENDING
-    API-->>Client: 202 taskId
+    Client->>Gateway: POST /v1/external/sync
+    Gateway->>DB: acquire SYNC lease
+    DB-->>Gateway: slot_id + lease_id
+    Gateway->>Upstream: upstream call
+    Upstream--xGateway: timeout / interrupted / transport error
+    Gateway->>DB: release slot
+    Gateway-->>Client: 5xx error response
+```
+
+## Dynamic View. Async Success With Callback
+
+```mermaid
+sequenceDiagram
+    participant Client as Client service
+    participant Gateway as Gateway
+    participant Dispatcher as Async dispatcher
+    participant DB as PostgreSQL
+    participant Upstream as External Service
+    participant Callback as Callback dispatcher
+
+    Client->>Gateway: POST /v1/external/async
+    Gateway->>DB: insert task PENDING
+    Gateway-->>Client: 202 taskId
+    Dispatcher->>DB: claim task and acquire ASYNC lease
+    DB-->>Dispatcher: task + lease
+    Dispatcher->>Upstream: upstream call
+    Upstream-->>Dispatcher: result
+    Dispatcher->>DB: mark DONE, create callback delivery, release slot
+    Callback->>DB: claim callback delivery
+    Callback->>Client: POST callback
+    Client-->>Callback: 200/204
+    Callback->>DB: mark DELIVERED
+```
+
+## Dynamic View. Async Slot Unavailable
+
+```mermaid
+sequenceDiagram
+    participant Dispatcher as Async dispatcher
+    participant DB as PostgreSQL
 
     Dispatcher->>DB: claim next PENDING task
-    Dispatcher->>Slots: acquire async slot by sliding reserve
-    Slots->>DB: check syncBusy, asyncBusy, sync waiters
-    DB-->>Slots: async lease allowed
-    Slots-->>Dispatcher: slot lease
+    Dispatcher->>DB: acquire ASYNC lease by sync reserve
+    DB-->>Dispatcher: no slot allowed
+    Dispatcher->>DB: return task to PENDING
+```
 
-    Dispatcher->>Upstream: HTTP call
-    Upstream-->>Dispatcher: response
-    Dispatcher->>DB: mark task DONE
-    Dispatcher->>DB: create callback delivery PENDING
-    Dispatcher->>Slots: release slot
+## Dynamic View. Async Upstream Failure
+
+```mermaid
+sequenceDiagram
+    participant Dispatcher as Async dispatcher
+    participant DB as PostgreSQL
+    participant Upstream as External Service
+
+    Dispatcher->>DB: claim task and acquire ASYNC lease
+    DB-->>Dispatcher: task + lease
+    Dispatcher->>Upstream: upstream call
+    Upstream--xDispatcher: timeout / runtime error
+    alt attempts left
+        Dispatcher->>DB: PENDING with retry backoff
+    else max attempts reached
+        Dispatcher->>DB: DEAD with error and callback delivery if needed
+    end
+    Dispatcher->>DB: release slot
+```
+
+## Dynamic View. Callback Failure
+
+```mermaid
+sequenceDiagram
+    participant Client as Client service
+    participant Callback as Callback dispatcher
+    participant DB as PostgreSQL
+    participant Timer as Retry timer
 
     Callback->>DB: claim callback delivery
     Callback->>Client: POST /internal/external-gateway/callbacks
-    Client-->>Callback: 200 OK
-    Callback->>DB: mark callback DELIVERED
+    Client--xCallback: timeout / 5xx
+    alt attempts left
+        Callback->>DB: mark RETRY with backoff
+        Timer-->>Callback: retry interval elapsed
+    else max attempts reached
+        Callback->>DB: mark DEAD
+    end
 ```
 
-Перевод async-задачи в финальный статус и создание записи callback delivery должны быть атомарными: одна транзакция в PostgreSQL или transactional outbox. Иначе рестарт gateway между этими действиями может оставить финальную задачу без доставки callback.
-
-Если callback не доставлен, `Callback Delivery` переводит доставку в retry с backoff. Результат задачи остается доступен через gateway fallback API.
-
-## Dynamic View. Async Fallback Result Read
+## Dynamic View. Async Fallback Read
 
 ```mermaid
 sequenceDiagram
-    participant Client as user-expertise
-    participant API as Gateway Async API
+    participant Client as Client service
+    participant Gateway as Gateway
     participant DB as PostgreSQL
 
-    Client->>API: GET /v1/external/async/{taskId}
-    API->>DB: select task by taskId and clientService from authenticated identity
-    DB-->>API: status, result, callbackDeliveryStatus
-    API-->>Client: AsyncTask
+    Client->>Gateway: GET /v1/external/async/{taskId}
+    Gateway->>DB: select task by taskId and optional X-Client-Service
+    DB-->>Gateway: task state, result, error
+    Gateway-->>Client: AsyncTask
 ```
-
-Fallback чтение не требует общей БД между сервисами. `user-expertise` обращается к gateway по API, а gateway читает собственную схему.
 
 ## Deployment Notes
 
@@ -221,7 +278,7 @@ Fallback чтение не требует общей БД между серви�
 C4Deployment
     title External Service Gateway - Deployment View
 
-    Deployment_Node(dc, "Cluster / two legs", "Docker / Kubernetes-like environment") {
+    Deployment_Node(cluster, "Cluster / two legs", "Docker / Kubernetes-like environment") {
         Deployment_Node(app_nodes, "Gateway runtime", "2+ instances") {
             Container(api_1, "Gateway instance #1", "Spring Boot")
             Container(api_2, "Gateway instance #2", "Spring Boot")
@@ -242,4 +299,4 @@ C4Deployment
     Rel(api_2, external_service, "HTTP")
 ```
 
-Все gateway-инстансы должны использовать один логический координатор слотов. Если PostgreSQL раздельный по плечам, лимит `5` превращается в сумму локальных лимитов и перестает быть глобальным.
+Все gateway-инстансы должны использовать один PostgreSQL-координатор. Если PostgreSQL разделен по плечам, лимит `5` превращается в сумму локальных лимитов и перестает быть глобальным.

@@ -1,223 +1,230 @@
 # Implementation Roadmap
 
-Документ описывает порядок разработки `external-service-gateway`. На этом этапе код не пишется; файл нужен как чек-лист для будущей имплементации.
+Документ хранит статус реализации `external-service-gateway` относительно целевой PostgreSQL-архитектуры. Статусы:
 
-## Шаг 0. Зафиксировать контракты
+```text
+done    - реализовано в текущем коде
+partial - реализована базовая часть, production-доработки остаются
+todo    - еще не реализовано
+```
 
-Результат:
+## Шаг 0. Контракты API
 
-- согласованы `../openapi/external-gateway-sync.yaml`, `../openapi/external-gateway-async.yaml` и `../openapi/external-gateway-callback.yaml`;
-- определены client service names: `invest-pay`, `user-expertise`, другие будущие клиенты;
-- определены callback endpoints для сервисов, которые хотят получать async-результат push-моделью;
-- определена схема авторизации между сервисами;
-- определена семантика `externalId` и `Idempotency-Key`.
+Статус: `partial`.
 
-Критерий готовности:
+Сделано:
 
-- потребители могут сгенерировать клиентов по OpenAPI;
-- `user-expertise` и `invest-pay` понимают контракт callback endpoint;
-- понятны статусы и ошибки sync/async API.
+- описаны `../openapi/external-gateway-sync.yaml`, `../openapi/external-gateway-async.yaml` и `../openapi/external-gateway-callback.yaml`;
+- определены client service names для примеров: `invest-pay`, `user-expertise`;
+- async submit использует `clientService + externalId` как идемпотентный ключ;
+- callback endpoint вынесен в отдельный контракт.
 
-## Шаг 1. Создать Spring Boot сервис и проверить запуск (сделано)
+Осталось:
 
-Результат:
+- закрепить production security contract: mTLS/JWT/service identity;
+- заменить временный `X-Client-Service` в read/cancel/retry на caller identity;
+- описать подпись callback, если она будет нужна.
 
-- текущий Spring Boot скелет проекта создан;
-- добавлены health/readiness endpoints;
-- добавлена базовая конфигурация профилей.
+## Шаг 1. Spring Boot Сервис
 
-Критерий готовности:
+Статус: `done`.
 
-- сервис стартует локально и отвечает на smoke endpoint;
-- после подключения PostgreSQL readiness не проходит без доступной gateway-схемы.
+Сделано:
 
-## Шаг 2. Добавить PostgreSQL-схему gateway
+- приложение создано на Spring Boot 3.4.3 и Java 21;
+- есть smoke endpoint `/`, который возвращает `TestQwenCli is running`;
+- свойства gateway вынесены в `application.properties`;
+- включены scheduled-компоненты для async и callback dispatcher через feature flags.
 
-Результат:
+Осталось:
 
-- Liquibase миграции;
-- таблица `ext_slots` с 5 слотами;
-- таблица `ext_request_queue`;
-- поле или вычисляемое значение `priority_weight` для сортировки `HIGH = 100`, `LOW = 10`;
-- таблица `ext_sync_waiters`;
-- таблица `ext_callback_delivery`;
-- опциональная таблица `ext_call_audit`.
+- добавить полноценные actuator health/readiness endpoints, если они потребуются для deployment.
 
-Критерий готовности:
+## Шаг 2. PostgreSQL-Схема Gateway
 
-- миграции создают схему с нуля;
-- повторный запуск миграций идемпотентен;
-- есть constraints на статусы, приоритеты и slot kind.
+Статус: `done`.
 
-## Шаг 3. Реализовать Slot Manager
+Сделано:
 
-Результат:
+- добавлен Liquibase changelog `db/changelog/external-gateway/db.changelog-master.yaml`;
+- создается схема `${externalGatewaySchema}`;
+- создаются таблицы `ext_slots`, `ext_sync_waiters`, `ext_request_queue`, `ext_callback_delivery`;
+- `ext_slots` заполняется 5 физическими slot rows;
+- добавлены constraints на slot kind, async priority/status/delivery mode, callback status;
+- добавлены индексы для claim async tasks, lookup by external id, claim callback delivery и cleanup sync waiters.
 
-- acquire sync slot: максимум 5;
-- acquire async slot по динамическому sync reserve;
-- release по `slot_id + lease_id`;
-- heartbeat по `slot_id + lease_id`;
-- reaper устаревших lease.
+Осталось:
 
-Критерий готовности:
+- при необходимости добавить отдельную audit-таблицу, которой сейчас нет в реализации.
 
-- конкурентный тест на 10+ потоков никогда не получает больше 5 слотов;
-- async acquire соблюдает динамический лимит `asyncAllowed = max(0, 5 - syncBusy - 1)`;
-- при росте `syncBusy` gateway не стартует новые async-вызовы, пока скользящий sync reserve не восстановится;
-- старый lease не может освободить новый lease.
+## Шаг 3. Slot Manager
 
-## Шаг 4. Реализовать sync API
+Статус: `done`.
 
-Результат:
+Сделано:
 
-- `POST /v1/external/sync`;
-- регистрация sync waiter перед ожиданием слота;
-- удаление sync waiter после acquire/timeout;
-- upstream HTTP-вызов вне DB-транзакции;
-- корректные ответы при timeout, upstream error, validation error.
+- sync acquire использует до 5 слотов;
+- async acquire соблюдает dynamic sync reserve;
+- async не стартует при наличии живых sync waiters;
+- release и heartbeat проверяют `slot_id + lease_id`;
+- `reapExpiredLeases()` освобождает истекшие lease и публикует slot-release notification;
+- PostgreSQL `LISTEN/NOTIFY` доступен в режиме `listen_notify` с polling fallback.
 
-Критерий готовности:
+Осталось:
 
-- sync получает приоритет над async при освобождении слота;
-- при отсутствии слота дольше SLA возвращается управляемая ошибка;
-- все sync-вызовы логируются с correlation/request id.
+- оформить production scheduler для регулярного вызова lease cleanup, если это требуется операционно.
 
-## Шаг 5. Реализовать async API
+## Шаг 4. Sync API
 
-Результат:
+Статус: `partial`.
 
-- `POST /v1/external/async`;
-- `GET /v1/external/async/{taskId}`;
-- `GET /v1/external/async/by-external-id/{externalId}`;
-- `DELETE /v1/external/async/{taskId}`;
-- `POST /v1/external/async/{taskId}/retry`.
-- поддержка `deliveryMode=CALLBACK | POLLING`;
-- сохранение результата upstream-вызова как `Map<String, String>`.
+Сделано:
 
-Критерий готовности:
+- реализован `POST /v1/external/sync`;
+- запрос ждет слот до `external-gateway.sync.wait-timeout-ms`;
+- при timeout возвращается `429 NO_SLOT_AVAILABLE`;
+- upstream-вызов выполняется вне DB-транзакции;
+- слот освобождается в `finally`;
+- validation errors возвращаются как структурированный `ErrorResponse`.
 
-- повторная постановка с тем же `externalId` возвращает существующую задачу;
-- статусы задачи отражают реальное состояние обработки;
-- завершенная задача содержит результат или ошибку.
-- `GET` возвращает тот же `result`, который отправляется в callback: `Map<String, String>` для `DONE` и `null` для неуспешных финальных статусов.
+Осталось:
 
-## Шаг 5.1. Реализовать callback delivery
+- заменить simulated upstream adapter на реальный HTTP client;
+- добавить production mapping upstream timeout/status codes;
+- внедрить строгую sync idempotency, если upstream операция меняет состояние.
 
-Результат:
+## Шаг 5. Async API
 
-- gateway выбирает callback URL по `clientService` из allow-list конфигурации;
-- gateway не принимает произвольный `callbackUrl` из пользовательского payload;
-- после финального статуса async-задачи gateway отправляет callback в сервис-клиент;
-- gateway отправляет обязательный заголовок `X-Callback-Attempt` и опциональные `X-Request-Id`, `X-Gateway-Signature`;
-- payload callback содержит `result` как `Map<String, String>` для `DONE` и `null` для неуспешных финальных статусов;
-- доставка callback имеет собственные retry/backoff и финальный статус `DEAD`;
-- callback endpoint на стороне сервиса-клиента должен быть идемпотентным.
+Статус: `done`.
 
-Критерий готовности:
+Сделано:
 
-- `user-expertise` получает callback после успешного выполнения async-задачи;
-- повторная доставка одного результата не создает дублей в сервисе-клиенте;
-- если callback не доставлен, результат остается доступен через `GET /v1/external/async/{taskId}`;
-- ошибка доставки callback не переводит успешно выполненную upstream-задачу в failed.
+- реализованы:
+  - `POST /v1/external/async`;
+  - `GET /v1/external/async/{taskId}`;
+  - `GET /v1/external/async/by-external-id/{externalId}`;
+  - `DELETE /v1/external/async/{taskId}`;
+  - `POST /v1/external/async/{taskId}/retry`.
+- поддержаны `deliveryMode=CALLBACK | POLLING`;
+- повтор submit с тем же `clientService + externalId` и тем же payload возвращает существующую задачу;
+- конфликт идемпотентности возвращает `409 IDEMPOTENCY_CONFLICT`;
+- result хранится как `Map<String, String>`;
+- финальная ошибка хранится в структурированном поле `error`.
 
-## Шаг 6. Реализовать Dispatcher
+Осталось:
 
-Результат:
+- заменить временный `X-Client-Service` на реальную caller identity.
 
-- выбор задач по `priority_weight DESC, available_at ASC, id ASC`;
-- `FOR UPDATE SKIP LOCKED` для claim;
-- запрет старта async, если есть живые sync waiters;
-- `LISTEN/NOTIFY` как wake-up механизм;
-- polling fallback.
+## Шаг 5.1. Callback Delivery
 
-Критерий готовности:
+Статус: `partial`.
 
-- несколько gateway-инстансов не берут одну задачу дважды;
-- async backlog не вытесняет sync;
-- при `syncBusy=1` одновременно стартует не больше 3 async-вызовов, при `syncBusy=2` - не больше 2;
-- потеря NOTIFY не ломает обработку благодаря polling.
+Сделано:
 
-## Шаг 7. Реализовать Upstream Client
+- callback URL выбирается по `clientService` из allow-list конфигурации;
+- произвольный `callbackUrl` из payload не используется;
+- после финального статуса async-задачи создается callback delivery;
+- callback payload содержит `eventId`, `taskId`, `externalId`, `clientService`, `status`, `result`, `error`, `finishedAt`;
+- отправляются `X-Callback-Attempt` и `X-Request-Id`;
+- доставка имеет retry/backoff и финальный статус `DEAD`;
+- ошибка callback-доставки не меняет результат upstream-задачи.
 
-Результат:
+Осталось:
 
-- HTTP client с connect/read timeout;
-- circuit breaker;
-- retry policy для разрешенных transient ошибок;
-- запрет retry для неидемпотентных sync-вызовов без idempotency key.
+- внедрить подпись callback, если она потребуется;
+- добавить production timeout/retry policy для HTTP callback client.
 
-Критерий готовности:
+## Шаг 6. Async Dispatcher
 
-- таймаут upstream меньше slot lease TTL;
-- 429 от внешнего сервиса логируется как нарушение лимита или внешний конкурент;
-- ошибки мапятся в понятные gateway-статусы.
+Статус: `done`.
 
-## Шаг 8. Добавить recovery
+Сделано:
 
-Результат:
+- dispatcher выбирает задачи по `priority_weight DESC, available_at ASC, id ASC`;
+- claim выполняется через `FOR UPDATE SKIP LOCKED`;
+- dispatcher получает async slot по dynamic sync reserve;
+- если слот недоступен, задача возвращается в `PENDING`;
+- successful upstream переводит задачу в `DONE`;
+- runtime upstream failure переводит задачу в retry/backoff или `DEAD`;
+- scheduler управляется свойством `external-gateway.async.dispatcher-enabled`.
 
-- reaper для устаревших slots;
-- reaper для зависших `IN_PROGRESS` задач;
-- перевод задач в `DEAD` после `maxAttempts`;
-- перевод неретраибельных финальных ошибок в `FAILED`;
-- ручной retry из `DEAD`/`FAILED`, если финальная ошибка помечена как `retryable`.
+Осталось:
 
-Критерий готовности:
+- после реального upstream client уточнить retryable/non-retryable классификацию ошибок.
 
-- рестарт gateway во время async-вызова не теряет задачу;
-- зависшая задача возвращается в обработку после TTL;
-- reaper не освобождает чужой новый lease.
-- зависшая доставка callback возвращается в retry после TTL.
+## Шаг 7. Upstream Client
 
-## Шаг 9. Добавить observability
+Статус: `partial`.
 
-Результат:
+Сделано:
 
-- Micrometer metrics;
-- structured logs;
-- dashboard queries;
-- alerts.
+- есть интерфейс `ExternalUpstreamClient`;
+- текущий adapter возвращает стабильный `Map<String, String>` и поддерживает искусственную задержку;
+- async dispatcher корректно обрабатывает runtime-ошибки adapter'а.
 
-Критерий готовности:
+Осталось:
 
-- видно количество занятых слотов;
-- видно очередь по приоритетам;
-- видны dead tasks;
-- видны pending/dead callback delivery;
-- виден процент sync rejected.
+- реализовать настоящий HTTP client;
+- настроить connect/read timeout;
+- описать mapping upstream status codes;
+- добавить circuit breaker и retry policy, если они нужны.
 
-## Шаг 10. Нагрузочные и интеграционные тесты
+## Шаг 8. Recovery
 
-Минимальные сценарии:
+Статус: `partial`.
 
-- 20 конкурентных sync-запросов, одновременно upstream получает не больше 5;
-- async backlog из 100 задач без активных sync-вызовов, одновременно upstream получает не больше 4 async;
-- если активен 1 sync-вызов, async dispatcher доводит async только до 3 in-flight и держит 1 свободный слот;
-- если активны 2 sync-вызова, async dispatcher доводит async только до 2 in-flight и держит 1 свободный слот;
-- во время async backlog приходит sync, следующий свободный слот получает sync;
-- падение gateway-инстанса во время async-вызова;
-- повторный `externalId` для async;
-- успешная callback-доставка результата в `user-expertise`;
-- повторный callback по той же задаче идемпотентен;
-- callback endpoint временно недоступен, gateway делает retry, результат доступен через GET;
-- `LISTEN/NOTIFY` отключен, polling продолжает обработку.
+Сделано:
 
-Критерий готовности:
+- lease cleanup реализован методом `SlotManager.reapExpiredLeases()`;
+- retry/backoff async-задач реализован в repository/dispatcher;
+- callback retry/backoff реализован в callback repository/dispatcher;
+- ручной retry поддержан для `FAILED`/`DEAD` задач с `retryable=true`.
 
-- тесты проходят локально и в CI;
-- результаты тестов приложены к релизу v1.
+Осталось:
+
+- добавить scheduler для expired leases;
+- добавить recovery для зависших `IN_PROGRESS` задач;
+- добавить recovery для зависших `DELIVERING` callback deliveries.
+
+## Шаг 9. Observability
+
+Статус: `partial`.
+
+Сделано:
+
+- есть прикладные логи по sync, async и callback flow;
+- error responses содержат `code`, `message`, `retryable`, `requestId`, `details`.
+
+Осталось:
+
+- добавить Micrometer metrics;
+- добавить dashboards и alerts;
+- стандартизировать structured logging.
+
+## Шаг 10. Интеграционные И Нагрузочные Тесты
+
+Статус: `partial`.
+
+Сделано:
+
+- есть тесты sync API, async API, Slot Manager, dispatcher, callback delivery и условной PostgreSQL-конфигурации;
+- проверяется наличие Liquibase changelog.
+
+Осталось:
+
+- выполнить PostgreSQL integration test на живой БД или Testcontainers;
+- проверить кластерную конкуренцию нескольких gateway-инстансов;
+- проверить потерю `NOTIFY` и fallback polling на настоящем PostgreSQL;
+- провести нагрузочные сценарии с sync и async backlog.
 
 ## Шаг 11. Развертывание
 
-Результат:
+Статус: `todo`.
 
-- gateway разворачивается минимум в 2 инстанса;
-- все потребители переключены на gateway;
-- сервисы-клиенты, использующие async callback, открыли внутренний callback endpoint;
-- прямые вызовы внешнего сервиса из `invest-pay` и `user-expertise` удалены или запрещены сетевой политикой.
+Осталось:
 
-Критерий готовности:
-
-- внешний сервис видит вызовы только от gateway;
-- лимит 5 соблюдается в production;
-- rollback-план описан и проверен.
+- подготовить Dockerfile/helm/k8s manifests;
+- описать миграционный и rollback-план;
+- настроить секреты PostgreSQL через внешнюю конфигурацию;
+- включить service-to-service authentication;
+- зафиксировать operational runbook для очереди, callback retries и dead tasks.

@@ -9,7 +9,7 @@
 - внешний лимит `5 concurrent calls` общий для нескольких доменных сервисов;
 - `invest-pay` и `user-expertise` не имеют общей схемы данных;
 - общая таблица-лимитер в одной из доменных БД создала бы скрытую связанность;
-- gateway централизует retry, audit, metrics и priority policy.
+- gateway централизует retry и priority policy, а также задает единое место для будущих audit/metrics.
 
 Последствия:
 
@@ -19,12 +19,12 @@
 
 ## ADR-002. PostgreSQL используется как координатор v1
 
-Решение: для v1 используем PostgreSQL gateway-сервиса для lease-слотов и async-очереди.
+Решение: для v1 используем PostgreSQL gateway-сервиса для lease-слотов, sync waiters, async-очереди и callback-доставок.
 
 Причины:
 
 - ожидаемая нагрузка небольшая: около 1500 запросов/день, пики 10-20/мин;
-- нужны транзакции, идемпотентность и persistent queue;
+- нужны транзакции, идемпотентность, persistent queue и состояние callback-доставок;
 - `FOR UPDATE SKIP LOCKED` подходит для конкурентного claim;
 - `LISTEN/NOTIFY` в режиме ожидания sync-слота уменьшает latency после освобождения слота без отдельного broker.
 
@@ -32,7 +32,7 @@
 
 - нужно следить за autovacuum и очисткой старых задач;
 - PostgreSQL не является message broker, поэтому `NOTIFY external_gateway_slot_released` используется только как wake-up для повторной проверки `ext_slots`;
-- при росте нагрузки можно заменить queue layer на RabbitMQ/Kafka/Temporal, сохранив gateway API.
+- при росте нагрузки можно заменить queue layer на RabbitMQ/Kafka/Temporal, сохранив gateway API и внешний callback-контракт.
 
 ## ADR-003. Lease-запись вместо долгого DB lock
 
@@ -103,7 +103,7 @@ async не стартует новые задачи при наличии жив
 
 ## ADR-006. Callback URL берется из allow-list конфигурации
 
-Решение: gateway не принимает произвольный `callbackUrl` в async-запросе. Callback endpoint выбирается по `clientService`.
+Решение: gateway не принимает произвольный `callbackUrl` в async-запросе. Callback endpoint выбирается по `clientService` из allow-list конфигурации.
 
 Пример:
 
@@ -125,9 +125,25 @@ external-gateway:
 Последствия:
 
 - для нового сервиса-клиента с `deliveryMode=CALLBACK` нужна конфигурация в gateway;
-- в запросе достаточно передать `clientService` и `deliveryMode`, но `clientService` обязательно сверяется с аутентифицированной service-to-service identity.
+- текущий код берет `clientService` из тела запроса, а сверка с аутентифицированной service-to-service identity остается отдельным security-этапом.
 
-## ADR-007. Результат внешнего сервиса нормализуется в Map<String, String>
+## ADR-007. Текущий scope доступа задается X-Client-Service до внедрения service identity
+
+Решение: для `GET`, `DELETE` и `POST /v1/external/async/{taskId}/retry` текущая реализация принимает необязательный заголовок `X-Client-Service`.
+
+Причины:
+
+- полноценная service-to-service authentication еще не внедрена;
+- API уже должен уметь ограничивать lookup задач сервисом-клиентом;
+- временный заголовок позволяет тестировать и отлаживать scope доступа без общей БД между клиентами.
+
+Последствия:
+
+- если `X-Client-Service` передан, gateway ищет или изменяет задачу только в этом scope;
+- если заголовок не передан, lookup не ограничивается сервисом-клиентом;
+- production-вариант должен заменить этот заголовок на caller identity из mTLS/JWT/service mesh.
+
+## ADR-008. Результат внешнего сервиса нормализуется в Map<String, String>
 
 Решение: sync response, async callback и fallback GET возвращают успешный результат как `Map<String, String>`. Для финальных неуспешных async-статусов `result` равен `null`, а причина передается в структурированном поле `error`. Строковое `lastError` может использоваться только как диагностическое краткое описание.
 
@@ -144,7 +160,7 @@ external-gateway:
 - если upstream вернет вложенную структуру, ее нужно либо flatten'ить, либо явно отбросить лишние поля;
 - ключи результата должны быть стабильными и документированными для конкретной операции.
 
-## ADR-008. OpenAPI разделяется на sync, async и callback
+## ADR-009. OpenAPI разделяется на sync, async и callback
 
 Решение: поддерживаем отдельные OpenAPI-файлы для входящих gateway API и исходящего callback-контракта.
 
@@ -161,7 +177,7 @@ external-gateway:
 - `../openapi/external-gateway-async.yaml`
 - `../openapi/external-gateway-callback.yaml`
 
-## ADR-009. Gateway API стабилен, внутренняя очередь заменяема
+## ADR-010. Gateway API стабилен, внутренняя очередь заменяема
 
 Решение: потребители интегрируются только через HTTP API gateway. Они не имеют доступа к таблицам gateway.
 
@@ -171,7 +187,7 @@ external-gateway:
 - можно менять retry и priority policy внутри gateway;
 - ownership остается четким.
 
-## ADR-010. REST/OpenAPI - единственный протокол v1
+## ADR-011. REST/OpenAPI - единственный протокол v1
 
 Решение: v1 проектируется как REST/OpenAPI API с HTTP callback для доставки async-результата. Другие внутренние протоколы не входят в документацию и контракт v1.
 

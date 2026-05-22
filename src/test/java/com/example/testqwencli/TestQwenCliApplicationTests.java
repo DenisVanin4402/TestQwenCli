@@ -16,6 +16,7 @@ import javax.sql.DataSource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -37,6 +38,19 @@ class TestQwenCliApplicationTests {
 		mockMvc.perform(get("/"))
 				.andExpect(status().isOk())
 				.andExpect(content().string("TestQwenCli is running"));
+	}
+
+	@Test
+	void openApiDocsAreAvailable() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.openapi").exists());
+	}
+
+	@Test
+	void swaggerUiIsAvailable() throws Exception {
+		mockMvc.perform(get("/swagger-ui.html"))
+				.andExpect(status().is3xxRedirection());
 	}
 
 	@Test

@@ -49,10 +49,6 @@ paths:
                 $ref: '#/components/schemas/ExternalSyncResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '408':
           description: Истекло время ожидания ответа внешнего сервиса
           content:
@@ -102,23 +98,12 @@ components:
         minLength: 8
         maxLength: 128
       description: |
-        Ключ идемпотентности. Обязателен для sync-вызовов, если upstream
-        операция меняет состояние.
+        Ключ идемпотентности для upstream adapter'а. Текущая реализация
+        принимает заголовок и передает его дальше, но не хранит sync-результат
+        по этому ключу.
   responses:
     BadRequest:
       description: Некорректный запрос
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    Unauthorized:
-      description: Не пройдена service-to-service аутентификация
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    Forbidden:
-      description: Сервис-клиент не имеет права вызывать gateway
       content:
         application/json:
           schema:
@@ -141,9 +126,8 @@ components:
           minLength: 2
           maxLength: 80
           description: |
-            Имя сервиса-клиента. Gateway сверяет это значение с
-            аутентифицированной service-to-service identity; несовпадение
-            считается ошибкой авторизации или валидации.
+            Имя сервиса-клиента. Текущая реализация берет значение из тела
+            запроса; сверка с service-to-service identity еще не внедрена.
           examples:
             - invest-pay
             - user-expertise

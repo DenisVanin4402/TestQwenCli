@@ -25,7 +25,6 @@ paths:
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/XCallbackAttempt'
-        - $ref: '#/components/parameters/XGatewaySignature'
       requestBody:
         required: true
         content:
@@ -57,7 +56,7 @@ paths:
                   status: DEAD
                   result: null
                   error:
-                    code: UPSTREAM_TIMEOUT
+                    code: UPSTREAM_TRANSIENT_FAILURE
                     message: External service timeout
                     retryable: true
                   finishedAt: '2026-05-21T20:31:00Z'
@@ -71,13 +70,13 @@ paths:
         '204':
           description: Callback принят, тело ответа не требуется
         '400':
-          description: Некорректный callback payload. Gateway считает ошибку постоянной.
+          description: Некорректный callback payload. Gateway зафиксирует ошибку доставки и применит retry/backoff.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Не пройдена аутентификация gateway
+          description: Не пройдена аутентификация gateway. Gateway зафиксирует ошибку доставки и применит retry/backoff.
           content:
             application/json:
               schema:
@@ -125,13 +124,6 @@ components:
         type: integer
         minimum: 1
       description: Номер попытки доставки callback
-    XGatewaySignature:
-      name: X-Gateway-Signature
-      in: header
-      required: false
-      schema:
-        type: string
-      description: Подпись тела callback, если выбран HMAC-based auth
   schemas:
     ExternalGatewayCallback:
       type: object

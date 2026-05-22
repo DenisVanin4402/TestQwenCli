@@ -1,103 +1,103 @@
-# C4 Architecture View
+# Архитектурное представление C4
 
-Документ фиксирует C4-представление `external-service-gateway`: от контекста системы до внутренних компонентов gateway. Диаграммы отражают текущие архитектурные решения:
+Документ фиксирует C4-представление `external-service-gateway`: от контекста системы до внутренних компонентов шлюза. Диаграммы отражают текущие архитектурные решения:
 
-- отдельный gateway-сервис между доменными сервисами и внешним сервисом;
-- общий лимит `5 concurrent calls`;
-- скользящий sync reserve;
-- async callback в сервис-клиент;
-- PostgreSQL как координатор слотов, очереди и callback delivery.
+- отдельный сервис-шлюз между доменными сервисами и внешним сервисом;
+- общий лимит `5` одновременных вызовов;
+- скользящий sync-резерв;
+- async-обратный вызов в сервис-клиент;
+- PostgreSQL как координатор слотов, очереди и доставки обратных вызовов.
 
-## Level 1. System Context
+## Уровень 1. Контекст системы
 
 ```mermaid
 C4Context
-    title External Service Gateway - System Context
+    title Шлюз внешнего сервиса - контекст системы
 
-    Person_Ext(operator, "Support / Operations", "Monitors queues, dead tasks, callbacks and incidents")
+    Person_Ext(operator, "Поддержка / эксплуатация", "Следит за очередями, задачами DEAD, обратными вызовами и инцидентами")
 
-    System(invest_pay, "invest-pay", "Domain service with its own database schema")
-    System(user_expertise, "user-expertise", "Domain service with its own database schema")
-    System(gateway, "external-service-gateway", "Internal Spring Boot gateway for prioritized and throttled calls")
-    System_Ext(external_service, "External Service", "Third-party service with max 5 concurrent calls")
+    System(invest_pay, "invest-pay", "Доменный сервис со своей схемой БД")
+    System(user_expertise, "user-expertise", "Доменный сервис со своей схемой БД")
+    System(gateway, "external-service-gateway", "Внутренний Spring Boot шлюз для приоритизированных вызовов с лимитом")
+    System_Ext(external_service, "Внешний сервис", "Сторонний сервис с лимитом 5 одновременных вызовов")
 
-    Rel(invest_pay, gateway, "Sync and async requests", "HTTP/JSON")
-    Rel(user_expertise, gateway, "Sync and async requests", "HTTP/JSON")
-    Rel(gateway, invest_pay, "Async result callback", "HTTP callback")
-    Rel(gateway, user_expertise, "Async result callback", "HTTP callback")
-    Rel(gateway, external_service, "Throttled upstream calls, max 5 in-flight", "HTTP")
-    Rel(operator, gateway, "Observes metrics, logs and task states")
+    Rel(invest_pay, gateway, "Sync- и async-запросы", "HTTP/JSON")
+    Rel(user_expertise, gateway, "Sync- и async-запросы", "HTTP/JSON")
+    Rel(gateway, invest_pay, "Обратный вызов с async-результатом", "HTTP")
+    Rel(gateway, user_expertise, "Обратный вызов с async-результатом", "HTTP")
+    Rel(gateway, external_service, "Вызовы с ограничением, максимум 5 одновременно", "HTTP")
+    Rel(operator, gateway, "Наблюдает метрики, логи и состояния задач")
 ```
 
-Ключевой смысл контекста: `invest-pay` и `user-expertise` не делят общую схему БД. Они интегрируются только через API gateway. Все прямые вызовы внешнего сервиса должны быть удалены или запрещены сетевой политикой.
+Ключевой смысл контекста: `invest-pay` и `user-expertise` не делят общую схему БД. Они интегрируются только через API шлюза. Все прямые вызовы внешнего сервиса должны быть удалены или запрещены сетевой политикой.
 
-## Level 2. Container View
+## Уровень 2. Представление контейнеров
 
 ```mermaid
 C4Container
-    title External Service Gateway - Container View
+    title Шлюз внешнего сервиса - представление контейнеров
 
-    System(invest_pay, "invest-pay", "Client service")
-    System(user_expertise, "user-expertise", "Client service")
-    System_Ext(external_service, "External Service", "Max 5 concurrent calls")
+    System(invest_pay, "invest-pay", "Сервис-клиент")
+    System(user_expertise, "user-expertise", "Сервис-клиент")
+    System_Ext(external_service, "Внешний сервис", "Максимум 5 одновременных вызовов")
 
     System_Boundary(gateway_boundary, "external-service-gateway") {
-        Container(api_app, "Gateway Application", "Spring Boot", "REST API, slot management, queue dispatching, callback delivery")
-        ContainerDb(pg, "Gateway PostgreSQL", "PostgreSQL", "Slots, async queue, sync waiters, callback delivery, audit")
+        Container(api_app, "Приложение шлюза", "Spring Boot", "REST API, управление слотами, диспетчеризация очереди, доставка обратных вызовов")
+        ContainerDb(pg, "PostgreSQL шлюза", "PostgreSQL", "Слоты, async-очередь, ожидающие sync-запросы, доставка обратных вызовов, аудит")
     }
 
-    Rel(invest_pay, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async result", "HTTP/JSON")
-    Rel(user_expertise, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async result", "HTTP/JSON")
-    Rel(api_app, invest_pay, "POST callback with result/error", "HTTP callback")
-    Rel(api_app, user_expertise, "POST callback with result/error", "HTTP callback")
-    Rel(api_app, pg, "Acquire slots, claim tasks, save results, track callbacks", "JDBC")
-    Rel(api_app, external_service, "Upstream calls", "HTTP")
+    Rel(invest_pay, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async-результата", "HTTP/JSON")
+    Rel(user_expertise, api_app, "POST /v1/external/sync, POST /v1/external/async, GET async-результата", "HTTP/JSON")
+    Rel(api_app, invest_pay, "POST обратного вызова с result/error", "HTTP")
+    Rel(api_app, user_expertise, "POST обратного вызова с result/error", "HTTP")
+    Rel(api_app, pg, "Занять слоты, забрать задачи, сохранить результаты, отслеживать обратные вызовы", "JDBC")
+    Rel(api_app, external_service, "Вызовы внешнего сервиса", "HTTP")
 ```
 
-`Gateway Application` может быть запущен в нескольких инстансах. Глобальный лимит обеспечивается не локальным пулом потоков, а общей PostgreSQL-схемой gateway.
+`Приложение шлюза` может быть запущено в нескольких инстансах. Глобальный лимит обеспечивается не локальным пулом потоков, а общей PostgreSQL-схемой шлюза.
 
 Если два датацентра/плеча не имеют общего координатора, глобальный лимит `5` невозможен без отдельного соглашения о квотах, например `3 + 2`.
 
-## Level 3. Gateway Component View
+## Уровень 3. Представление компонентов шлюза
 
 ```mermaid
 C4Component
-    title External Service Gateway - Component View
+    title Шлюз внешнего сервиса - представление компонентов
 
-    ContainerDb(pg, "Gateway PostgreSQL", "PostgreSQL", "Coordination and persistence")
-    System_Ext(external_service, "External Service", "Max 5 concurrent calls")
-    System(client_service, "Client Service", "invest-pay / user-expertise")
+    ContainerDb(pg, "PostgreSQL шлюза", "PostgreSQL", "Координация и хранение состояния")
+    System_Ext(external_service, "Внешний сервис", "Максимум 5 одновременных вызовов")
+    System(client_service, "Сервис-клиент", "invest-pay / user-expertise")
 
-    Container_Boundary(app, "Gateway Application") {
-        Component(sync_api, "Sync API", "Spring MVC", "Accepts sync calls and waits for a slot")
-        Component(async_api, "Async API", "Spring MVC", "Accepts async tasks and exposes fallback result reads")
-        Component(slot_manager, "Slot Manager", "Service", "Maintains lease-based global slots and sliding sync reserve")
-        Component(queue_repo, "Queue Repository", "JDBC", "Persists async tasks and claims work with SKIP LOCKED")
-        Component(dispatcher, "Async Dispatcher", "Scheduled worker + NOTIFY listener", "Starts async work only when priority policy allows it")
-        Component(upstream_client, "Upstream Client", "HTTP client", "Calls external service with timeout, retry and circuit breaker policy")
-        Component(callback_delivery, "Callback Delivery", "Worker", "Sends async result callbacks and retries delivery")
-        Component(reaper, "Reaper", "Scheduled worker", "Restores stale leases, stuck tasks and stuck callbacks")
-        Component(metrics, "Observability", "Micrometer + structured logs", "Exports metrics and logs for operations")
+    Container_Boundary(app, "Приложение шлюза") {
+        Component(sync_api, "Sync API", "Spring MVC", "Принимает sync-вызовы и ждет слот")
+        Component(async_api, "Async API", "Spring MVC", "Принимает async-задачи и дает резервное чтение результата")
+        Component(slot_manager, "Управление слотами", "Сервис", "Ведет глобальные lease-слоты и скользящий sync-резерв")
+        Component(queue_repo, "Репозиторий очереди", "JDBC", "Хранит async-задачи и забирает работу через SKIP LOCKED")
+        Component(dispatcher, "Async-диспетчер", "Плановый обработчик + слушатель NOTIFY", "Стартует async-работу только когда это разрешает политика приоритета")
+        Component(upstream_client, "Клиент внешнего сервиса", "HTTP-клиент", "Вызывает внешний сервис с таймаутом, повторами и автоматическим выключателем")
+        Component(callback_delivery, "Доставка обратных вызовов", "Обработчик", "Отправляет обратные вызовы с async-результатом и повторяет доставку")
+        Component(reaper, "Восстановитель", "Плановый обработчик", "Восстанавливает устаревшие lease-записи, зависшие задачи и зависшие обратные вызовы")
+        Component(metrics, "Наблюдаемость", "Micrometer + структурированные логи", "Экспортирует метрики и логи для эксплуатации")
     }
 
-    Rel(client_service, sync_api, "Sync request")
-    Rel(client_service, async_api, "Async submit / fallback result read")
-    Rel(sync_api, slot_manager, "Acquire SYNC slot")
-    Rel(async_api, queue_repo, "Insert task")
-    Rel(dispatcher, queue_repo, "Claim next task")
-    Rel(dispatcher, slot_manager, "Acquire ASYNC slot by dynamic reserve")
-    Rel(slot_manager, pg, "Read/update ext_slots and ext_sync_waiters")
-    Rel(queue_repo, pg, "Read/update ext_request_queue")
-    Rel(dispatcher, upstream_client, "Execute async upstream call")
-    Rel(sync_api, upstream_client, "Execute sync upstream call")
+    Rel(client_service, sync_api, "Sync-запрос")
+    Rel(client_service, async_api, "Постановка async / резервное чтение результата")
+    Rel(sync_api, slot_manager, "Занять слот SYNC")
+    Rel(async_api, queue_repo, "Создать задачу")
+    Rel(dispatcher, queue_repo, "Забрать следующую задачу")
+    Rel(dispatcher, slot_manager, "Занять слот ASYNC по динамическому резерву")
+    Rel(slot_manager, pg, "Чтение/обновление ext_slots и ext_sync_waiters")
+    Rel(queue_repo, pg, "Чтение/обновление ext_request_queue")
+    Rel(dispatcher, upstream_client, "Выполнить async-вызов внешнего сервиса")
+    Rel(sync_api, upstream_client, "Выполнить sync-вызов внешнего сервиса")
     Rel(upstream_client, external_service, "HTTP")
-    Rel(callback_delivery, client_service, "Callback with result Map<String,String>")
-    Rel(callback_delivery, pg, "Read/update ext_callback_delivery")
-    Rel(reaper, pg, "Recover stale records")
-    Rel(metrics, pg, "Read operational gauges")
+    Rel(callback_delivery, client_service, "Обратный вызов с result Map<String,String>")
+    Rel(callback_delivery, pg, "Чтение/обновление ext_callback_delivery")
+    Rel(reaper, pg, "Восстановить устаревшие записи")
+    Rel(metrics, pg, "Читать эксплуатационные показатели")
 ```
 
-Главный инвариант Slot Manager:
+Главный инвариант управления слотами:
 
 ```text
 totalSlots = 5
@@ -112,111 +112,111 @@ asyncBusy < asyncAllowed
 и нет живых sync waiters
 ```
 
-## Dynamic View. Sync Request
+## Динамическое представление. Sync-запрос
 
 ```mermaid
 sequenceDiagram
     participant Client as invest-pay / user-expertise
-    participant API as Gateway Sync API
-    participant Slots as Slot Manager
+    participant API as Sync API шлюза
+    participant Slots as Управление слотами
     participant DB as PostgreSQL
-    participant Upstream as External Service
+    participant Upstream as Внешний сервис
 
     Client->>API: POST /v1/external/sync
-    API->>DB: register sync waiter
-    API->>Slots: acquire sync slot, max 5
-    Slots->>DB: lease free slot with lease_id
-    DB-->>Slots: slot acquired
-    Slots-->>API: slot lease
-    API->>DB: remove sync waiter
-    API->>Upstream: HTTP call
-    Upstream-->>API: response
-    API->>Slots: release slot by slot_id + lease_id
-    Slots->>DB: clear lease
+    API->>DB: зарегистрировать sync waiter
+    API->>Slots: занять sync-слот, максимум 5
+    Slots->>DB: арендовать свободный слот с lease_id
+    DB-->>Slots: слот занят
+    Slots-->>API: lease слота
+    API->>DB: удалить sync waiter
+    API->>Upstream: HTTP-вызов
+    Upstream-->>API: ответ
+    API->>Slots: освободить слот по slot_id + lease_id
+    Slots->>DB: очистить lease
     API-->>Client: 200 result
 ```
 
-Если слот не получен до `syncWaitTimeout`, gateway удаляет sync waiter и возвращает `429`. Код `503` используется для недоступности gateway или координатора лимитов, а не как обычный ответ на исчерпание sync SLA.
+Если слот не получен до `syncWaitTimeout`, шлюз удаляет sync waiter и возвращает `429`. Код `503` используется для недоступности шлюза или координатора лимитов, а не как обычный ответ на исчерпание sync SLA.
 
-## Dynamic View. Async Request With Callback
+## Динамическое представление. Async-запрос с обратным вызовом
 
 ```mermaid
 sequenceDiagram
     participant Client as user-expertise
-    participant API as Gateway Async API
-    participant Dispatcher as Async Dispatcher
-    participant Slots as Slot Manager
+    participant API as Async API шлюза
+    participant Dispatcher as Async-диспетчер
+    participant Slots as Управление слотами
     participant DB as PostgreSQL
-    participant Upstream as External Service
-    participant Callback as Callback Delivery
+    participant Upstream as Внешний сервис
+    participant Callback as Доставка обратных вызовов
 
     Client->>API: POST /v1/external/async deliveryMode=CALLBACK
-    API->>DB: insert task PENDING
+    API->>DB: создать задачу PENDING
     API->>DB: NOTIFY external_gateway_queue
     API-->>Client: 202 taskId
 
-    Dispatcher->>DB: claim next PENDING task
-    Dispatcher->>Slots: acquire async slot by sliding reserve
-    Slots->>DB: check syncBusy, asyncBusy, sync waiters
-    DB-->>Slots: async lease allowed
-    Slots-->>Dispatcher: slot lease
+    Dispatcher->>DB: забрать следующую задачу PENDING
+    Dispatcher->>Slots: занять async-слот по скользящему резерву
+    Slots->>DB: проверить syncBusy, asyncBusy, sync waiters
+    DB-->>Slots: async lease разрешен
+    Slots-->>Dispatcher: lease слота
 
-    Dispatcher->>Upstream: HTTP call
-    Upstream-->>Dispatcher: response
-    Dispatcher->>DB: mark task DONE and create callback delivery PENDING atomically
-    Dispatcher->>Slots: release slot
+    Dispatcher->>Upstream: HTTP-вызов
+    Upstream-->>Dispatcher: ответ
+    Dispatcher->>DB: отметить задачу DONE и атомарно создать доставку PENDING
+    Dispatcher->>Slots: освободить слот
 
-    Callback->>DB: claim callback delivery
+    Callback->>DB: забрать доставку обратного вызова
     Callback->>Client: POST /internal/external-gateway/callbacks
     Client-->>Callback: 200 OK
-    Callback->>DB: mark callback DELIVERED
+    Callback->>DB: отметить доставку DELIVERED
 ```
 
-Перевод async-задачи в финальный статус и создание записи callback delivery должны быть атомарными: одна транзакция в PostgreSQL или transactional outbox. Иначе рестарт gateway между этими действиями может оставить финальную задачу без доставки callback.
+Перевод async-задачи в финальный статус и создание записи доставки обратного вызова должны быть атомарными: одна транзакция в PostgreSQL или транзакционный outbox. Иначе рестарт шлюза между этими действиями может оставить финальную задачу без доставки обратного вызова.
 
-Если callback не доставлен, `Callback Delivery` переводит доставку в retry с backoff. Результат задачи остается доступен через gateway fallback API.
+Если обратный вызов не доставлен, `Доставка обратных вызовов` переводит доставку в повтор с задержкой. Результат задачи остается доступен через резервный API шлюза.
 
-## Dynamic View. Async Fallback Result Read
+## Динамическое представление. Резервное чтение async-результата
 
 ```mermaid
 sequenceDiagram
     participant Client as user-expertise
-    participant API as Gateway Async API
+    participant API as Async API шлюза
     participant DB as PostgreSQL
 
     Client->>API: GET /v1/external/async/{taskId}
-    API->>DB: select task by taskId and clientService from authenticated identity
+    API->>DB: выбрать задачу по taskId и clientService из аутентифицированной идентичности
     DB-->>API: status, result, callbackDeliveryStatus
     API-->>Client: AsyncTask
 ```
 
-Fallback чтение не требует общей БД между сервисами. `user-expertise` обращается к gateway по API, а gateway читает собственную схему.
+Резервное чтение не требует общей БД между сервисами. `user-expertise` обращается к шлюзу по API, а шлюз читает собственную схему.
 
-## Deployment Notes
+## Заметки по развертыванию
 
 ```mermaid
 C4Deployment
-    title External Service Gateway - Deployment View
+    title Шлюз внешнего сервиса - представление развертывания
 
-    Deployment_Node(dc, "Cluster / two legs", "Docker / Kubernetes-like environment") {
-        Deployment_Node(app_nodes, "Gateway runtime", "2+ instances") {
-            Container(api_1, "Gateway instance #1", "Spring Boot")
-            Container(api_2, "Gateway instance #2", "Spring Boot")
+    Deployment_Node(dc, "Кластер / два плеча", "Docker / Kubernetes-подобная среда") {
+        Deployment_Node(app_nodes, "Среда выполнения шлюза", "2+ инстанса") {
+            Container(api_1, "Инстанс шлюза #1", "Spring Boot")
+            Container(api_2, "Инстанс шлюза #2", "Spring Boot")
         }
-        Deployment_Node(db_node, "Database", "PostgreSQL") {
-            ContainerDb(pg, "Gateway PostgreSQL", "PostgreSQL")
+        Deployment_Node(db_node, "База данных", "PostgreSQL") {
+            ContainerDb(pg, "PostgreSQL шлюза", "PostgreSQL")
         }
     }
 
-    System_Ext(external_service, "External Service", "Max 5 concurrent calls")
-    System(client_services, "Client services", "invest-pay, user-expertise")
+    System_Ext(external_service, "Внешний сервис", "Максимум 5 одновременных вызовов")
+    System(client_services, "Сервисы-клиенты", "invest-pay, user-expertise")
 
-    Rel(client_services, api_1, "Requests")
-    Rel(client_services, api_2, "Requests")
+    Rel(client_services, api_1, "Запросы")
+    Rel(client_services, api_2, "Запросы")
     Rel(api_1, pg, "JDBC")
     Rel(api_2, pg, "JDBC")
     Rel(api_1, external_service, "HTTP")
     Rel(api_2, external_service, "HTTP")
 ```
 
-Все gateway-инстансы должны использовать один логический координатор слотов. Если PostgreSQL раздельный по плечам, лимит `5` превращается в сумму локальных лимитов и перестает быть глобальным.
+Все инстансы шлюза должны использовать один логический координатор слотов. Если PostgreSQL раздельный по плечам, лимит `5` превращается в сумму локальных лимитов и перестает быть глобальным.

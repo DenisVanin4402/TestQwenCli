@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
-  title: External Service Gateway Sync API
+  title: Синхронный API external-service-gateway
   version: 0.1.0
   description: |
-    Синхронный API внутреннего gateway-сервиса для вызова внешнего сервиса
-    с глобальным ограничением 5 concurrent calls.
+    Синхронный API внутреннего сервиса-шлюза для вызова внешнего сервиса
+    с глобальным ограничением 5 одновременных вызовов.
 servers:
   - url: http://external-service-gateway.internal
-    description: Internal service DNS
+    description: DNS внутреннего сервиса
 tags:
   - name: Sync
     description: Синхронные вызовы внешнего сервиса
@@ -19,7 +19,7 @@ paths:
       operationId: callExternalSync
       summary: Выполнить синхронный вызов внешнего сервиса
       description: |
-        Gateway пытается получить sync-slot, выполняет upstream HTTP-вызов
+        Шлюз пытается получить sync-slot, выполняет HTTP-вызов внешнего сервиса
         и возвращает результат в рамках исходного HTTP-запроса.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -60,7 +60,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Gateway не смог получить слот в рамках sync SLA
+          description: Шлюз не смог получить слот в рамках sync SLA
           headers:
             Retry-After:
               schema:
@@ -78,7 +78,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Gateway или координатор лимитов временно недоступен
+          description: Шлюз или координатор лимитов временно недоступен
           content:
             application/json:
               schema:
@@ -92,7 +92,7 @@ components:
       schema:
         type: string
         maxLength: 128
-      description: Correlation id от вызывающего сервиса
+      description: Идентификатор корреляции от вызывающего сервиса
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -102,8 +102,8 @@ components:
         minLength: 8
         maxLength: 128
       description: |
-        Ключ идемпотентности. Обязателен для sync-вызовов, если upstream
-        операция меняет состояние.
+        Ключ идемпотентности. Обязателен для sync-вызовов, если операция
+        внешнего сервиса меняет состояние.
   responses:
     BadRequest:
       description: Некорректный запрос
@@ -112,13 +112,13 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: Не пройдена service-to-service аутентификация
+      description: Не пройдена межсервисная аутентификация
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
-      description: Сервис-клиент не имеет права вызывать gateway
+      description: Сервис-клиент не имеет права вызывать шлюз
       content:
         application/json:
           schema:
@@ -141,15 +141,15 @@ components:
           minLength: 2
           maxLength: 80
           description: |
-            Имя сервиса-клиента. Gateway сверяет это значение с
-            аутентифицированной service-to-service identity; несовпадение
+            Имя сервиса-клиента. Шлюз сверяет это значение с
+            аутентифицированной межсервисной идентичностью; несовпадение
             считается ошибкой авторизации или валидации.
           examples:
             - invest-pay
             - user-expertise
         payload:
           type: object
-          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
+          description: Данные, которые шлюз передаст во внешний сервис после валидации маршрута
     ExternalSyncResponse:
       type: object
       additionalProperties: false
@@ -209,7 +209,7 @@ components:
       type: object
       additionalProperties:
         type: string
-      description: Результат выполнения upstream-запроса в формате Map<String, String>
+      description: Результат выполнения запроса во внешний сервис в формате Map<String, String>
       examples:
         - decision: APPROVED
           score: '82'

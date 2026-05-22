@@ -1,16 +1,16 @@
 openapi: 3.1.0
 info:
-  title: External Service Gateway Callback API
+  title: API обратного вызова external-service-gateway
   version: 0.1.0
   description: |
-    Контракт endpoint'а, который должны реализовать сервисы-клиенты
+    Контракт эндпоинта, который должны реализовать сервисы-клиенты
     для получения результата async-задачи от external-service-gateway.
 servers:
   - url: http://user-expertise.internal
-    description: Example client service DNS
+    description: Пример DNS сервиса-клиента
 tags:
   - name: Callback
-    description: Callback от gateway в сервис-клиент
+    description: Обратный вызов от шлюза в сервис-клиент
 paths:
   /internal/external-gateway/callbacks:
     post:
@@ -19,8 +19,8 @@ paths:
       operationId: receiveExternalGatewayCallback
       summary: Принять результат async-задачи
       description: |
-        Gateway вызывает этот endpoint после финального статуса async-задачи.
-        Endpoint должен быть идемпотентным: повторная доставка того же taskId/status
+        Шлюз вызывает этот эндпоинт после финального статуса async-задачи.
+        Эндпоинт должен быть идемпотентным: повторная доставка того же taskId/status
         должна возвращать успешный ответ и не создавать дублей.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
@@ -48,7 +48,7 @@ paths:
                   error: null
                   finishedAt: '2026-05-21T20:30:00Z'
               failed:
-                summary: Retry upstream исчерпаны
+                summary: Повторы вызова внешнего сервиса исчерпаны
                 value:
                   eventId: 33e72e4a-48f2-4140-9f22-9c7339b789ce
                   taskId: 12346
@@ -58,51 +58,51 @@ paths:
                   result: null
                   error:
                     code: UPSTREAM_TIMEOUT
-                    message: External service timeout
+                    message: Таймаут внешнего сервиса
                     retryable: true
                   finishedAt: '2026-05-21T20:31:00Z'
       responses:
         '200':
-          description: Callback принят
+          description: Обратный вызов принят
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CallbackAck'
         '204':
-          description: Callback принят, тело ответа не требуется
+          description: Обратный вызов принят, тело ответа не требуется
         '400':
-          description: Некорректный callback payload. Gateway считает ошибку постоянной.
+          description: Некорректная полезная нагрузка обратного вызова. Шлюз считает ошибку постоянной.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Не пройдена аутентификация gateway
+          description: Не пройдена аутентификация шлюза
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Конфликт состояния. Использовать только для настоящего конфликта; повтор уже обработанного callback должен возвращать 200/204.
+          description: Конфликт состояния. Использовать только для настоящего конфликта; повтор уже обработанного обратного вызова должен возвращать 200/204.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: Сервис-клиент временно перегружен. Gateway повторит callback позже.
+          description: Сервис-клиент временно перегружен. Шлюз повторит обратный вызов позже.
           headers:
             Retry-After:
               schema:
                 type: integer
                 minimum: 1
         '500':
-          description: Временная ошибка сервиса-клиента. Gateway повторит callback позже.
+          description: Временная ошибка сервиса-клиента. Шлюз повторит обратный вызов позже.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Сервис-клиент временно недоступен. Gateway повторит callback позже.
+          description: Сервис-клиент временно недоступен. Шлюз повторит обратный вызов позже.
           content:
             application/json:
               schema:
@@ -116,7 +116,7 @@ components:
       schema:
         type: string
         maxLength: 128
-      description: Correlation id callback-доставки
+      description: Идентификатор корреляции доставки обратного вызова
     XCallbackAttempt:
       name: X-Callback-Attempt
       in: header
@@ -124,14 +124,14 @@ components:
       schema:
         type: integer
         minimum: 1
-      description: Номер попытки доставки callback
+      description: Номер попытки доставки обратного вызова
     XGatewaySignature:
       name: X-Gateway-Signature
       in: header
       required: false
       schema:
         type: string
-      description: Подпись тела callback, если выбран HMAC-based auth
+      description: Подпись тела обратного вызова, если выбрана аутентификация на основе HMAC
   schemas:
     ExternalGatewayCallback:
       type: object
@@ -149,7 +149,7 @@ components:
         eventId:
           type: string
           format: uuid
-          description: Уникальный идентификатор попытки доставки callback
+          description: Уникальный идентификатор попытки доставки обратного вызова
         taskId:
           type: integer
           format: int64
@@ -200,8 +200,8 @@ components:
         - CANCELLED
       description: |
         FAILED означает финальную неретраибельную ошибку.
-        DEAD означает, что retry upstream исчерпаны.
-        CANCELLED означает отмену до старта upstream-вызова.
+        DEAD означает, что повторы вызова внешнего сервиса исчерпаны.
+        CANCELLED означает отмену до старта вызова внешнего сервиса.
     CallbackError:
       type: object
       additionalProperties: false
@@ -216,7 +216,7 @@ components:
           type: string
         retryable:
           type: boolean
-          description: Возможность ручного retry; автоматические retry upstream уже завершены до финального callback.
+          description: Возможность ручного повтора; автоматические повторы вызова внешнего сервиса уже завершены до финального обратного вызова.
     CallbackAck:
       type: object
       additionalProperties: false

@@ -44,6 +44,11 @@ public class ExternalAsyncDispatcher {
 				"callbackDeliveryPlanner must not be null");
 	}
 
+	/**
+	 * Выполняет одну доступную async-задачу, если очередь и лимит слотов позволяют старт.
+	 *
+	 * @return {@code true}, если задача была обработана или завершилась управляемой ошибкой
+	 */
 	public boolean dispatchOnce() {
 		Optional<AsyncTaskClaim> claimedTask = repository.claimNextPending(clock.instant());
 		if (claimedTask.isEmpty()) {

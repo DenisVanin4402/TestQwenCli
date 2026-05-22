@@ -33,6 +33,13 @@ public class ExternalSyncService {
 		this.upstreamClient = Objects.requireNonNull(upstreamClient, "upstreamClient must not be null");
 	}
 
+	/**
+	 * Выполняет синхронный вызов внешнего сервиса через общий лимитер слотов.
+	 *
+	 * @param request запрос сервиса-клиента
+	 * @param headers технические заголовки вызова
+	 * @return успешный нормализованный ответ внешнего сервиса
+	 */
 	public ExternalSyncResponse sync(ExternalSyncRequest request, ExternalSyncHeaders headers) {
 		Objects.requireNonNull(request, "request must not be null");
 		Objects.requireNonNull(headers, "headers must not be null");

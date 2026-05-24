@@ -12,6 +12,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import javax.sql.DataSource;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -92,5 +95,38 @@ class TestQwenCliApplicationTests {
 				"db/changelog/external-gateway/db.changelog-master.yaml");
 
 		assertThat(changelog.exists()).isTrue();
+	}
+
+	@Test
+	void consoleLoggingUsesUtf8ByDefault() throws Exception {
+		Properties properties = loadProperties("application.properties");
+
+		assertThat(properties)
+				.containsEntry("logging.charset.console", "UTF-8")
+				.containsEntry("logging.charset.file", "UTF-8")
+				.containsEntry("server.servlet.encoding.charset", "UTF-8")
+				.containsEntry("server.servlet.encoding.force", "true");
+	}
+
+	@Test
+	void postgresProfileConfiguresLocalDockerDatabase() throws Exception {
+		Properties properties = loadProperties("application-postgres.properties");
+
+		assertThat(properties)
+				.containsEntry("external-gateway.repository.type", "postgres")
+				.containsEntry("external-gateway.postgres.jdbc-url",
+						"jdbc:postgresql://localhost:5432/external_gateway")
+				.containsEntry("external-gateway.postgres.username", "external_gateway")
+				.containsEntry("external-gateway.postgres.schema", "external_gateway")
+				.containsEntry("external-gateway.postgres.liquibase-enabled", "true");
+	}
+
+	private static Properties loadProperties(String path) throws Exception {
+		ClassPathResource resource = new ClassPathResource(path);
+		Properties properties = new Properties();
+		try (InputStreamReader reader = new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8)) {
+			properties.load(reader);
+		}
+		return properties;
 	}
 }

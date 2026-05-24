@@ -13,14 +13,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 
 @Service
 public class ExternalAsyncDispatcher {
@@ -34,6 +31,7 @@ public class ExternalAsyncDispatcher {
 	private final Clock clock;
 	private final Optional<CallbackDeliveryPlanner> callbackDeliveryPlanner;
 	private final ExecutorService dispatchExecutor;
+	private final Semaphore dispatchPermits;
 
 	public ExternalAsyncDispatcher(
 			AsyncTaskRepository repository,
@@ -51,6 +49,7 @@ public class ExternalAsyncDispatcher {
 		this.callbackDeliveryPlanner = Objects.requireNonNull(callbackDeliveryPlanner,
 				"callbackDeliveryPlanner must not be null");
 		this.dispatchExecutor = Executors.newFixedThreadPool(properties.dispatchBatchSize());
+		this.dispatchPermits = new Semaphore(properties.dispatchBatchSize());
 	}
 
 	public boolean dispatchOnce() {
@@ -76,29 +75,57 @@ public class ExternalAsyncDispatcher {
 		if (attempts == 0) {
 			return 0;
 		}
-		List<Future<Boolean>> futures = new ArrayList<>(attempts);
+		int startedWorkers = 0;
 		for (int index = 0; index < attempts; index++) {
-			futures.add(dispatchExecutor.submit(this::dispatchOnce));
+			if (!dispatchPermits.tryAcquire()) {
+				break;
+			}
+			try {
+				dispatchExecutor.submit(this::dispatchUntilIdle);
+				startedWorkers++;
+			}
+			catch (RuntimeException exception) {
+				dispatchPermits.release();
+				throw exception;
+			}
 		}
-		return completedDispatches(futures);
+		return startedWorkers;
+	}
+
+	private void dispatchUntilIdle() {
+		try {
+			while (dispatchOnce()) {
+				// Воркер сразу берет следующую задачу, чтобы не ждать следующего scheduled tick.
+			}
+		}
+		catch (RuntimeException exception) {
+			log.warn("Async-dispatch worker завершился с ошибкой", exception);
+		}
+		finally {
+			dispatchPermits.release();
+		}
 	}
 
 	private boolean dispatchClaim(AsyncTaskClaim claim, SlotLease slotLease) {
 		AsyncTask task = claim.task();
+		long startedNanos = System.nanoTime();
 		try {
 			ExternalUpstreamResponse response = upstreamClient.call(toUpstreamRequest(claim));
+			long durationMs = elapsedMillis(startedNanos);
 			repository.complete(task.taskId(), response.result(), clock.instant())
 					.ifPresent(this::planCallbackDelivery);
-			log.info("Async-задача завершена: taskId={}, clientService={}", task.taskId(), task.clientService());
+			log.info("Async-задача завершена: taskId={}, clientService={}, durationMs={}",
+					task.taskId(), task.clientService(), durationMs);
 			return true;
 		}
 		catch (RuntimeException exception) {
+			long durationMs = elapsedMillis(startedNanos);
 			repository.failTransient(task.taskId(), exception.getMessage(), properties.retryBackoffMs(),
 					clock.instant())
 					.filter(updatedTask -> updatedTask.status() == AsyncTaskStatus.DEAD)
 					.ifPresent(this::planCallbackDelivery);
-			log.warn("Async-задача завершилась transient-ошибкой: taskId={}, clientService={}, error={}",
-					task.taskId(), task.clientService(), exception.toString());
+			log.warn("Async-задача завершилась transient-ошибкой: taskId={}, clientService={}, durationMs={}, error={}",
+					task.taskId(), task.clientService(), durationMs, exception.toString());
 			log.debug("Детали transient-ошибки async-задачи: taskId={}", task.taskId(), exception);
 			return true;
 		}
@@ -129,36 +156,8 @@ public class ExternalAsyncDispatcher {
 		dispatchExecutor.shutdownNow();
 	}
 
-	private static int completedDispatches(List<Future<Boolean>> futures) {
-		int completed = 0;
-		RuntimeException firstFailure = null;
-		for (Future<Boolean> future : futures) {
-			try {
-				if (Boolean.TRUE.equals(future.get())) {
-					completed++;
-				}
-			}
-			catch (InterruptedException exception) {
-				cancelRemaining(futures);
-				Thread.currentThread().interrupt();
-				throw new IllegalStateException("Async-dispatch batch interrupted", exception);
-			}
-			catch (ExecutionException exception) {
-				if (firstFailure == null) {
-					firstFailure = new IllegalStateException("Async-dispatch batch failed", exception.getCause());
-				}
-			}
-		}
-		if (firstFailure != null) {
-			throw firstFailure;
-		}
-		return completed;
-	}
-
-	private static void cancelRemaining(List<Future<Boolean>> futures) {
-		for (Future<Boolean> future : futures) {
-			future.cancel(true);
-		}
+	private static long elapsedMillis(long startedNanos) {
+		return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
 	}
 
 	private static String owner(AsyncTask task) {

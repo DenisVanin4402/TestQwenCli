@@ -4,12 +4,33 @@ databaseChangeLog:
       author: codex
       changes:
         - sql:
+            # Создает отдельную схему проекта. Все прикладные таблицы gateway лежат в ней,
+            # чтобы не смешиваться с системными объектами PostgreSQL и таблицами других сервисов.
             sql: CREATE SCHEMA IF NOT EXISTS ${externalGatewaySchema};
 
   - changeSet:
       id: 002-create-slot-tables
       author: codex
       changes:
+        # Таблица ext_slots хранит глобальный пул lease-слотов.
+        # Слот - это разрешение на выполнение одного внешнего запроса.
+        #
+        # Поля:
+        # - slot_id: номер слота из фиксированного пула. Значения заранее вставляются ниже,
+        #   сейчас это 1..5. Используется как первичный ключ.
+        # - lease_id: UUID текущего владения слотом. NULL означает, что слот свободен.
+        #   Ненулевое значение проверяется при release/heartbeat, чтобы старый поток не мог
+        #   освободить уже переиспользованный слот.
+        # - owner: строковый идентификатор владельца lease. Для sync обычно содержит владельца
+        #   запроса, для async - строку вида async:<clientService>:<taskId>. NULL только у
+        #   свободного слота.
+        # - kind: тип занятого слота. Допустимые значения: SYNC для синхронного запроса,
+        #   ASYNC для асинхронной задачи. NULL только у свободного слота.
+        # - acquired_at: момент захвата слота. NULL только у свободного слота.
+        # - expires_at: момент истечения lease. Если lease просрочен, reaper может освободить
+        #   слот даже без явного release. NULL только у свободного слота.
+        # - task_id: id async-задачи, если слот занят ASYNC. Для SYNC и свободного слота может
+        #   быть NULL.
         - createTable:
             schemaName: ${externalGatewaySchema}
             tableName: ext_slots
@@ -39,6 +60,17 @@ databaseChangeLog:
               - column:
                   name: task_id
                   type: varchar(80)
+        # Таблица ext_sync_waiters хранит sync-запросы, которые ждут свободный слот.
+        # Пока есть живой waiter, async-захват слотов временно блокируется. Это защищает
+        # синхронные запросы от starvation, когда вся емкость занята async-нагрузкой.
+        #
+        # Поля:
+        # - waiter_id: UUID записи ожидания. Используется как первичный ключ и удаляется
+        #   после завершения ожидания.
+        # - owner: владелец ожидающего sync-запроса. Нужен для диагностики и корреляции.
+        # - registered_at: момент регистрации ожидания.
+        # - expires_at: момент истечения ожидания. Просроченные waiters удаляются при
+        #   следующих операциях со слотами.
         - createTable:
             schemaName: ${externalGatewaySchema}
             tableName: ext_sync_waiters
@@ -65,6 +97,8 @@ databaseChangeLog:
                   type: timestamp with time zone
                   constraints:
                     nullable: false
+        # Ограничения для ext_slots фиксируют допустимые состояния lease.
+        # Индексы ускоряют подсчет занятых слотов и очистку истекших waiters.
         - sql:
             splitStatements: true
             sql: |
@@ -86,6 +120,8 @@ databaseChangeLog:
 
               CREATE INDEX idx_ext_sync_waiters_expires_at
                 ON ${externalGatewaySchema}.ext_sync_waiters (expires_at);
+        # Начальный пул слотов. Количество строк должно соответствовать
+        # external-gateway.slots.total, если конфигурация total не увеличивается миграцией.
         - insert:
             schemaName: ${externalGatewaySchema}
             tableName: ext_slots
@@ -126,6 +162,50 @@ databaseChangeLog:
       id: 003-create-request-queue
       author: codex
       changes:
+        # Таблица ext_request_queue хранит async-задачи внешнего gateway.
+        # Это основная очередь: HTTP submit создает PENDING-задачу, dispatcher забирает ее
+        # в IN_PROGRESS, вызывает upstream, затем переводит в финальный статус.
+        #
+        # Поля:
+        # - id: внутренний последовательный id задачи. Используется в URL polling,
+        #   callback payload и связях с callback-доставкой.
+        # - external_id: внешний idempotency key клиента. В паре с client_service должен быть
+        #   уникален, чтобы повторный submit той же операции возвращал существующую задачу.
+        # - client_service: имя сервиса-клиента, например invest-pay или user-expertise.
+        #   Участвует в idempotency и выборе callback URL.
+        # - priority: приоритет задачи. Допустимые значения: HIGH для срочных задач,
+        #   LOW для обычных.
+        # - priority_weight: числовой вес priority. HIGH сейчас 100, LOW сейчас 10.
+        #   Используется в ORDER BY при claim, чтобы HIGH обрабатывался раньше LOW.
+        # - delivery_mode: способ получения результата. CALLBACK означает, что после
+        #   финального статуса будет запланирована callback-доставка. POLLING означает,
+        #   что клиент сам забирает результат и callback не нужен.
+        # - status: состояние async-задачи. PENDING - ждет обработки или retry и доступна
+        #   после available_at. IN_PROGRESS - dispatcher уже забрал задачу и держит async-слот.
+        #   DONE - upstream успешно ответил, result заполнен. FAILED - финальная бизнес-ошибка,
+        #   если появится отдельный неретраимый сценарий. DEAD - попытки исчерпаны после
+        #   transient-ошибок. CANCELLED - задача отменена клиентом до обработки.
+        # - callback_delivery_status: состояние доставки callback для этой задачи.
+        #   NOT_REQUIRED - callback не нужен, обычно delivery_mode=POLLING. PENDING - callback
+        #   ожидает отправки. DELIVERING - callback сейчас отправляется. DELIVERED - callback
+        #   успешно доставлен. RETRY - доставка не удалась и будет повторена после available_at
+        #   в ext_callback_delivery. DEAD - доставка невозможна или исчерпала попытки.
+        # - payload: исходная JSON-нагрузка async-запроса.
+        # - result: JSON-результат upstream, заполняется при status=DONE.
+        # - error: JSON-описание ошибки, заполняется для DEAD, FAILED или CANCELLED.
+        # - attempts: число попыток обработки upstream. Увеличивается при переходе в
+        #   IN_PROGRESS, откатывается при возврате claim из-за отсутствия async-слота.
+        # - max_attempts: максимальное число попыток upstream перед DEAD.
+        # - created_at: момент создания задачи.
+        # - available_at: момент, начиная с которого PENDING-задачу можно claim-ить.
+        #   При retry сдвигается на retry_backoff.
+        # - started_at: момент последнего перехода в IN_PROGRESS. NULL до claim и после
+        #   возврата в PENDING.
+        # - finished_at: момент финального завершения DONE, DEAD, FAILED или CANCELLED.
+        # - updated_at: момент последнего изменения строки.
+        # - last_error: текст последней transient-ошибки для диагностики.
+        # - retryable: признак, что финальную FAILED/DEAD задачу можно вернуть в PENDING
+        #   через ручной retry.
         - createTable:
             schemaName: ${externalGatewaySchema}
             tableName: ext_request_queue
@@ -226,10 +306,13 @@ databaseChangeLog:
                   constraints:
                     nullable: false
         - addUniqueConstraint:
+            # Гарантирует идемпотентность submit внутри одного client_service.
             schemaName: ${externalGatewaySchema}
             tableName: ext_request_queue
             columnNames: client_service, external_id
             constraintName: uq_ext_request_queue_idempotency
+        # Ограничения фиксируют допустимые enum-значения и корректность счетчиков.
+        # Индексы ускоряют claim PENDING-задач и поиск по external_id.
         - sql:
             splitStatements: true
             sql: |
@@ -264,6 +347,29 @@ databaseChangeLog:
       id: 004-create-callback-delivery
       author: codex
       changes:
+        # Таблица ext_callback_delivery хранит отдельную очередь доставки callback.
+        # Она создается для финальных async-задач с delivery_mode=CALLBACK. Если callback URL
+        # отсутствует в allow-list, запись сразу создается в DEAD без callback_url.
+        #
+        # Поля:
+        # - delivery_id: UUID доставки callback. Используется как первичный ключ и стабильный
+        #   идентификатор попыток доставки.
+        # - task_id: ссылка на ext_request_queue.id. Для одной задачи разрешена только одна
+        #   callback-доставка.
+        # - callback_url: целевой URL клиента. NULL допустим только для DEAD, когда доставка
+        #   невозможна, например из-за отсутствия allow-list URL.
+        # - status: состояние доставки. PENDING - ожидает отправки. DELIVERING - dispatcher
+        #   забрал доставку и выполняет HTTP-вызов. DELIVERED - клиент принял callback.
+        #   RETRY - предыдущая попытка завершилась ошибкой, доставка станет доступной после
+        #   available_at. DEAD - доставка невозможна или исчерпала max_attempts.
+        # - payload: JSON тела callback, собранный из финального состояния async-задачи.
+        # - attempts: число попыток HTTP-доставки. Увеличивается при claim в DELIVERING.
+        # - max_attempts: максимальное число попыток перед DEAD.
+        # - created_at: момент постановки callback в очередь.
+        # - available_at: момент, начиная с которого PENDING/RETRY доставку можно claim-ить.
+        # - started_at: момент последнего перехода в DELIVERING.
+        # - completed_at: момент финального завершения DELIVERED или DEAD.
+        # - last_error: текст последней ошибки доставки.
         - createTable:
             schemaName: ${externalGatewaySchema}
             tableName: ext_callback_delivery
@@ -324,11 +430,13 @@ databaseChangeLog:
                   name: last_error
                   type: text
         - addUniqueConstraint:
+            # Одна async-задача должна иметь не более одной записи callback-доставки.
             schemaName: ${externalGatewaySchema}
             tableName: ext_callback_delivery
             columnNames: task_id
             constraintName: uq_ext_callback_delivery_task
         - addForeignKeyConstraint:
+            # При удалении задачи удаляется и связанная callback-доставка.
             baseTableSchemaName: ${externalGatewaySchema}
             baseTableName: ext_callback_delivery
             baseColumnNames: task_id
@@ -337,6 +445,8 @@ databaseChangeLog:
             referencedTableName: ext_request_queue
             referencedColumnNames: id
             onDelete: CASCADE
+        # Ограничения фиксируют допустимые состояния доставки, счетчики попыток
+        # и обязательность callback_url для всех доставляемых статусов.
         - sql:
             splitStatements: true
             sql: |

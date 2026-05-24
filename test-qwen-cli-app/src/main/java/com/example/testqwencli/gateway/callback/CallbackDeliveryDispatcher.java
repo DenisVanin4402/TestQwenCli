@@ -56,18 +56,20 @@ public class CallbackDeliveryDispatcher {
 
 		CallbackDelivery delivery = claimedDelivery.orElseThrow();
 		taskRepository.updateCallbackDeliveryStatus(delivery.taskId(), delivery.status(), clock.instant());
+		long startedNanos = System.nanoTime();
 		try {
 			CallbackClientResponse response = callbackClient.send(delivery.payload(), delivery.callbackUrl(),
 					delivery.attempt(), delivery.payload().eventId().toString());
+			long durationMs = elapsedMillis(startedNanos);
 			if (response.successful()) {
-				markDelivered(delivery);
+				markDelivered(delivery, durationMs);
 				return true;
 			}
-			markFailed(delivery, "Callback endpoint вернул HTTP " + response.statusCode());
+			markFailed(delivery, "Callback endpoint вернул HTTP " + response.statusCode(), durationMs);
 			return true;
 		}
 		catch (RuntimeException exception) {
-			markFailed(delivery, normalizeErrorMessage(exception));
+			markFailed(delivery, normalizeErrorMessage(exception), elapsedMillis(startedNanos));
 			return true;
 		}
 	}
@@ -84,23 +86,23 @@ public class CallbackDeliveryDispatcher {
 		return completedDeliveries(futures);
 	}
 
-	private void markDelivered(CallbackDelivery delivery) {
+	private void markDelivered(CallbackDelivery delivery, long durationMs) {
 		Instant now = clock.instant();
 		deliveryRepository.markDelivered(delivery.deliveryId(), now)
 				.ifPresent(updated -> {
 					taskRepository.updateCallbackDeliveryStatus(updated.taskId(), updated.status(), now);
-					log.info("Callback-доставка выполнена: taskId={}, clientService={}, attempt={}",
-							updated.taskId(), updated.clientService(), updated.attempt());
+					log.info("Callback-доставка выполнена: taskId={}, clientService={}, attempt={}, durationMs={}",
+							updated.taskId(), updated.clientService(), updated.attempt(), durationMs);
 				});
 	}
 
-	private void markFailed(CallbackDelivery delivery, String message) {
+	private void markFailed(CallbackDelivery delivery, String message, long durationMs) {
 		Instant now = clock.instant();
 		deliveryRepository.markRetryOrDead(delivery.deliveryId(), message, properties.retryBackoffMs(), now)
 				.ifPresent(updated -> {
 					taskRepository.updateCallbackDeliveryStatus(updated.taskId(), updated.status(), now);
-					log.warn("Callback-доставка завершилась ошибкой: taskId={}, clientService={}, status={}, error={}",
-							updated.taskId(), updated.clientService(), updated.status(), updated.lastError());
+					log.warn("Callback-доставка завершилась ошибкой: taskId={}, clientService={}, status={}, durationMs={}, error={}",
+							updated.taskId(), updated.clientService(), updated.status(), durationMs, updated.lastError());
 				});
 	}
 
@@ -139,6 +141,10 @@ public class CallbackDeliveryDispatcher {
 		for (Future<Boolean> future : futures) {
 			future.cancel(true);
 		}
+	}
+
+	private static long elapsedMillis(long startedNanos) {
+		return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
 	}
 
 	private static String normalizeErrorMessage(RuntimeException exception) {

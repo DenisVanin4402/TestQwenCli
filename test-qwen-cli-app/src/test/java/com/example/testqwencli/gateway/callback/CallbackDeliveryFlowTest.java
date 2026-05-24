@@ -21,6 +21,9 @@ import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamClient;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamRequest;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.net.URI;
 import java.time.Clock;
@@ -38,6 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(OutputCaptureExtension.class)
 class CallbackDeliveryFlowTest {
 
 	private static final Instant NOW = Instant.parse("2026-05-22T00:00:00Z");
@@ -90,7 +94,7 @@ class CallbackDeliveryFlowTest {
 	}
 
 	@Test
-	void callbackDispatcherSendsPayloadAndMarksDeliveryDelivered() {
+	void callbackDispatcherSendsPayloadAndMarksDeliveryDelivered(CapturedOutput output) {
 		MutableClock clock = new MutableClock(NOW);
 		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();
 		MemoryCallbackDeliveryRepository deliveryRepository = new MemoryCallbackDeliveryRepository();
@@ -118,6 +122,7 @@ class CallbackDeliveryFlowTest {
 		AsyncTask storedTask = taskRepository.findByTaskId(task.taskId(), Optional.empty()).orElseThrow();
 		assertThat(storedTask.status()).isEqualTo(AsyncTaskStatus.DONE);
 		assertThat(storedTask.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.DELIVERED);
+		assertThat(output.getOut()).contains("durationMs=");
 	}
 
 	@Test

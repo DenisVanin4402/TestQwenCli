@@ -210,9 +210,9 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				    END,
 				    result = NULL,
 				    error = CASE WHEN task.attempts < task.max_attempts THEN NULL ELSE CAST(:error AS jsonb) END,
-				    available_at = CASE WHEN task.attempts < task.max_attempts THEN :availableAt ELSE task.available_at END,
+				    available_at = CASE WHEN task.attempts < task.max_attempts THEN CAST(:availableAt AS timestamp with time zone) ELSE task.available_at END,
 				    started_at = CASE WHEN task.attempts < task.max_attempts THEN NULL ELSE task.started_at END,
-				    finished_at = CASE WHEN task.attempts < task.max_attempts THEN NULL ELSE :now END,
+				    finished_at = CASE WHEN task.attempts < task.max_attempts THEN NULL ELSE CAST(:now AS timestamp with time zone) END,
 				    updated_at = :now,
 				    last_error = :message,
 				    retryable = CASE WHEN task.attempts < task.max_attempts THEN FALSE ELSE TRUE END

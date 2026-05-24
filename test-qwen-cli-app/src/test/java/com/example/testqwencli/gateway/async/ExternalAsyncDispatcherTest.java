@@ -11,6 +11,9 @@ import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamClient;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamRequest;
 import com.example.testqwencli.gateway.sync.upstream.ExternalUpstreamResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -25,13 +28,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(OutputCaptureExtension.class)
 class ExternalAsyncDispatcherTest {
 
 	private static final Instant NOW = Instant.parse("2026-05-22T00:00:00Z");
 	private static final Duration RETRY_BACKOFF = Duration.ofMillis(50);
 
 	@Test
-	void dispatchOnceMovesPendingTaskToDoneAndStoresResult() {
+	void dispatchOnceMovesPendingTaskToDoneAndStoresResult(CapturedOutput output) {
 		MutableClock clock = new MutableClock(NOW);
 		MemoryAsyncTaskRepository repository = new MemoryAsyncTaskRepository();
 		AsyncTask task = submit(repository, "09199009-c69e-4e1e-bc08-5deec70e4c42", 3, clock.instant());
@@ -49,6 +53,7 @@ class ExternalAsyncDispatcherTest {
 		assertThat(storedTask.result()).containsEntry("score", "82");
 		assertThat(storedTask.attempts()).isEqualTo(1);
 		assertThat(upstreamClient.calls()).isEqualTo(1);
+		assertThat(output.getOut()).contains("durationMs=");
 	}
 
 	@Test
@@ -117,19 +122,21 @@ class ExternalAsyncDispatcherTest {
 	}
 
 	@Test
-	void dispatchBatchRunsTasksConcurrentlyAndUsesAvailableAsyncSlots() {
+	void dispatchBatchRunsTasksConcurrentlyAndUsesAvailableAsyncSlots() throws InterruptedException {
 		MutableClock clock = new MutableClock(NOW);
 		MemoryAsyncTaskRepository repository = new MemoryAsyncTaskRepository();
 		submit(repository, "04ccaf8c-9e26-4476-8b35-16b68136b4d1", 3, clock.instant());
 		submit(repository, "e86d4d66-d1c9-403f-9518-5a9887f4dedf", 3, clock.instant());
 		submit(repository, "f04e7244-62af-47b9-a4ca-59726da2d2bb", 3, clock.instant());
-		BlockingUpstreamClient upstreamClient = new BlockingUpstreamClient(2);
+		BlockingUpstreamClient upstreamClient = new BlockingUpstreamClient(2, 3);
 		ExternalAsyncDispatcher dispatcher = dispatcher(repository, upstreamClient, clock);
 
 		try {
-			int completed = dispatcher.dispatchBatch(3);
+			int startedWorkers = dispatcher.dispatchBatch(3);
 
-			assertThat(completed).isEqualTo(3);
+			assertThat(startedWorkers).isEqualTo(3);
+			assertThat(upstreamClient.awaitConcurrentCalls()).isTrue();
+			assertThat(upstreamClient.awaitTotalCalls()).isTrue();
 			assertThat(upstreamClient.maxActive()).isGreaterThan(1);
 		}
 		finally {
@@ -211,11 +218,13 @@ class ExternalAsyncDispatcherTest {
 	private static final class BlockingUpstreamClient implements ExternalUpstreamClient {
 
 		private final CountDownLatch enoughCallsStarted;
+		private final CountDownLatch allCallsStarted;
 		private final AtomicInteger active = new AtomicInteger();
 		private final AtomicInteger maxActive = new AtomicInteger();
 
-		private BlockingUpstreamClient(int expectedConcurrentCalls) {
+		private BlockingUpstreamClient(int expectedConcurrentCalls, int expectedTotalCalls) {
 			this.enoughCallsStarted = new CountDownLatch(expectedConcurrentCalls);
+			this.allCallsStarted = new CountDownLatch(expectedTotalCalls);
 		}
 
 		@Override
@@ -223,6 +232,7 @@ class ExternalAsyncDispatcherTest {
 			int current = active.incrementAndGet();
 			maxActive.accumulateAndGet(current, Math::max);
 			enoughCallsStarted.countDown();
+			allCallsStarted.countDown();
 			try {
 				enoughCallsStarted.await(1, TimeUnit.SECONDS);
 				return new ExternalUpstreamResponse(Map.of("decision", "APPROVED"), 200, null);
@@ -238,6 +248,14 @@ class ExternalAsyncDispatcherTest {
 
 		private int maxActive() {
 			return maxActive.get();
+		}
+
+		private boolean awaitConcurrentCalls() throws InterruptedException {
+			return enoughCallsStarted.await(1, TimeUnit.SECONDS);
+		}
+
+		private boolean awaitTotalCalls() throws InterruptedException {
+			return allCallsStarted.await(1, TimeUnit.SECONDS);
 		}
 	}
 

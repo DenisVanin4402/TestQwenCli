@@ -14,6 +14,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
+import java.sql.SQLException;
 import java.util.Map;
 
 @Configuration(proxyBeanMethods = false)
@@ -28,7 +29,9 @@ public class ExternalGatewayPostgresConfiguration {
 		config.setJdbcUrl(properties.requiredJdbcUrl());
 		config.setUsername(properties.requiredUsername());
 		config.setPassword(properties.passwordOrEmpty());
-		return new HikariDataSource(config);
+		HikariDataSource dataSource = new HikariDataSource(config);
+		createSchemaIfMissing(dataSource, properties.schema());
+		return dataSource;
 	}
 
 	@Bean
@@ -66,6 +69,20 @@ public class ExternalGatewayPostgresConfiguration {
 		liquibase.setDataSource(dataSource);
 		liquibase.setChangeLog("classpath:db/changelog/external-gateway/db.changelog-master.yaml");
 		liquibase.setChangeLogParameters(Map.of("externalGatewaySchema", properties.schema()));
+		liquibase.setDefaultSchema(properties.schema());
+		liquibase.setLiquibaseSchema(properties.schema());
 		return liquibase;
+	}
+
+	private void createSchemaIfMissing(DataSource dataSource, String schema) {
+		try (
+				var connection = dataSource.getConnection();
+				var statement = connection.createStatement()
+		) {
+			statement.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+		}
+		catch (SQLException exception) {
+			throw new IllegalStateException("Не удалось подготовить PostgreSQL schema " + schema, exception);
+		}
 	}
 }

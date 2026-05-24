@@ -132,10 +132,10 @@ public final class PostgresCallbackDeliveryRepository implements CallbackDeliver
 				SET status = CASE WHEN delivery.attempts >= delivery.max_attempts THEN 'DEAD' ELSE 'RETRY' END,
 				    available_at = CASE
 				        WHEN delivery.attempts >= delivery.max_attempts THEN delivery.available_at
-				        ELSE :availableAt
+				        ELSE CAST(:availableAt AS timestamp with time zone)
 				    END,
 				    completed_at = CASE
-				        WHEN delivery.attempts >= delivery.max_attempts THEN :now
+				        WHEN delivery.attempts >= delivery.max_attempts THEN CAST(:now AS timestamp with time zone)
 				        ELSE NULL
 				    END,
 				    last_error = :message

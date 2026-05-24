@@ -172,6 +172,40 @@ public final class PostgresCallbackDeliveryRepository implements CallbackDeliver
 	}
 
 	@Override
+	public List<CallbackDelivery> recoverTimedOutDeliveries(Instant timedOutBefore, String message, Duration backoff,
+			Instant now) {
+		Objects.requireNonNull(timedOutBefore, "timedOutBefore must not be null");
+		Objects.requireNonNull(backoff, "backoff must not be null");
+		Objects.requireNonNull(now, "now must not be null");
+		if (backoff.isNegative()) {
+			throw new IllegalArgumentException("Backoff retry callback-доставки не должен быть отрицательным");
+		}
+		String sql = """
+				UPDATE %s delivery
+				SET status = CASE WHEN delivery.attempts >= delivery.max_attempts THEN 'DEAD' ELSE 'RETRY' END,
+				    available_at = CASE
+				        WHEN delivery.attempts >= delivery.max_attempts THEN delivery.available_at
+				        ELSE CAST(:availableAt AS timestamp with time zone)
+				    END,
+				    completed_at = CASE
+				        WHEN delivery.attempts >= delivery.max_attempts THEN CAST(:now AS timestamp with time zone)
+				        ELSE NULL
+				    END,
+				    last_error = :message
+				WHERE status = 'DELIVERING'
+				  AND started_at IS NOT NULL
+				  AND started_at < :timedOutBefore
+				RETURNING %s
+				""".formatted(tables.callbackDelivery(), returningColumns("delivery"));
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("message", normalizeErrorMessage(message))
+				.addValue("availableAt", timestamp(now.plus(backoff)))
+				.addValue("timedOutBefore", timestamp(timedOutBefore))
+				.addValue("now", timestamp(now));
+		return jdbc.query(sql, params, (rs, rowNum) -> toDelivery(rs));
+	}
+
+	@Override
 	public CallbackDeliveryRepositoryStats stats(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
 		EnumMap<CallbackDeliveryStatus, Long> statusCounts = new EnumMap<>(CallbackDeliveryStatus.class);

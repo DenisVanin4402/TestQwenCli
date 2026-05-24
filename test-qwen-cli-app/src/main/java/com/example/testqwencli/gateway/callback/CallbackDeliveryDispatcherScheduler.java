@@ -2,6 +2,8 @@ package com.example.testqwencli.gateway.callback;
 
 import com.example.testqwencli.gateway.callback.config.ExternalGatewayCallbackProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,5 +27,15 @@ class CallbackDeliveryDispatcherScheduler {
 	@Scheduled(fixedDelayString = "${external-gateway.callback.delivery-interval-ms:100}")
 	void dispatch() {
 		dispatcher.dispatchBatch(properties.deliveryBatchSize());
+	}
+
+	@EventListener(ApplicationReadyEvent.class)
+	void recoverOnStartup() {
+		dispatcher.recoverTimedOutDeliveries();
+	}
+
+	@Scheduled(fixedDelayString = "${external-gateway.callback.delivery-recovery-interval-ms:1000}")
+	void recoverTimedOutDeliveries() {
+		dispatcher.recoverTimedOutDeliveries();
 	}
 }

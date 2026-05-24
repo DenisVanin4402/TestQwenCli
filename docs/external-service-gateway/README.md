@@ -456,9 +456,12 @@ external-gateway.slots.sync-acquire-poll-interval=10ms
 external-gateway.slots.sync-acquire-wait-mode=listen_notify
 external-gateway.async.dispatcher-enabled=true
 external-gateway.callback.delivery-enabled=true
+external-gateway.callback.delivery-timeout-ms=30s
+external-gateway.callback.delivery-recovery-interval-ms=1000
 ```
 
 Если `external-gateway.postgres.liquibase-enabled=false`, changelog `db/changelog/external-gateway/db.changelog-master.yaml` должен быть применен заранее.
+Callback-доставки, которые остались в `DELIVERING` дольше `external-gateway.callback.delivery-timeout-ms` после падения JVM или остановки процесса, на старте и далее с интервалом `external-gateway.callback.delivery-recovery-interval-ms` возвращаются в `RETRY` либо переводятся в `DEAD`, если попытки исчерпаны.
 
 ## OpenAPI
 

@@ -17,12 +17,16 @@ public record ExternalGatewayCallbackProperties(
 		@Min(1) @DefaultValue("3") int maxAttempts,
 		@Min(1) @Max(10) @DefaultValue("10") int deliveryBatchSize,
 		@NotNull @DefaultValue("1000ms") Duration retryBackoffMs,
-		@NotNull @DefaultValue("100ms") Duration deliveryIntervalMs
+		@NotNull @DefaultValue("100ms") Duration deliveryIntervalMs,
+		@NotNull @DefaultValue("30s") Duration deliveryTimeoutMs,
+		@NotNull @DefaultValue("1000ms") Duration deliveryRecoveryIntervalMs
 ) {
 
 	public ExternalGatewayCallbackProperties {
 		Objects.requireNonNull(retryBackoffMs, "retryBackoffMs must not be null");
 		Objects.requireNonNull(deliveryIntervalMs, "deliveryIntervalMs must not be null");
+		Objects.requireNonNull(deliveryTimeoutMs, "deliveryTimeoutMs must not be null");
+		Objects.requireNonNull(deliveryRecoveryIntervalMs, "deliveryRecoveryIntervalMs must not be null");
 		if (maxAttempts < 1) {
 			throw new IllegalArgumentException("maxAttempts должен быть положительным");
 		}
@@ -34,6 +38,12 @@ public record ExternalGatewayCallbackProperties(
 		}
 		if (deliveryIntervalMs.isNegative() || deliveryIntervalMs.isZero()) {
 			throw new IllegalArgumentException("Интервал callback-доставки должен быть положительным");
+		}
+		if (deliveryTimeoutMs.isNegative() || deliveryTimeoutMs.isZero()) {
+			throw new IllegalArgumentException("Timeout callback-доставки должен быть положительным");
+		}
+		if (deliveryRecoveryIntervalMs.isNegative() || deliveryRecoveryIntervalMs.isZero()) {
+			throw new IllegalArgumentException("Интервал восстановления callback-доставок должен быть положительным");
 		}
 	}
 }

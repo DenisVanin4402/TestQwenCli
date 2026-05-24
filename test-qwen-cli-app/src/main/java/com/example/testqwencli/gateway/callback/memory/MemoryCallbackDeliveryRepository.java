@@ -12,9 +12,11 @@ import com.example.testqwencli.gateway.callback.CallbackPayload;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -116,6 +118,28 @@ public final class MemoryCallbackDeliveryRepository implements CallbackDeliveryR
 		StoredCallbackDelivery dead = delivery.dead(normalizeErrorMessage(message), now);
 		deliveriesById.put(deliveryId, dead);
 		return Optional.of(dead.toDelivery());
+	}
+
+	@Override
+	public synchronized List<CallbackDelivery> recoverTimedOutDeliveries(Instant timedOutBefore, String message,
+			Duration backoff, Instant now) {
+		Objects.requireNonNull(timedOutBefore, "timedOutBefore must not be null");
+		Objects.requireNonNull(backoff, "backoff must not be null");
+		Objects.requireNonNull(now, "now must not be null");
+		if (backoff.isNegative()) {
+			throw new IllegalArgumentException("Backoff retry callback-доставки не должен быть отрицательным");
+		}
+		List<CallbackDelivery> recovered = new ArrayList<>();
+		for (StoredCallbackDelivery delivery : deliveriesById.values()) {
+			if (delivery.status() == CallbackDeliveryStatus.DELIVERING
+					&& delivery.startedAt() != null
+					&& delivery.startedAt().isBefore(timedOutBefore)) {
+				StoredCallbackDelivery updated = delivery.retryOrDead(normalizeErrorMessage(message), backoff, now);
+				deliveriesById.put(updated.deliveryId(), updated);
+				recovered.add(updated.toDelivery());
+			}
+		}
+		return recovered;
 	}
 
 	@Override

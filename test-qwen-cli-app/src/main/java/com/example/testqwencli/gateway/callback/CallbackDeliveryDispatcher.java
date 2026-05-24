@@ -86,6 +86,20 @@ public class CallbackDeliveryDispatcher {
 		return completedDeliveries(futures);
 	}
 
+	public int recoverTimedOutDeliveries() {
+		Instant now = clock.instant();
+		String message = "Callback-доставка зависла в DELIVERING дольше " + properties.deliveryTimeoutMs();
+		List<CallbackDelivery> recovered = deliveryRepository.recoverTimedOutDeliveries(
+				now.minus(properties.deliveryTimeoutMs()), message, properties.retryBackoffMs(), now);
+		for (CallbackDelivery delivery : recovered) {
+			taskRepository.updateCallbackDeliveryStatus(delivery.taskId(), delivery.status(), now);
+			log.warn("Callback-доставка восстановлена после зависания: taskId={}, clientService={}, status={}, attempt={}, startedAt={}",
+					delivery.taskId(), delivery.clientService(), delivery.status(), delivery.attempt(),
+					delivery.startedAt());
+		}
+		return recovered.size();
+	}
+
 	private void markDelivered(CallbackDelivery delivery, long durationMs) {
 		Instant now = clock.instant();
 		deliveryRepository.markDelivered(delivery.deliveryId(), now)

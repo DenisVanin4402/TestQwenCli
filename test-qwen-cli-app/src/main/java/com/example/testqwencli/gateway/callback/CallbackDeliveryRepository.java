@@ -5,6 +5,7 @@ import com.example.testqwencli.gateway.async.AsyncTask;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,6 +24,9 @@ public interface CallbackDeliveryRepository {
 	Optional<CallbackDelivery> markRetryOrDead(UUID deliveryId, String message, Duration backoff, Instant now);
 
 	Optional<CallbackDelivery> markDead(UUID deliveryId, String message, Instant now);
+
+	List<CallbackDelivery> recoverTimedOutDeliveries(Instant timedOutBefore, String message, Duration backoff,
+			Instant now);
 
 	CallbackDeliveryRepositoryStats stats(Instant now);
 }

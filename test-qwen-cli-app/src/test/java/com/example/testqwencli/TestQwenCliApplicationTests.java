@@ -105,7 +105,9 @@ class TestQwenCliApplicationTests {
 				.containsEntry("logging.charset.console", "UTF-8")
 				.containsEntry("logging.charset.file", "UTF-8")
 				.containsEntry("server.servlet.encoding.charset", "UTF-8")
-				.containsEntry("server.servlet.encoding.force", "true");
+				.containsEntry("server.servlet.encoding.force", "true")
+				.containsEntry("external-gateway.callback.delivery-timeout-ms", "30s")
+				.containsEntry("external-gateway.callback.delivery-recovery-interval-ms", "1000");
 	}
 
 	@Test

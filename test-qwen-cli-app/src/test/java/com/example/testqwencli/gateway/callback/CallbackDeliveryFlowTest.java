@@ -47,6 +47,7 @@ class CallbackDeliveryFlowTest {
 	private static final Instant NOW = Instant.parse("2026-05-22T00:00:00Z");
 	private static final Duration ASYNC_RETRY_BACKOFF = Duration.ofMillis(50);
 	private static final Duration CALLBACK_RETRY_BACKOFF = Duration.ofMillis(100);
+	private static final Duration CALLBACK_DELIVERY_TIMEOUT = Duration.ofSeconds(30);
 	private static final URI INVEST_PAY_CALLBACK_URL =
 			URI.create("http://invest-pay/internal/external-gateway/callbacks");
 
@@ -198,6 +199,72 @@ class CallbackDeliveryFlowTest {
 	}
 
 	@Test
+	void timedOutDeliveringCallbackDeliveryReturnsToRetry() {
+		MutableClock clock = new MutableClock(NOW);
+		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();
+		MemoryCallbackDeliveryRepository deliveryRepository = new MemoryCallbackDeliveryRepository();
+		ExternalAsyncDispatcher asyncDispatcher = asyncDispatcher(taskRepository, deliveryRepository, clock,
+				clientsWithInvestPay(), RecordingUpstreamClient.succeeding(doneResult()));
+		AsyncTask task = submit(taskRepository, "10944cf1-855e-441e-8672-e9c8713d70cb",
+				AsyncDeliveryMode.CALLBACK, "invest-pay", 3, clock.instant());
+		asyncDispatcher.dispatchOnce();
+		CallbackDelivery claimed = deliveryRepository.claimNextPending(clock.instant()).orElseThrow();
+		taskRepository.updateCallbackDeliveryStatus(claimed.taskId(), claimed.status(), clock.instant());
+		CallbackDeliveryDispatcher callbackDispatcher = callbackDispatcher(taskRepository, deliveryRepository,
+				RecordingCallbackClient.succeeding(204), clock, 2);
+
+		clock.advance(CALLBACK_DELIVERY_TIMEOUT.minusMillis(1));
+		assertThat(callbackDispatcher.recoverTimedOutDeliveries()).isZero();
+		assertThat(deliveryRepository.findByTaskId(task.taskId()).orElseThrow().status())
+				.isEqualTo(CallbackDeliveryStatus.DELIVERING);
+
+		clock.advance(Duration.ofMillis(1));
+		assertThat(callbackDispatcher.recoverTimedOutDeliveries()).isZero();
+		assertThat(deliveryRepository.findByTaskId(task.taskId()).orElseThrow().status())
+				.isEqualTo(CallbackDeliveryStatus.DELIVERING);
+
+		clock.advance(Duration.ofMillis(1));
+		assertThat(callbackDispatcher.recoverTimedOutDeliveries()).isEqualTo(1);
+
+		CallbackDelivery recovered = deliveryRepository.findByTaskId(task.taskId()).orElseThrow();
+		assertThat(recovered.status()).isEqualTo(CallbackDeliveryStatus.RETRY);
+		assertThat(recovered.attempt()).isEqualTo(1);
+		assertThat(recovered.availableAt()).isEqualTo(clock.instant().plus(CALLBACK_RETRY_BACKOFF));
+		assertThat(recovered.lastError()).contains("зависла в DELIVERING");
+
+		AsyncTask storedTask = taskRepository.findByTaskId(task.taskId(), Optional.empty()).orElseThrow();
+		assertThat(storedTask.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.RETRY);
+	}
+
+	@Test
+	void timedOutDeliveringCallbackDeliveryMovesToDeadAfterLastAttempt() {
+		MutableClock clock = new MutableClock(NOW);
+		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();
+		MemoryCallbackDeliveryRepository deliveryRepository = new MemoryCallbackDeliveryRepository();
+		ExternalAsyncDispatcher asyncDispatcher = asyncDispatcher(taskRepository, deliveryRepository, clock,
+				clientsWithInvestPay(), RecordingUpstreamClient.succeeding(doneResult()), 1);
+		AsyncTask task = submit(taskRepository, "ec627c8d-d9a4-4371-ae40-1601bc0758ec",
+				AsyncDeliveryMode.CALLBACK, "invest-pay", 3, clock.instant());
+		asyncDispatcher.dispatchOnce();
+		CallbackDelivery claimed = deliveryRepository.claimNextPending(clock.instant()).orElseThrow();
+		taskRepository.updateCallbackDeliveryStatus(claimed.taskId(), claimed.status(), clock.instant());
+		CallbackDeliveryDispatcher callbackDispatcher = callbackDispatcher(taskRepository, deliveryRepository,
+				RecordingCallbackClient.succeeding(204), clock, 1);
+
+		clock.advance(CALLBACK_DELIVERY_TIMEOUT.plusMillis(1));
+		assertThat(callbackDispatcher.recoverTimedOutDeliveries()).isEqualTo(1);
+
+		CallbackDelivery recovered = deliveryRepository.findByTaskId(task.taskId()).orElseThrow();
+		assertThat(recovered.status()).isEqualTo(CallbackDeliveryStatus.DEAD);
+		assertThat(recovered.attempt()).isEqualTo(1);
+		assertThat(recovered.completedAt()).isEqualTo(clock.instant());
+		assertThat(recovered.lastError()).contains("зависла в DELIVERING");
+
+		AsyncTask storedTask = taskRepository.findByTaskId(task.taskId(), Optional.empty()).orElseThrow();
+		assertThat(storedTask.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.DEAD);
+	}
+
+	@Test
 	void missingCallbackUrlDoesNotFailUpstreamTaskAndCreatesDeadDelivery() {
 		MutableClock clock = new MutableClock(NOW);
 		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();
@@ -227,12 +294,23 @@ class CallbackDeliveryFlowTest {
 			ExternalGatewayClientsProperties clientsProperties,
 			RecordingUpstreamClient upstreamClient
 	) {
+		return asyncDispatcher(taskRepository, deliveryRepository, clock, clientsProperties, upstreamClient, 2);
+	}
+
+	private static ExternalAsyncDispatcher asyncDispatcher(
+			MemoryAsyncTaskRepository taskRepository,
+			MemoryCallbackDeliveryRepository deliveryRepository,
+			Clock clock,
+			ExternalGatewayClientsProperties clientsProperties,
+			RecordingUpstreamClient upstreamClient,
+			int callbackMaxAttempts
+	) {
 		ExternalGatewaySlotProperties slotProperties = slotProperties();
 		SlotManager slotManager = new SlotManager(new MemorySlotRepository(slotProperties), clock,
 				new PollingSyncSlotWaitStrategy(duration -> {
 				}), slotProperties);
 		CallbackDeliveryPlanner planner = new CallbackDeliveryPlanner(deliveryRepository, taskRepository,
-				callbackProperties(2), clientsProperties, clock);
+				callbackProperties(callbackMaxAttempts), clientsProperties, clock);
 		return new ExternalAsyncDispatcher(taskRepository, slotManager, upstreamClient, asyncProperties(), clock,
 				Optional.of(planner));
 	}
@@ -271,7 +349,7 @@ class CallbackDeliveryFlowTest {
 
 	private static ExternalGatewayCallbackProperties callbackProperties(int maxAttempts) {
 		return new ExternalGatewayCallbackProperties(false, maxAttempts, 10, CALLBACK_RETRY_BACKOFF,
-				Duration.ofMillis(100));
+				Duration.ofMillis(100), CALLBACK_DELIVERY_TIMEOUT, Duration.ofSeconds(1));
 	}
 
 	private static ExternalGatewayClientsProperties clientsWithInvestPay() {

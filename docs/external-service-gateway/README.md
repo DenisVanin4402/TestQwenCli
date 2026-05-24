@@ -461,6 +461,7 @@ external-gateway.callback.delivery-recovery-interval-ms=1000
 ```
 
 Если `external-gateway.postgres.liquibase-enabled=false`, changelog `db/changelog/external-gateway/db.changelog-master.yaml` должен быть применен заранее.
+Async-задача в PostgreSQL берется через `FOR UPDATE SKIP LOCKED`, а row-lock строки удерживается до финального обновления после upstream-вызова. Статус `IN_PROGRESS` при таком подходе является транзакционным состоянием обработки: при падении JVM транзакция откатывается, row-lock снимается, а задача остается `PENDING` и может быть взята снова. Async-слот при этом захватывается и освобождается отдельными короткими транзакциями, чтобы состояние слотов было видно дашборду во время долгого upstream-вызова. Если JVM падает после committed-захвата слота, но до release, lease слота будет очищен по `external-gateway.slots.lease-ttl`. Отдельный timeout-recovery для `IN_PROGRESS` не нужен; для внешнего upstream при этом важна идемпотентность по request id или `external_id`.
 Callback-доставки, которые остались в `DELIVERING` дольше `external-gateway.callback.delivery-timeout-ms` после падения JVM или остановки процесса, на старте и далее с интервалом `external-gateway.callback.delivery-recovery-interval-ms` возвращаются в `RETRY` либо переводятся в `DEAD`, если попытки исчерпаны.
 
 ## OpenAPI
@@ -477,6 +478,6 @@ Sync и async разделены, потому что у них разные SLA
 
 - Реальный HTTP-клиент внешнего сервиса пока заменен симулированным adapter'ом.
 - Service-to-service authentication, caller identity и подпись callback не внедрены.
-- Production-grade scheduled recovery jobs для зависших `IN_PROGRESS` задач и callback-доставок не оформлены.
+- Автоматический reconcile `ext_request_queue.callback_delivery_status` с `ext_callback_delivery.status` пока не оформлен.
 - Полный набор Micrometer metrics, dashboards и alerts не реализован.
 - Интеграционный прогон PostgreSQL-варианта на живой БД или Testcontainers нужно выполнить отдельно.

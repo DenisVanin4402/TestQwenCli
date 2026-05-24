@@ -10,6 +10,8 @@ import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
@@ -32,7 +34,7 @@ public final class PostgresSlotRepository implements SlotRepository {
 	);
 
 	private final NamedParameterJdbcTemplate jdbc;
-	private final TransactionTemplate transactionTemplate;
+	private final TransactionTemplate slotTransactionTemplate;
 	private final PostgresTableNames tables;
 	private final int totalSlots;
 	private final int targetFreeSyncSlots;
@@ -42,13 +44,15 @@ public final class PostgresSlotRepository implements SlotRepository {
 
 	public PostgresSlotRepository(
 			NamedParameterJdbcTemplate jdbc,
-			TransactionTemplate transactionTemplate,
+			PlatformTransactionManager transactionManager,
 			ExternalGatewayPostgresProperties postgresProperties,
 			ExternalGatewaySlotProperties slotProperties,
 			SlotReleaseNotificationPublisher notificationPublisher
 	) {
 		this.jdbc = Objects.requireNonNull(jdbc, "jdbc must not be null");
-		this.transactionTemplate = Objects.requireNonNull(transactionTemplate, "transactionTemplate must not be null");
+		this.slotTransactionTemplate = new TransactionTemplate(Objects.requireNonNull(transactionManager,
+				"transactionManager must not be null"));
+		this.slotTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 		Objects.requireNonNull(slotProperties, "slotProperties must not be null");
 		this.tables = new PostgresTableNames(Objects.requireNonNull(postgresProperties,
 				"postgresProperties must not be null").schema());
@@ -94,25 +98,27 @@ public final class PostgresSlotRepository implements SlotRepository {
 		if (!isConfiguredSlot(slotId)) {
 			return false;
 		}
-		String sql = """
-				UPDATE %s
-				SET lease_id = NULL,
-				    owner = NULL,
-				    kind = NULL,
-				    acquired_at = NULL,
-				    expires_at = NULL,
-				    task_id = NULL
-				WHERE slot_id = :slotId
-				  AND lease_id = :leaseId
-				""".formatted(tables.slots());
-		MapSqlParameterSource params = new MapSqlParameterSource()
-				.addValue("slotId", slotId)
-				.addValue("leaseId", leaseId);
-		boolean released = jdbc.update(sql, params) > 0;
-		if (released) {
-			notificationPublisher.publishSlotReleased();
-		}
-		return released;
+		return slotTransactionTemplate.execute(status -> {
+			String sql = """
+					UPDATE %s
+					SET lease_id = NULL,
+					    owner = NULL,
+					    kind = NULL,
+					    acquired_at = NULL,
+					    expires_at = NULL,
+					    task_id = NULL
+					WHERE slot_id = :slotId
+					  AND lease_id = :leaseId
+					""".formatted(tables.slots());
+			MapSqlParameterSource params = new MapSqlParameterSource()
+					.addValue("slotId", slotId)
+					.addValue("leaseId", leaseId);
+			boolean released = jdbc.update(sql, params) > 0;
+			if (released) {
+				notificationPublisher.publishSlotReleased();
+			}
+			return released;
+		});
 	}
 
 	@Override
@@ -122,20 +128,22 @@ public final class PostgresSlotRepository implements SlotRepository {
 		if (!isConfiguredSlot(slotId)) {
 			return Optional.empty();
 		}
-		String sql = """
-				UPDATE %s
-				SET expires_at = :expiresAt
-				WHERE slot_id = :slotId
-				  AND lease_id = :leaseId
-				  AND expires_at > :now
-				RETURNING slot_id, lease_id, owner, kind, expires_at, task_id
-				""".formatted(tables.slots());
-		MapSqlParameterSource params = new MapSqlParameterSource()
-				.addValue("slotId", slotId)
-				.addValue("leaseId", leaseId)
-				.addValue("now", timestamp(now))
-				.addValue("expiresAt", timestamp(now.plus(leaseTtl)));
-		return queryLease(sql, params);
+		return executeOptional(() -> {
+			String sql = """
+					UPDATE %s
+					SET expires_at = :expiresAt
+					WHERE slot_id = :slotId
+					  AND lease_id = :leaseId
+					  AND expires_at > :now
+					RETURNING slot_id, lease_id, owner, kind, expires_at, task_id
+					""".formatted(tables.slots());
+			MapSqlParameterSource params = new MapSqlParameterSource()
+					.addValue("slotId", slotId)
+					.addValue("leaseId", leaseId)
+					.addValue("now", timestamp(now))
+					.addValue("expiresAt", timestamp(now.plus(leaseTtl)));
+			return queryLease(sql, params);
+		});
 	}
 
 	@Override
@@ -158,33 +166,35 @@ public final class PostgresSlotRepository implements SlotRepository {
 	@Override
 	public int reapExpiredLeases(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
-		String sql = """
-				UPDATE %s
-				SET lease_id = NULL,
-				    owner = NULL,
-				    kind = NULL,
-				    acquired_at = NULL,
-				    expires_at = NULL,
-				    task_id = NULL
-				WHERE lease_id IS NOT NULL
-				  AND slot_id <= :totalSlots
-				  AND expires_at <= :now
-				""".formatted(tables.slots());
-		MapSqlParameterSource params = new MapSqlParameterSource()
-				.addValue("now", timestamp(now))
-				.addValue("totalSlots", totalSlots);
-		int reaped = jdbc.update(sql, params);
-		if (reaped > 0) {
-			notificationPublisher.publishSlotReleased();
-		}
-		return reaped;
+		return slotTransactionTemplate.execute(status -> {
+			String sql = """
+					UPDATE %s
+					SET lease_id = NULL,
+					    owner = NULL,
+					    kind = NULL,
+					    acquired_at = NULL,
+					    expires_at = NULL,
+					    task_id = NULL
+					WHERE lease_id IS NOT NULL
+					  AND slot_id <= :totalSlots
+					  AND expires_at <= :now
+					""".formatted(tables.slots());
+			MapSqlParameterSource params = new MapSqlParameterSource()
+					.addValue("now", timestamp(now))
+					.addValue("totalSlots", totalSlots);
+			int reaped = jdbc.update(sql, params);
+			if (reaped > 0) {
+				notificationPublisher.publishSlotReleased();
+			}
+			return reaped;
+		});
 	}
 
 	@Override
 	public UUID registerSyncWaiter(String owner, Instant now) {
 		validateOwner(owner);
 		Objects.requireNonNull(now, "now must not be null");
-		return transactionTemplate.execute(status -> {
+		return slotTransactionTemplate.execute(status -> {
 			deleteExpiredSyncWaiters(now);
 			UUID waiterId = UUID.randomUUID();
 			String sql = """
@@ -204,14 +214,16 @@ public final class PostgresSlotRepository implements SlotRepository {
 	@Override
 	public boolean removeSyncWaiter(UUID waiterId) {
 		Objects.requireNonNull(waiterId, "waiterId must not be null");
-		String sql = "DELETE FROM %s WHERE waiter_id = :waiterId".formatted(tables.syncWaiters());
-		return jdbc.update(sql, new MapSqlParameterSource("waiterId", waiterId)) > 0;
+		return slotTransactionTemplate.execute(status -> {
+			String sql = "DELETE FROM %s WHERE waiter_id = :waiterId".formatted(tables.syncWaiters());
+			return jdbc.update(sql, new MapSqlParameterSource("waiterId", waiterId)) > 0;
+		});
 	}
 
 	@Override
 	public long countLiveSyncWaiters(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
-		return transactionTemplate.execute(status -> {
+		return slotTransactionTemplate.execute(status -> {
 			deleteExpiredSyncWaiters(now);
 			return countLiveSyncWaitersInternal(now);
 		});
@@ -295,7 +307,7 @@ public final class PostgresSlotRepository implements SlotRepository {
 	}
 
 	private Optional<SlotLease> executeOptional(TransactionalSupplier<Optional<SlotLease>> supplier) {
-		Optional<SlotLease> lease = transactionTemplate.execute(status -> supplier.get());
+		Optional<SlotLease> lease = slotTransactionTemplate.execute(status -> supplier.get());
 		return lease == null ? Optional.empty() : lease;
 	}
 

@@ -53,6 +53,10 @@ public class ExternalAsyncDispatcher {
 	}
 
 	public boolean dispatchOnce() {
+		return repository.executeInProcessingTransaction(this::dispatchOnceInTransaction);
+	}
+
+	private boolean dispatchOnceInTransaction() {
 		Optional<AsyncTaskClaim> claimedTask = repository.claimNextPending(clock.instant());
 		if (claimedTask.isEmpty()) {
 			return false;

@@ -12,6 +12,7 @@ import com.example.testqwencli.gateway.async.AsyncTaskStatus;
 import com.example.testqwencli.gateway.async.AsyncTaskUpdateResult;
 import com.example.testqwencli.gateway.async.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.async.ExternalAsyncRequest;
+import com.example.testqwencli.gateway.async.SyncRequestTrace;
 import com.example.testqwencli.gateway.async.TaskError;
 
 import java.time.Duration;
@@ -20,10 +21,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 
@@ -80,6 +83,7 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 		}
 		return tasksById.values()
 				.stream()
+				.filter(StoredAsyncTask::asyncQueueTask)
 				.filter(task -> task.externalId().equals(externalId))
 				.findFirst()
 				.map(StoredAsyncTask::toTask);
@@ -129,10 +133,32 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 	}
 
 	@Override
+	public synchronized AsyncTask recordSyncTrace(SyncRequestTrace trace) {
+		Objects.requireNonNull(trace, "trace must not be null");
+		StoredAsyncTask task = StoredAsyncTask.syncTrace(nextTaskId++, trace);
+		tasksById.put(task.taskId(), task);
+		return task.toTask();
+	}
+
+	@Override
+	public synchronized List<AsyncTask> findRequestTracesByExternalId(UUID externalId,
+			Optional<String> clientService) {
+		Objects.requireNonNull(externalId, "externalId must not be null");
+		Objects.requireNonNull(clientService, "clientService must not be null");
+		return tasksById.values()
+				.stream()
+				.filter(task -> task.externalId().equals(externalId))
+				.filter(task -> clientService.isEmpty() || task.clientService().equals(clientService.orElseThrow()))
+				.map(StoredAsyncTask::toTask)
+				.toList();
+	}
+
+	@Override
 	public synchronized Optional<AsyncTaskClaim> claimNextPending(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
 		Optional<StoredAsyncTask> candidate = tasksById.values()
 				.stream()
+				.filter(StoredAsyncTask::asyncQueueTask)
 				.filter(task -> task.status() == AsyncTaskStatus.PENDING)
 				.filter(task -> !task.availableAt().isAfter(now))
 				.min(DISPATCH_ORDER);
@@ -144,6 +170,12 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 		StoredAsyncTask claimed = task.claim(now);
 		tasksById.put(claimed.taskId(), claimed);
 		return Optional.of(claimed.toClaim());
+	}
+
+	@Override
+	public <T> T executeInProcessingTransaction(Supplier<T> action) {
+		Objects.requireNonNull(action, "action must not be null");
+		return action.get();
 	}
 
 	@Override
@@ -216,6 +248,9 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 		long retryCount = 0;
 		Instant oldestActiveCreatedAt = null;
 		for (StoredAsyncTask task : tasksById.values()) {
+			if (!task.asyncQueueTask()) {
+				continue;
+			}
 			statusCounts.compute(task.status(), (status, count) -> count == null ? 1L : count + 1);
 			if (task.status() == AsyncTaskStatus.PENDING && task.attempts() > 0) {
 				retryCount++;
@@ -231,6 +266,9 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 	private Optional<StoredAsyncTask> findStoredByTaskId(long taskId, Optional<String> clientService) {
 		StoredAsyncTask task = tasksById.get(taskId);
 		if (task == null) {
+			return Optional.empty();
+		}
+		if (!task.asyncQueueTask()) {
 			return Optional.empty();
 		}
 		if (clientService.isPresent() && !task.clientService().equals(clientService.orElseThrow())) {
@@ -282,6 +320,14 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 					request.priority().weight(), request.deliveryMode(), AsyncTaskStatus.PENDING,
 					callbackStatus(request.deliveryMode()), request.payload(), null, null, 0, maxAttempts, now, now,
 					null, null, null, false);
+		}
+
+		private static StoredAsyncTask syncTrace(long taskId, SyncRequestTrace trace) {
+			return new StoredAsyncTask(taskId, trace.externalId(), trace.clientService(), AsyncPriority.HIGH,
+					AsyncPriority.HIGH.weight(), AsyncDeliveryMode.SYNC, trace.status(),
+					CallbackDeliveryStatus.NOT_REQUIRED, trace.payload(), trace.result(), trace.error(),
+					trace.attempts(), 1, trace.startedAt(), trace.startedAt(), trace.startedAt(),
+					trace.finishedAt(), trace.lastError(), false);
 		}
 
 		private ArrayList<String> conflictingFields(ExternalAsyncRequest request) {
@@ -359,10 +405,14 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 		}
 
 		private static CallbackDeliveryStatus callbackStatus(AsyncDeliveryMode deliveryMode) {
-			if (deliveryMode == AsyncDeliveryMode.POLLING) {
+			if (deliveryMode != AsyncDeliveryMode.CALLBACK) {
 				return CallbackDeliveryStatus.NOT_REQUIRED;
 			}
 			return CallbackDeliveryStatus.PENDING;
+		}
+
+		private boolean asyncQueueTask() {
+			return deliveryMode != AsyncDeliveryMode.SYNC;
 		}
 	}
 

@@ -162,9 +162,12 @@ databaseChangeLog:
       id: 003-create-request-queue
       author: codex
       changes:
-        # Таблица ext_request_queue хранит async-задачи внешнего gateway.
-        # Это основная очередь: HTTP submit создает PENDING-задачу, dispatcher забирает ее
-        # в IN_PROGRESS, вызывает upstream, затем переводит в финальный статус.
+        # Таблица ext_request_queue хранит async-задачи и trace синхронных вызовов внешнего gateway.
+        # Для async это основная очередь: HTTP submit создает PENDING-задачу, dispatcher забирает ее,
+        # вызывает upstream и затем переводит в финальный статус. В PostgreSQL claim, upstream-вызов
+        # и финальное обновление выполняются в одной транзакции с row-lock строки. Захват и release
+        # async-слота выполняются отдельными короткими транзакциями, чтобы дашборд видел занятый слот.
+        # Для sync запись создается уже как финальный trace с delivery_mode=SYNC.
         #
         # Поля:
         # - id: внутренний последовательный id задачи. Используется в URL polling,
@@ -179,14 +182,18 @@ databaseChangeLog:
         #   Используется в ORDER BY при claim, чтобы HIGH обрабатывался раньше LOW.
         # - delivery_mode: способ получения результата. CALLBACK означает, что после
         #   финального статуса будет запланирована callback-доставка. POLLING означает,
-        #   что клиент сам забирает результат и callback не нужен.
+        #   что клиент сам забирает результат и callback не нужен. SYNC означает trace
+        #   синхронного запроса; такая строка не участвует в async claim и не требует callback.
         # - status: состояние async-задачи. PENDING - ждет обработки или retry и доступна
-        #   после available_at. IN_PROGRESS - dispatcher уже забрал задачу и держит async-слот.
+        #   после available_at. IN_PROGRESS - dispatcher уже забрал задачу; async-слот
+        #   хранится committed lease-записью в ext_slots. В PostgreSQL сам IN_PROGRESS
+        #   не коммитится отдельно при штатной обработке и откатывается вместе с транзакцией,
+        #   если JVM падает до финального обновления.
         #   DONE - upstream успешно ответил, result заполнен. FAILED - финальная бизнес-ошибка,
         #   если появится отдельный неретраимый сценарий. DEAD - попытки исчерпаны после
         #   transient-ошибок. CANCELLED - задача отменена клиентом до обработки.
         # - callback_delivery_status: состояние доставки callback для этой задачи.
-        #   NOT_REQUIRED - callback не нужен, обычно delivery_mode=POLLING. PENDING - callback
+        #   NOT_REQUIRED - callback не нужен, обычно delivery_mode=POLLING или SYNC. PENDING - callback
         #   ожидает отправки. DELIVERING - callback сейчас отправляется. DELIVERED - callback
         #   успешно доставлен. RETRY - доставка не удалась и будет повторена после available_at
         #   в ext_callback_delivery. DEAD - доставка невозможна или исчерпала попытки.
@@ -194,13 +201,15 @@ databaseChangeLog:
         # - result: JSON-результат upstream, заполняется при status=DONE.
         # - error: JSON-описание ошибки, заполняется для DEAD, FAILED или CANCELLED.
         # - attempts: число попыток обработки upstream. Увеличивается при переходе в
-        #   IN_PROGRESS, откатывается при возврате claim из-за отсутствия async-слота.
+        #   IN_PROGRESS; в PostgreSQL увеличение фиксируется только при коммите финального статуса,
+        #   а при падении JVM откатывается вместе с claim.
         # - max_attempts: максимальное число попыток upstream перед DEAD.
         # - created_at: момент создания задачи.
         # - available_at: момент, начиная с которого PENDING-задачу можно claim-ить.
         #   При retry сдвигается на retry_backoff.
         # - started_at: момент последнего перехода в IN_PROGRESS. NULL до claim и после
-        #   возврата в PENDING.
+        #   возврата в PENDING; в PostgreSQL значение обычно видно снаружи только вместе
+        #   с финальным статусом, потому что обработка идет внутри одной транзакции.
         # - finished_at: момент финального завершения DONE, DEAD, FAILED или CANCELLED.
         # - updated_at: момент последнего изменения строки.
         # - last_error: текст последней transient-ошибки для диагностики.
@@ -465,3 +474,29 @@ databaseChangeLog:
               CREATE INDEX idx_ext_callback_delivery_claim
                 ON ${externalGatewaySchema}.ext_callback_delivery (available_at ASC, created_at ASC, delivery_id ASC)
                 WHERE status IN ('PENDING', 'RETRY');
+
+  - changeSet:
+      id: 005-allow-sync-request-traces
+      author: codex
+      changes:
+        # Sync-вызовы тоже пишутся в ext_request_queue как trace-строки с delivery_mode=SYNC.
+        # Для таких строк не нужна идемпотентная уникальность: один и тот же external_id может
+        # использоваться в нескольких синхронных запросах, и каждый запрос должен оставить след.
+        # Поэтому прежняя уникальность client_service + external_id заменяется частичным уникальным
+        # индексом только для async-режимов CALLBACK/POLLING.
+        - sql:
+            splitStatements: true
+            sql: |
+              ALTER TABLE ${externalGatewaySchema}.ext_request_queue
+                DROP CONSTRAINT IF EXISTS uq_ext_request_queue_idempotency;
+
+              ALTER TABLE ${externalGatewaySchema}.ext_request_queue
+                DROP CONSTRAINT IF EXISTS chk_ext_request_queue_delivery_mode;
+
+              ALTER TABLE ${externalGatewaySchema}.ext_request_queue
+                ADD CONSTRAINT chk_ext_request_queue_delivery_mode
+                CHECK (delivery_mode IN ('CALLBACK', 'POLLING', 'SYNC'));
+
+              CREATE UNIQUE INDEX IF NOT EXISTS uq_ext_request_queue_async_idempotency
+                ON ${externalGatewaySchema}.ext_request_queue (client_service, external_id)
+                WHERE delivery_mode IN ('CALLBACK', 'POLLING');

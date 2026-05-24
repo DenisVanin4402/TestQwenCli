@@ -1,5 +1,10 @@
 package com.example.testqwencli.gateway.sync;
 
+import com.example.testqwencli.gateway.async.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.async.AsyncTask;
+import com.example.testqwencli.gateway.async.AsyncTaskRepository;
+import com.example.testqwencli.gateway.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.async.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.slot.SlotLease;
 import com.example.testqwencli.gateway.slot.SlotManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,9 +18,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,6 +47,9 @@ class ExternalSyncControllerTest {
 	@Autowired
 	private SlotManager slotManager;
 
+	@Autowired
+	private AsyncTaskRepository taskRepository;
+
 	@Test
 	void syncReturnsSucceededResponseWithResultMap() throws Exception {
 		Map<String, Object> request = Map.of(
@@ -61,6 +71,13 @@ class ExternalSyncControllerTest {
 				.andExpect(jsonPath("$.result.reasonCode").value("OK"))
 				.andExpect(jsonPath("$.upstreamStatus").value(200))
 				.andExpect(jsonPath("$.durationMs").isNumber());
+
+		AsyncTask trace = onlyTrace(EXTERNAL_ID, "invest-pay");
+		assertThat(trace.deliveryMode()).isEqualTo(AsyncDeliveryMode.SYNC);
+		assertThat(trace.status()).isEqualTo(AsyncTaskStatus.DONE);
+		assertThat(trace.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.NOT_REQUIRED);
+		assertThat(trace.result()).containsEntry("decision", "APPROVED");
+		assertThat(trace.attempts()).isEqualTo(1);
 	}
 
 	@Test
@@ -83,6 +100,14 @@ class ExternalSyncControllerTest {
 					.andExpect(jsonPath("$.retryable").value(true))
 					.andExpect(jsonPath("$.requestId").value("req-no-slot"))
 					.andExpect(jsonPath("$.details.syncWaitTimeoutMs").value(1));
+
+			AsyncTask trace = onlyTrace(UUID.fromString("56f57774-aa9d-470f-8cda-fc76f8309e5b"), "invest-pay");
+			assertThat(trace.deliveryMode()).isEqualTo(AsyncDeliveryMode.SYNC);
+			assertThat(trace.status()).isEqualTo(AsyncTaskStatus.FAILED);
+			assertThat(trace.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.NOT_REQUIRED);
+			assertThat(trace.attempts()).isZero();
+			assertThat(trace.error().code()).isEqualTo("NO_SLOT_AVAILABLE");
+			assertThat(trace.error().retryable()).isTrue();
 		}
 		finally {
 			leases.forEach(lease -> slotManager.release(lease.slotId(), lease.leaseId()));
@@ -113,5 +138,11 @@ class ExternalSyncControllerTest {
 				.mapToObj(index -> slotManager.acquireSyncSlot("preoccupied-sync-" + index, Duration.ZERO)
 						.orElseThrow())
 				.toList();
+	}
+
+	private AsyncTask onlyTrace(UUID externalId, String clientService) {
+		List<AsyncTask> traces = taskRepository.findRequestTracesByExternalId(externalId, Optional.of(clientService));
+		assertThat(traces).hasSize(1);
+		return traces.getFirst();
 	}
 }

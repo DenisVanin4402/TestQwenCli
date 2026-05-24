@@ -178,13 +178,15 @@ todo    - еще не реализовано
 - lease cleanup реализован методом `SlotManager.reapExpiredLeases()`;
 - retry/backoff async-задач реализован в repository/dispatcher;
 - callback retry/backoff реализован в callback repository/dispatcher;
+- PostgreSQL async claim удерживает row-lock до финального статуса, поэтому падение JVM откатывает незавершенный `IN_PROGRESS`;
+- PostgreSQL slot lease захватывается и освобождается отдельной короткой транзакцией, поэтому дашборд видит занятый slot во время upstream-вызова;
 - ручной retry поддержан для `FAILED`/`DEAD` задач с `retryable=true`.
 
 Осталось:
 
 - добавить scheduler для expired leases;
-- добавить recovery для зависших `IN_PROGRESS` задач;
-- добавить recovery для зависших `DELIVERING` callback deliveries.
+- при необходимости добавить one-time cleanup для старых, уже закоммиченных `IN_PROGRESS` задач от прежней версии;
+- добавить production-настройки и мониторинг recovery для зависших `DELIVERING` callback deliveries.
 
 ## Шаг 9. Observability
 

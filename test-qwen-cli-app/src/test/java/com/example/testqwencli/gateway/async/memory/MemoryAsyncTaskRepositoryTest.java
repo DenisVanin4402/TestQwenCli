@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +29,18 @@ class MemoryAsyncTaskRepositoryTest {
 		assertThat(claim.task().priority()).isEqualTo(AsyncPriority.HIGH);
 		assertThat(claim.task().status().name()).isEqualTo("IN_PROGRESS");
 		assertThat(claim.task().attempts()).isEqualTo(1);
+	}
+
+	@Test
+	void claimNextPendingDoesNotSelectFreshInProgressTaskAgain() {
+		repository.submit(request("639820fa-435e-4e65-b0c6-a665cdde211f", AsyncPriority.HIGH), 3, NOW);
+		AsyncTaskClaim firstClaim = repository.claimNextPending(NOW).orElseThrow();
+
+		Optional<AsyncTaskClaim> secondClaim = repository.claimNextPending(NOW.plusSeconds(60));
+
+		assertThat(secondClaim).isEmpty();
+		assertThat(repository.findByTaskId(firstClaim.task().taskId(), Optional.empty()).orElseThrow().attempts())
+				.isEqualTo(1);
 	}
 
 	private static ExternalAsyncRequest request(String externalId, AsyncPriority priority) {

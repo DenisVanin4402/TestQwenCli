@@ -27,9 +27,9 @@
 
 4. Async dispatcher:
    - выбирает задачи по `priorityWeight DESC, availableAt ASC, taskId ASC`;
-   - переводит `PENDING -> IN_PROGRESS -> DONE`;
-   - вызывает upstream adapter вне DB lock;
-   - использует async slot через `SlotManager`;
+   - в PostgreSQL держит row-lock задачи в транзакции на время upstream-вызова;
+   - переводит `PENDING -> IN_PROGRESS -> DONE`, при этом `IN_PROGRESS` в PostgreSQL не коммитится отдельно;
+   - использует async slot через `SlotManager`; PostgreSQL lease слота коммитится отдельной короткой транзакцией, чтобы дашборд видел занятый слот;
    - при runtime-ошибках возвращает задачу в retry/backoff или переводит в `DEAD`;
    - scheduler включается свойством `external-gateway.async.dispatcher-enabled=true`.
 
@@ -222,9 +222,11 @@ mvn test
    - полного набора Micrometer metrics, dashboards и alerts нет;
    - логи есть, но structured logging не доведен до production-формата.
 
-6. Recovery jobs:
+6. Recovery:
    - lease cleanup доступен на уровне `SlotManager.reapExpiredLeases()`;
-   - отдельные scheduled jobs для зависших `IN_PROGRESS` задач и callback deliveries не оформлены.
+   - зависшие `IN_PROGRESS` async-задачи предотвращаются транзакционным row-lock claim в PostgreSQL;
+   - если JVM падает после отдельного committed-захвата async-слота, слот освобождается lease cleanup по TTL;
+   - recovery зависших `DELIVERING` callback deliveries выполняется на старте и scheduler-ом.
 
 7. Deployment:
    - нет Dockerfile/helm/k8s manifests;

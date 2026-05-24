@@ -51,7 +51,7 @@ public class CallbackDeliveryPlanner {
 			return Optional.empty();
 		}
 		Instant now = clock.instant();
-		if (task.deliveryMode() == AsyncDeliveryMode.POLLING) {
+		if (task.deliveryMode() != AsyncDeliveryMode.CALLBACK) {
 			taskRepository.updateCallbackDeliveryStatus(task.taskId(), CallbackDeliveryStatus.NOT_REQUIRED, now);
 			return Optional.empty();
 		}

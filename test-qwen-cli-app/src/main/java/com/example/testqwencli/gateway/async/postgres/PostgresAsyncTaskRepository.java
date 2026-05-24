@@ -11,6 +11,7 @@ import com.example.testqwencli.gateway.async.AsyncTaskStatus;
 import com.example.testqwencli.gateway.async.AsyncTaskUpdateResult;
 import com.example.testqwencli.gateway.async.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.async.ExternalAsyncRequest;
+import com.example.testqwencli.gateway.async.SyncRequestTrace;
 import com.example.testqwencli.gateway.async.TaskError;
 import com.example.testqwencli.gateway.postgres.ExternalGatewayPostgresProperties;
 import com.example.testqwencli.gateway.postgres.PostgresJsonMapper;
@@ -32,8 +33,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
+
+	private static final String ASYNC_DELIVERY_MODE_FILTER = "delivery_mode IN ('CALLBACK', 'POLLING')";
 
 	private final NamedParameterJdbcTemplate jdbc;
 	private final TransactionTemplate transactionTemplate;
@@ -89,7 +93,8 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 		Objects.requireNonNull(externalId, "externalId must not be null");
 		Objects.requireNonNull(clientService, "clientService must not be null");
 		MapSqlParameterSource params = new MapSqlParameterSource("externalId", externalId);
-		String sql = baseSelect() + "\nWHERE external_id = :externalId";
+		String sql = baseSelect() + "\nWHERE external_id = :externalId"
+				+ "\n  AND " + ASYNC_DELIVERY_MODE_FILTER;
 		if (clientService.isPresent()) {
 			sql += "\n  AND client_service = :clientService";
 			params.addValue("clientService", clientService.orElseThrow());
@@ -139,6 +144,83 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 	}
 
 	@Override
+	public AsyncTask recordSyncTrace(SyncRequestTrace trace) {
+		Objects.requireNonNull(trace, "trace must not be null");
+		String sql = """
+				INSERT INTO %s (
+				    external_id,
+				    client_service,
+				    priority,
+				    priority_weight,
+				    delivery_mode,
+				    status,
+				    callback_delivery_status,
+				    payload,
+				    result,
+				    error,
+				    attempts,
+				    max_attempts,
+				    created_at,
+				    available_at,
+				    started_at,
+				    finished_at,
+				    updated_at,
+				    last_error,
+				    retryable
+				)
+				VALUES (
+				    :externalId,
+				    :clientService,
+				    'HIGH',
+				    :priorityWeight,
+				    'SYNC',
+				    :status,
+				    'NOT_REQUIRED',
+				    CAST(:payload AS jsonb),
+				    CAST(:result AS jsonb),
+				    CAST(:error AS jsonb),
+				    :attempts,
+				    1,
+				    :startedAt,
+				    :startedAt,
+				    :startedAt,
+				    :finishedAt,
+				    :finishedAt,
+				    :lastError,
+				    FALSE
+				)
+				RETURNING %s
+				""".formatted(tables.requestQueue(), returningColumns(null));
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("externalId", trace.externalId())
+				.addValue("clientService", trace.clientService())
+				.addValue("priorityWeight", AsyncPriority.HIGH.weight())
+				.addValue("status", trace.status().name())
+				.addValue("payload", jsonMapper.write(trace.payload()))
+				.addValue("result", jsonMapper.write(trace.result()))
+				.addValue("error", jsonMapper.write(trace.error()))
+				.addValue("attempts", trace.attempts())
+				.addValue("startedAt", timestamp(trace.startedAt()))
+				.addValue("finishedAt", timestamp(trace.finishedAt()))
+				.addValue("lastError", trace.lastError());
+		return queryStored(sql, params).stream().findFirst().orElseThrow().task();
+	}
+
+	@Override
+	public List<AsyncTask> findRequestTracesByExternalId(UUID externalId, Optional<String> clientService) {
+		Objects.requireNonNull(externalId, "externalId must not be null");
+		Objects.requireNonNull(clientService, "clientService must not be null");
+		MapSqlParameterSource params = new MapSqlParameterSource("externalId", externalId);
+		String sql = baseSelect() + "\nWHERE external_id = :externalId";
+		if (clientService.isPresent()) {
+			sql += "\n  AND client_service = :clientService";
+			params.addValue("clientService", clientService.orElseThrow());
+		}
+		sql += "\nORDER BY id ASC";
+		return queryStored(sql, params).stream().map(StoredAsyncTask::task).toList();
+	}
+
+	@Override
 	public Optional<AsyncTaskClaim> claimNextPending(Instant now) {
 		Objects.requireNonNull(now, "now must not be null");
 		String sql = """
@@ -146,8 +228,11 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				    SELECT id
 				    FROM %s
 				    WHERE status = 'PENDING'
+				      AND %s
 				      AND available_at <= :now
-				    ORDER BY priority_weight DESC, available_at ASC, id ASC
+				    ORDER BY priority_weight DESC,
+				        available_at ASC,
+				        id ASC
 				    FOR UPDATE SKIP LOCKED
 				    LIMIT 1
 				)
@@ -162,8 +247,17 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				FROM candidate
 				WHERE task.id = candidate.id
 				RETURNING %s
-				""".formatted(tables.requestQueue(), tables.requestQueue(), returningColumns("task"));
-		return queryClaim(sql, new MapSqlParameterSource("now", timestamp(now))).stream().findFirst();
+				""".formatted(tables.requestQueue(), ASYNC_DELIVERY_MODE_FILTER, tables.requestQueue(),
+				returningColumns("task"));
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("now", timestamp(now));
+		return queryClaim(sql, params).stream().findFirst();
+	}
+
+	@Override
+	public <T> T executeInProcessingTransaction(Supplier<T> action) {
+		Objects.requireNonNull(action, "action must not be null");
+		return transactionTemplate.execute(status -> action.get());
 	}
 
 	@Override
@@ -285,8 +379,9 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 		String statusSql = """
 				SELECT status, COUNT(*) AS count
 				FROM %s
+				WHERE %s
 				GROUP BY status
-				""".formatted(tables.requestQueue());
+				""".formatted(tables.requestQueue(), ASYNC_DELIVERY_MODE_FILTER);
 		jdbc.query(statusSql, new MapSqlParameterSource(), rs -> {
 			statusCounts.put(AsyncTaskStatus.valueOf(rs.getString("status")), rs.getLong("count"));
 		});
@@ -294,14 +389,16 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				SELECT COUNT(*)
 				FROM %s
 				WHERE status = 'PENDING'
+				  AND %s
 				  AND attempts > 0
-				""".formatted(tables.requestQueue());
+				""".formatted(tables.requestQueue(), ASYNC_DELIVERY_MODE_FILTER);
 		Long retryCount = jdbc.queryForObject(retrySql, new MapSqlParameterSource(), Long.class);
 		String oldestSql = """
 				SELECT MIN(created_at)
 				FROM %s
 				WHERE status IN ('PENDING', 'IN_PROGRESS')
-				""".formatted(tables.requestQueue());
+				  AND %s
+				""".formatted(tables.requestQueue(), ASYNC_DELIVERY_MODE_FILTER);
 		Timestamp oldest = jdbc.queryForObject(oldestSql, new MapSqlParameterSource(), Timestamp.class);
 		return new AsyncTaskRepositoryStats(statusCounts, retryCount == null ? 0 : retryCount,
 				oldest == null ? null : oldest.toInstant());
@@ -341,7 +438,9 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				    :now,
 				    FALSE
 				)
-				ON CONFLICT (client_service, external_id) DO NOTHING
+				ON CONFLICT (client_service, external_id)
+				WHERE delivery_mode IN ('CALLBACK', 'POLLING')
+				DO NOTHING
 				RETURNING %s
 				""".formatted(tables.requestQueue(), returningColumns(null));
 		MapSqlParameterSource params = new MapSqlParameterSource()
@@ -362,7 +461,8 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				
 				WHERE client_service = :clientService
 				  AND external_id = :externalId
-				""";
+				  AND %s
+				""".formatted(ASYNC_DELIVERY_MODE_FILTER);
 		MapSqlParameterSource params = new MapSqlParameterSource()
 				.addValue("clientService", clientService)
 				.addValue("externalId", externalId);
@@ -372,7 +472,8 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 	private Optional<StoredAsyncTask> findStoredByTaskId(long taskId, Optional<String> clientService,
 			boolean forUpdate) {
 		MapSqlParameterSource params = new MapSqlParameterSource("taskId", taskId);
-		String sql = baseSelect() + "\nWHERE id = :taskId";
+		String sql = baseSelect() + "\nWHERE id = :taskId"
+				+ "\n  AND " + ASYNC_DELIVERY_MODE_FILTER;
 		if (clientService.isPresent()) {
 			sql += "\n  AND client_service = :clientService";
 			params.addValue("clientService", clientService.orElseThrow());
@@ -512,7 +613,7 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 	}
 
 	private static CallbackDeliveryStatus callbackStatus(AsyncDeliveryMode deliveryMode) {
-		if (deliveryMode == AsyncDeliveryMode.POLLING) {
+		if (deliveryMode != AsyncDeliveryMode.CALLBACK) {
 			return CallbackDeliveryStatus.NOT_REQUIRED;
 		}
 		return CallbackDeliveryStatus.PENDING;

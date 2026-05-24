@@ -21,6 +21,9 @@ public record ExternalAsyncRequest(
 		if (deliveryMode == null) {
 			deliveryMode = AsyncDeliveryMode.CALLBACK;
 		}
+		if (deliveryMode == AsyncDeliveryMode.SYNC) {
+			throw new IllegalArgumentException("deliveryMode=SYNC используется только для внутренних trace-записей");
+		}
 		if (payload != null) {
 			payload = AsyncPayloads.copyMap(payload);
 		}

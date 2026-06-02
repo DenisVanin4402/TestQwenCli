@@ -1,14 +1,13 @@
 package com.example.testqwencli.dashboard;
 
-import com.example.testqwencli.gateway.callback.CallbackClient;
-import com.example.testqwencli.gateway.callback.CallbackClientResponse;
-import com.example.testqwencli.gateway.callback.CallbackPayload;
+import com.example.testqwencli.gateway.client.CallbackClient;
+import com.example.testqwencli.gateway.model.callback.CallbackClientResponse;
+import com.example.testqwencli.gateway.model.callback.CallbackPayload;
+import java.net.URI;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.Objects;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
-
-import java.net.URI;
-import java.util.Objects;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @Primary

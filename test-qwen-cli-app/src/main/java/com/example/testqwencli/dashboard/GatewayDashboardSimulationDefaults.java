@@ -1,11 +1,10 @@
 package com.example.testqwencli.dashboard;
 
-import com.example.testqwencli.gateway.sync.config.ExternalGatewayUpstreamProperties;
+import com.example.testqwencli.gateway.config.ExternalGatewayUpstreamProperties;
+import java.util.Objects;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
-
-import java.util.Objects;
 
 @Component
 class GatewayDashboardSimulationDefaults implements ApplicationRunner {

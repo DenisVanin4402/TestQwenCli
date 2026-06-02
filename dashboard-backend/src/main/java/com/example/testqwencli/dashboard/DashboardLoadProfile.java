@@ -6,6 +6,19 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
+/**
+ * Профиль нагрузки, который дашборд использует для генерации sync- и async-запросов к gateway.
+ *
+ * @param syncRps целевая интенсивность синхронных запросов в секунду; {@code 0} отключает sync-нагрузку.
+ * @param asyncRps целевая интенсивность асинхронных submit-запросов в секунду; {@code 0} отключает async-нагрузку.
+ * @param highPriorityPercent доля async-запросов с приоритетом {@link DashboardRequestPriority#HIGH}, от {@code 0}
+ * до {@code 100}.
+ * @param timeoutMs таймаут sync-вызова gateway из дашборда; если передан {@code 0}, используется значение по
+ * умолчанию.
+ * @param dispatchBatchSize размер батча, который дашборд просит использовать для ручного async/callback dispatch.
+ * @param clientServices список клиентских сервисов, между которыми распределяется нагрузка; пустой список заменяется
+ * сервисами по умолчанию.
+ */
 public record DashboardLoadProfile(
 		@Min(0) @Max(300) int syncRps,
 		@Min(0) @Max(500) int asyncRps,
@@ -37,6 +50,11 @@ public record DashboardLoadProfile(
 		}
 	}
 
+	/**
+	 * Возвращает базовый профиль для локальной проверки gateway без ручной настройки дашборда.
+	 *
+	 * @return профиль с умеренной sync/async нагрузкой и двумя клиентскими сервисами.
+	 */
 	public static DashboardLoadProfile defaults() {
 		return new DashboardLoadProfile(18, 28, 35, 1500, 30, DEFAULT_CLIENT_SERVICES);
 	}

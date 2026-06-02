@@ -1,23 +1,22 @@
 package com.example.testqwencli.dashboard;
 
-import com.example.testqwencli.gateway.async.AsyncTaskRepository;
-import com.example.testqwencli.gateway.async.AsyncTaskRepositoryStats;
-import com.example.testqwencli.gateway.async.AsyncTaskStatus;
-import com.example.testqwencli.gateway.async.CallbackDeliveryStatus;
-import com.example.testqwencli.gateway.callback.CallbackDeliveryRepository;
-import com.example.testqwencli.gateway.callback.CallbackDeliveryRepositoryStats;
-import com.example.testqwencli.gateway.slot.SlotKind;
-import com.example.testqwencli.gateway.slot.SlotRepository;
-import com.example.testqwencli.gateway.slot.config.ExternalGatewaySlotProperties;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
+import com.example.testqwencli.gateway.config.ExternalGatewaySlotProperties;
+import com.example.testqwencli.gateway.model.async.AsyncTaskRepositoryStats;
+import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.callback.CallbackDeliveryRepositoryStats;
+import com.example.testqwencli.gateway.model.slot.SlotKind;
+import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
+import com.example.testqwencli.gateway.repository.CallbackDeliveryRepository;
+import com.example.testqwencli.gateway.repository.SlotRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
 
 @Service
 class GatewayDashboardHealthProvider implements DashboardHealthProvider {

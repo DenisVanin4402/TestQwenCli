@@ -1,13 +1,12 @@
 package com.example.testqwencli.dashboard;
 
-import com.example.testqwencli.gateway.async.ExternalAsyncService;
-import com.example.testqwencli.gateway.sync.ExternalSyncService;
-import com.example.testqwencli.gateway.sync.error.UpstreamTimeoutException;
-import org.junit.jupiter.api.Test;
-
+import com.example.testqwencli.gateway.exception.UpstreamTimeoutException;
+import com.example.testqwencli.gateway.services.ExternalAsyncService;
+import com.example.testqwencli.gateway.services.ExternalSyncService;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

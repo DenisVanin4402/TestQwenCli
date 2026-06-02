@@ -1,7 +1,11 @@
 package com.example.testqwencli;
 
-import com.example.testqwencli.gateway.slot.postgres.PostgresSlotReleaseNotificationListener;
-import com.example.testqwencli.gateway.slot.postgres.PostgresSlotReleaseNotificationPublisher;
+import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationListener;
+import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationPublisher;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,11 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.servlet.MockMvc;
-
-import javax.sql.DataSource;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;

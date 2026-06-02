@@ -1,5 +1,13 @@
 package com.example.testqwencli.dashboard;
 
+/**
+ * Результат одного async-submit вызова gateway из нагрузочного дашборда.
+ *
+ * @param status нормализованный статус submit-операции.
+ * @param durationMs полная длительность submit-вызова в миллисекундах.
+ * @param code технический код ответа или ошибки; используется для диагностики отклонений.
+ * @param taskId идентификатор созданной или переиспользованной async-задачи; {@code null}, если submit не принят.
+ */
 public record DashboardSubmitOutcome(
 		DashboardSubmitStatus status,
 		long durationMs,

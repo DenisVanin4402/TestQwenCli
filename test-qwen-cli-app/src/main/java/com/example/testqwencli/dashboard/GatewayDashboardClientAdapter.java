@@ -1,20 +1,20 @@
 package com.example.testqwencli.dashboard;
 
-import com.example.testqwencli.gateway.async.AsyncDeliveryMode;
-import com.example.testqwencli.gateway.async.AsyncPriority;
-import com.example.testqwencli.gateway.async.AsyncSubmitResponse;
-import com.example.testqwencli.gateway.async.ExternalAsyncRequest;
-import com.example.testqwencli.gateway.async.ExternalAsyncService;
-import com.example.testqwencli.gateway.async.error.AsyncIdempotencyConflictException;
-import com.example.testqwencli.gateway.sync.ExternalSyncHeaders;
-import com.example.testqwencli.gateway.sync.ExternalSyncRequest;
-import com.example.testqwencli.gateway.sync.ExternalSyncService;
-import com.example.testqwencli.gateway.sync.error.ExternalGatewayException;
-import com.example.testqwencli.gateway.sync.error.NoSlotAvailableException;
-import org.springframework.stereotype.Service;
-
+import com.example.testqwencli.gateway.exception.AsyncIdempotencyConflictException;
+import com.example.testqwencli.gateway.exception.ExternalGatewayException;
+import com.example.testqwencli.gateway.exception.NoSlotAvailableException;
+import com.example.testqwencli.gateway.model.async.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.AsyncPriority;
+import com.example.testqwencli.gateway.model.async.AsyncSubmitResponse;
+import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
+import com.example.testqwencli.gateway.model.callback.CallbackDelivery;
+import com.example.testqwencli.gateway.model.sync.ExternalSyncHeaders;
+import com.example.testqwencli.gateway.model.sync.ExternalSyncRequest;
+import com.example.testqwencli.gateway.services.ExternalAsyncService;
+import com.example.testqwencli.gateway.services.ExternalSyncService;
 import java.time.Duration;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 @Service
 class GatewayDashboardClientAdapter implements DashboardGatewayClient {

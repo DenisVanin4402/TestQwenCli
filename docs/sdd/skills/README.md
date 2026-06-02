@@ -110,3 +110,68 @@ skills/
 - [ ] Git WorkTree для проектирования нескольких фичей одновременно
 - [ ] Поддержка MCP для PlantUML, Mermaid и Draw.io
 - [ ] Локальные overrides для skills и references
+
+## Обучающие примеры
+
+В примерах ниже "команда" означает фразу в чате агенту. Отдельный OpenSpec CLI не нужен: агент выбирает нужный skill и работает с файлами в репозитории.
+
+### Стандартный workflow
+
+1. Подготовить master specification:
+   - Команда: `инициализируй master spec для external-gateway`
+   - Естественная фраза: `я положил документацию сервиса в openspec/external-gateway, подключи ее как мастер спецификацию`
+   - Ожидаемый шаг: `openspec-init-master-spec` создает или обновляет `_sdd/manifest.yaml`, `navigation.md`, `coverage.md`, `stale-files.md`.
+
+2. Оформить изменение требований:
+   - Команда: `создай change add-callback-retry-policy для external-gateway`
+   - Естественная фраза: `хочу поменять retry policy для callback delivery, оформи change-request`
+   - Ожидаемый шаг: `openspec-propose` читает `_sdd/navigation.md`, `_sdd/manifest.yaml`, выбирает релевантные документы и создает `openspec/changes/<name>/change.md`.
+
+3. Согласовать change:
+   - Команда: `change add-callback-retry-policy согласован`
+   - Естественная фраза: `PR с change.md замержен, можно готовить реализацию`
+   - Ожидаемый шаг: аналитик вручную меняет статус в `change.md` на `Согласовано`.
+
+4. Подготовить технический проект:
+   - Команда: `подготовь design и tasks для add-callback-retry-policy`
+   - Естественная фраза: `распиши технический план реализации и задачи по этому change`
+   - Ожидаемый шаг: `openspec-design` создает `design.md` и `tasks.md`, используя `change.md`, manifest и источники master specification.
+
+5. Реализовать задачи:
+   - Команда: `реализуй tasks для add-callback-retry-policy`
+   - Естественная фраза: `пора кодить этот change, выполняй задачи по плану`
+   - Ожидаемый шаг: `openspec-implement` выполняет рабочие чекбоксы в `tasks.md`, обновляет статус на `В реализации`, запускает сборку/тесты/линтер.
+
+6. Проверить или применить изменения master spec:
+   - Команда: `проверь master spec update для add-callback-retry-policy`
+   - Естественная фраза: `реализация готова, проверь что документация master spec обновлена`
+   - Ожидаемый шаг: по `Spec update mode` выполняется branch-diff verify или manual-change через `openspec-apply-change`.
+
+7. Архивировать change:
+   - Команда: `архивируй change add-callback-retry-policy`
+   - Естественная фраза: `change завершен, перенеси его в архив`
+   - Ожидаемый шаг: `openspec-archive-change` переносит каталог в `openspec/changes/archive/YYYY-MM-DD-<name>/`.
+
+### Быстрые команды и фразы
+
+| Что нужно сделать | Командная формулировка | Естественная формулировка | Skill |
+|---|---|---|---|
+| Понять workflow | `объясни openspec workflow` | `как тут правильно работать со спеками?` | `openspec-teach` |
+| Подключить папку документов | `инициализируй master spec service=external-gateway` | `собери manifest и navigation для openspec/external-gateway` | `openspec-init-master-spec` |
+| Обновить manifest после правок | `refresh master spec external-gateway` | `я поменял документы, обнови _sdd` | `openspec-init-master-spec` |
+| Исследовать сервис read-only | `research codebase target=spec service=external-gateway` | `картируй сервис external-gateway без правок` | `openspec-explore` |
+| Исследовать зону изменения | `research target=change service=external-gateway anchor=callback delivery` | `собери карту зоны изменения вокруг callback delivery` | `openspec-explore` |
+| Создать change | `propose add-callback-retry-policy` | `нужно добавить retry policy для callback delivery, оформи CR` | `openspec-propose` |
+| Подготовить design/tasks | `design add-callback-retry-policy` | `спроектируй реализацию и разбей на задачи` | `openspec-design` |
+| Продолжить реализацию | `implement add-callback-retry-policy` | `продолжи реализацию с первой невыполненной задачи` | `openspec-implement` |
+| Проверить обновление документации | `apply-change add-callback-retry-policy` | `проверь, что change отражен в master spec documents` | `openspec-apply-change` |
+| Закрыть change | `archive add-callback-retry-policy` | `заархивируй завершенный change` | `openspec-archive-change` |
+
+### Типовые ветвления
+
+- Если `openspec/<service>/_sdd/manifest.yaml` отсутствует, следующий шаг всегда `openspec-init-master-spec`.
+- Если `stale-files.md` непустой, сначала сделай refresh или явно подтверди продолжение с риском stale manifest.
+- Если change еще `На согласовании`, нельзя запускать реализацию; нужно завершить ревью и поставить `Согласовано`.
+- Если `tasks.md` отсутствует, перед реализацией запусти `openspec-design`.
+- Если `Spec update mode = branch-diff`, после реализации проверяется diff документов master spec.
+- Если `Spec update mode = manual-change`, после реализации нужно явно обновить выбранные документы master spec и затем сделать refresh `_sdd`.

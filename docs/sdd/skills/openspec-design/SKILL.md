@@ -52,7 +52,9 @@ openspec/changes/<name>/change.md
 - `Мастер-спецификация`;
 - `Manifest`;
 - `Spec update mode`;
+- для `Spec update mode: branch-diff`: `Base ref`, `Analyst ref`, `Diff mode`, `Merge base`, `Diff command`;
 - `## 0. Источники master specification`;
+- если есть: `## 0. Источники изменения`;
 - все функциональные разделы change;
 - критерии приемки.
 
@@ -61,14 +63,30 @@ openspec/changes/<name>/change.md
 ### 5. Прочитать master-spec context
 
 1. Из шапки change возьми master-spec root.
-2. Прочитай `root/_sdd/navigation.md`.
-3. Прочитай `root/_sdd/manifest.yaml`.
-4. Прочитай документы из `## 0. Источники master specification`.
-5. При необходимости прочитай `read_priority=high` документы и `related_files`/`depends_on` из manifest.
+2. Если `Spec update mode: branch-diff` и существует `openspec/changes/<name>/.spec-diff/changed-files.yaml`, прочитай его перед проектированием.
+3. Если `Spec update mode: branch-diff` и существует `openspec/changes/<name>/.spec-diff/context-files.yaml`, прочитай его перед выбором дополнительных документов.
+4. Прочитай `root/_sdd/navigation.md`, если файл есть в текущей ветке.
+5. Прочитай `root/_sdd/manifest.yaml`, если файл есть в текущей ветке.
+6. Прочитай документы из `## 0. Источники master specification` или `## 0. Источники изменения`.
+7. При необходимости прочитай `read_priority=high` документы и `related_files`/`depends_on` из manifest.
 
 Не читай всю папку master spec рекурсивно.
 
 Если manifest отсутствует или явно stale, предложи `openspec-init-master-spec`.
+
+Для `branch-diff` текущая рабочая ветка может не содержать документы analyst ref. В этом случае читай нужные файлы без checkout:
+
+```bash
+git show <analyst_ref>:<path>
+```
+
+Если файл удален в analyst ref, читай old content из `base_ref`:
+
+```bash
+git show <base_ref>:<path>
+```
+
+Не выполняй checkout base/analyst refs.
 
 ### 6. Изучить код точечно
 
@@ -84,6 +102,7 @@ openspec/changes/<name>/change.md
 
 - добавь `## Источники требований`;
 - перечисли master-spec documents и что из них взято;
+- для `branch-diff` добавь diff metadata: base ref, analyst ref, diff mode, merge-base, changed-files.yaml;
 - перечисли `change.md`, research notes и ключевые code references;
 - ссылайся на конкретные сущности кода проекта;
 - не придумывай технологии и библиотеки, которых нет в проекте.
@@ -116,6 +135,7 @@ openspec/changes/<name>/tasks.md
 - design ссылается на master-spec documents и кодовые сущности;
 - tasks покрывают change requirements и acceptance;
 - tasks не требуют автоматического final apply-change;
+- для `branch-diff` tasks предлагают verify master-spec source, а не обязательный apply-change;
 - следующий шаг учитывает `Spec update mode`.
 
 ---

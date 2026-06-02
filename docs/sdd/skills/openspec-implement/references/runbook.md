@@ -96,7 +96,7 @@ e. Переходи к следующей задаче.
 Все задачи выполнены и верификация пройдена.
 
 Следующий шаг зависит от `Spec update mode` в `change.md`:
-- `branch-diff` — проверь, что документы master specification, указанные в `change.md`, уже обновлены в ветке; затем можно архивировать change.
+- `branch-diff` — проверь, что документы master specification уже находятся в `Analyst ref`, сравни metadata с `.spec-diff/changed-files.yaml`, затем можно архивировать change.
 - `manual-change` — явно обнови нужные документы master specification или запусти `openspec-apply-change` только как manual-apply gateway.
 - mode отсутствует — выбери mode перед финальным обновлением master spec.
 ```

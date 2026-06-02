@@ -53,7 +53,8 @@ openspec/changes/<name>/
 - `> **Spec update mode**:`;
 - `> **Мастер-спецификация**:`;
 - `> **Manifest**:`;
-- `## 0. Источники master specification`.
+- `## 0. Источники master specification` или `## 0. Источники изменения`;
+- для `Spec update mode: branch-diff`: `Base ref`, `Analyst ref`, `Diff mode`, `Merge base`.
 
 Статусы обрабатывай по `references/runbook.md`: `Согласовано` автоматически переводится в `В реализации`, `В реализации` продолжается, остальные статусы блокируют или требуют подтверждения.
 
@@ -73,7 +74,9 @@ openspec/changes/<name>/
 
 - master-spec root;
 - manifest;
-- sources из `## 0. Источники master specification`.
+- sources из `## 0. Источники master specification` или `## 0. Источники изменения`.
+
+Если `Spec update mode: branch-diff` и существует `.spec-diff/changed-files.yaml`, прочитай его для понимания source-of-truth документов. Не меняй master-spec documents в рамках implement.
 
 Не редактируй master-spec documents в рамках implement без явного задания в рабочей задаче.
 
@@ -110,9 +113,16 @@ openspec/changes/<name>/
 - перечисли команды верификации и результат;
 - покажи `Spec update mode`;
 - предложи следующий шаг:
-  - `branch-diff`: проверить, что документы master specification из `change.md` обновлены в ветке, затем архивировать change;
+  - `branch-diff`: проверить, что документы master specification из `change.md` уже находятся в `Analyst ref`, затем архивировать change;
   - `manual-change`: явно обновить документы master specification или запустить `openspec-apply-change` только как manual-apply gateway;
   - mode неизвестен: попросить пользователя выбрать mode перед финальным обновлением master spec.
+
+Для `branch-diff` в итоговом отчете явно укажи:
+
+```text
+Master-spec изменения являются source-of-truth в Analyst ref: <analyst_ref>.
+Финальный apply-change не требуется по умолчанию; следующий шаг — verify source и archive.
+```
 
 ---
 
@@ -125,3 +135,4 @@ openspec/changes/<name>/
 - Не докладывай завершение без верификации или явной фиксации невозможности верификации.
 - Не считай `openspec-apply-change` обязательным финальным шагом.
 - Не редактируй master-spec documents без явной задачи или выбранного manual-change процесса.
+- Для `branch-diff` не предлагай mandatory final apply-change; предлагай verify master-spec source.

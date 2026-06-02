@@ -24,7 +24,8 @@ metadata:
 - `openspec/changes/<name>/` — активные change-запросы:
   - `change.md` — предложение системного аналитика;
   - `design.md` — технический проект;
-  - `tasks.md` — план задач на реализацию.
+  - `tasks.md` — план задач на реализацию;
+  - `.spec-diff/` — metadata и artifacts для change, созданного из diff веток.
 - `openspec/changes/archive/YYYY-MM-DD-<name>/` — завершенные change-запросы.
 
 `openspec/changes/` — системная директория. Имена сервисов `changes`, `archive`, `_sdd`, `_system` зарезервированы.
@@ -39,6 +40,7 @@ metadata:
 | `openspec-init-master-spec` | Создать или обновить `_sdd/manifest.yaml`, `navigation.md`, `coverage.md`, `stale-files.md` для `openspec/<service>/` |
 | `openspec-explore` | Structured research кодовой базы: read-only субагенты и YAML-агрегация |
 | `openspec-propose` | Создать `change.md` на основе master-spec folder и manifest |
+| `openspec-change-from-diff` | Создать `change.md` из git diff двух локальных refs по `openspec/<service>/` |
 | `openspec-design` | Создать `design.md` и `tasks.md` из согласованного change |
 | `openspec-implement` | Выполнить `tasks.md` с обязательной верификацией |
 | `openspec-apply-change` | Manual-apply/verify gateway; автоматический merge произвольных folder docs не является основным путем |
@@ -50,19 +52,26 @@ metadata:
 1. **Подключение документации сервиса** — пользователь помещает документы в `openspec/<service>/`.
 2. **Инициализация master spec** — `openspec-init-master-spec` создает `_sdd` navigation layer.
 3. **Предложение изменения** — `openspec-propose` создает `change.md` со статусом `На согласовании`.
+   Если аналитик уже изменил master-spec documents в отдельной ветке/ref, `openspec-change-from-diff` создает `change.md` из diff.
 4. **Ревью и согласование** — PR merge, статус вручную меняется на `Согласовано`.
 5. **Технический проект** — `openspec-design` создает `design.md` и `tasks.md` для сложных CR.
 6. **Реализация** — `openspec-implement` выполняет задачи, ставит `В реализации`, запускает сборку/тесты/линтер.
 7. **Проверка или обновление master spec** — по `Spec update mode`:
-   - `branch-diff`: проверить, что документы master spec уже обновлены;
+   - `branch-diff`: проверить, что документы master spec уже находятся в `Analyst ref`;
    - `manual-change`: явно обновить нужные документы, при необходимости через `openspec-apply-change` как ручной gateway.
 8. **Архивация** — `openspec-archive-change` переносит change в архив.
+
+Branch-diff lifecycle:
+
+```text
+init-master-spec -> change-from-diff -> design -> implement -> verify/archive
+```
 
 ## Статусы change.md
 
 | Статус | Кто ставит | Когда |
 |---|---|---|
-| На согласовании | `openspec-propose` | Change создан, идет ревью в PR |
+| На согласовании | `openspec-propose` / `openspec-change-from-diff` | Change создан, идет ревью в PR |
 | Согласовано | Аналитик вручную | PR с `change.md` вмержен, change одобрен |
 | В реализации | `openspec-implement` | Первый запуск implement, идет кодинг по `tasks.md` |
 | Реализовано | Пользователь / verify / apply | Код и master spec обновлены выбранным mode |
@@ -102,6 +111,7 @@ Skills OpenSpec ссылаются на собственные `templates/*` и 
 |---|---|
 | `openspec-init-master-spec` | "инициализируй master spec", "подключи папку как мастер спецификацию", "собери manifest", "обнови navigation/manifest", "refresh master spec" |
 | `openspec-propose` | "добавим", "поменяем", "изменим", "уберем", "сделай change", "оформим CR", "обнови требования" |
+| `openspec-change-from-diff` | "создай change из diff веток", "сгенерируй change.md по ветке аналитика", "получи change по base branch и analyst branch", "change from git diff", "ветка аналитика уже изменила master spec" |
 | `openspec-design` | "техпроект", "дизайн", "распиши задачи", "подготовь tasks", "план реализации" |
 | `openspec-implement` | "реализуй", "начни задачи", "пиши код по плану", "продолжи реализацию" |
 | `openspec-apply-change` | "применить change к master spec", "проверить обновление спеки", "manual apply", "внести change в документы" |
@@ -113,10 +123,12 @@ Skills OpenSpec ссылаются на собственные `templates/*` и 
 
 - Есть `openspec/<service>/`, но нет `_sdd/manifest.yaml` — `openspec-init-master-spec`.
 - Нужно изменить существующий сервис — `openspec-propose`.
+- Нужно получить change из изменений master-spec в analyst branch — `openspec-change-from-diff`.
 - Есть согласованный `change.md`, но нет `tasks.md` — `openspec-design`.
 - Есть `tasks.md`, пора кодить — `openspec-implement`.
 - Реализация завершена — смотри `Spec update mode`, затем verify/manual apply и archive.
 - Новый сервис больше не означает создание одного большого файла: сначала folder-based docs, затем init manifest.
+- Для branch-diff refs должны быть локальными; агент не делает `git fetch`, `git pull` и checkout base/analyst веток.
 
 ## Следующий шаг
 
@@ -124,6 +136,7 @@ Skills OpenSpec ссылаются на собственные `templates/*` и 
 
 - нет `_sdd/manifest.yaml` для сервиса → `openspec-init-master-spec`;
 - нужно оформить изменение → `openspec-propose`;
+- аналитик уже изменил master spec в ветке → `openspec-change-from-diff`;
 - нужно получить разовую карту сервиса или зоны изменения → `openspec-explore`;
 - есть согласованный change, пора проектировать → `openspec-design`;
 - готов `tasks.md`, пора реализовывать → `openspec-implement`;

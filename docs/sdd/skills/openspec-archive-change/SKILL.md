@@ -39,6 +39,8 @@ ls openspec/changes/ 2>/dev/null
 - Спроси подтверждение через **AskUserQuestion tool**
 - Продолжи при подтверждении
 
+Проверь, есть ли `openspec/changes/<name>/.spec-diff/`. Если есть, зафиксируй в output, что diff metadata будет архивирована вместе с change. Отдельно копировать, очищать или преобразовывать `.spec-diff/` не нужно.
+
 ### 3. Проверь статус change.md
 
 Прочитай `openspec/changes/<name>/change.md` и проверь поле `> **Статус**:` в шапке:
@@ -60,6 +62,8 @@ ls openspec/changes/ 2>/dev/null
 Меняй ТОЛЬКО строку `> **Статус**:`, ничего больше.
 
 **b. Перемести директорию**
+
+Вся директория `openspec/changes/<name>/` перемещается целиком. Это включает `change.md`, `design.md`, `tasks.md`, `.research/`, `.research-notes.md` и `.spec-diff/`, если они есть.
 
 ```bash
 mkdir -p openspec/changes/archive
@@ -87,7 +91,7 @@ mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>
 **Change:** <change-name>
 **Archived to:** openspec/changes/archive/YYYY-MM-DD-<name>/
 
-Все артефакты завершены. Change архивирован.
+Все артефакты завершены. Change архивирован. Если у change была `.spec-diff/`, diff metadata сохранена в архиве.
 ```
 
 ## Output With Warnings
@@ -113,4 +117,5 @@ mv openspec/changes/<name> openspec/changes/archive/YYYY-MM-DD-<name>
 - Проверяй статус по содержимому change.md, а не через CLI
 - НЕ блокируй архивацию при предупреждениях — информируй и подтверждай
 - Вся директория change перемещается целиком
+- `.spec-diff/` архивируется вместе с директорией change, без отдельного merge или очистки
 - Покажи понятный итог

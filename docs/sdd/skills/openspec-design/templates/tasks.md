@@ -40,6 +40,7 @@
 ### Master specification
 
 - [ ] Проверено, что реализация соответствует документам master specification, указанным в change.md.
+- [ ] Для `Spec update mode: branch-diff` проверено, что source-of-truth документы находятся в `Analyst ref`, а `.spec-diff/changed-files.yaml` соответствует текущему diff summary.
 
 ### Основной сценарий
 

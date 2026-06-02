@@ -12,6 +12,8 @@ metadata:
 
 `change.md` описывает ЗАЧЕМ и ЧТО меняется. Он не описывает КАК реализовать изменение в коде и не требует single-file target spec.
 
+Если пользователь просит создать change из diff веток, указывает `base_ref`/`analyst_ref` или говорит, что ветка аналитика уже изменила master spec, не используй этот skill. Используй `openspec-change-from-diff`.
+
 **Input**: название change в kebab-case или описание изменения. Нужно определить `service` и `change name`.
 
 **Bundle-пути**
@@ -48,6 +50,8 @@ metadata:
 - ограничения;
 - обратная совместимость;
 - предполагаемый `Spec update mode`: `manual-change` или `branch-diff`.
+
+Если на этом этапе выяснилось, что `branch-diff` уже имеет конкретные `base_ref` и `analyst_ref`, останови `openspec-propose` и переключись на `openspec-change-from-diff`.
 
 Не создавай `change.md` после одного ответа. Подведи итог и получи явное подтверждение.
 

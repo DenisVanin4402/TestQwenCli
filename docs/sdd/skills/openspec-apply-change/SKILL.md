@@ -15,7 +15,7 @@ metadata:
 - читает `Spec update mode`;
 - определяет затронутые master-spec documents;
 - предупреждает о рисках;
-- для `branch-diff` проверяет, что документы уже обновлены;
+- для `branch-diff` проверяет, что документы уже обновлены в `Analyst ref` и diff metadata не разошлась;
 - для `manual-change` помогает пользователю явно выбрать документы и режим правки;
 - не требует и не выполняет single-file merge по умолчанию.
 
@@ -60,7 +60,9 @@ openspec/changes/<name>/change.md
 - `Мастер-спецификация`;
 - `Manifest`;
 - `Spec update mode`;
+- для `Spec update mode: branch-diff`: `Base ref`, `Analyst ref`, `Diff mode`, `Merge base`, `Diff command`;
 - `## 0. Источники master specification`.
+- если есть: `## 0. Источники изменения`.
 
 Затем прочитать:
 
@@ -70,15 +72,65 @@ openspec/changes/<name>/change.md
 
 Если manifest отсутствует или stale, предложить `openspec-init-master-spec`.
 
+Для `branch-diff` текущая ветка может не содержать master-spec docs analyst ref. В этом случае не считай отсутствие локальных файлов blocker для verify source: читай документы через `git show <analyst_ref>:<path>`.
+
 ### 4. Обработать `Spec update mode`
 
 #### `branch-diff`
 
-1. Сравнить документы master spec, указанные в `change.md`, с base branch через git diff.
-2. Проверить, что изменения требований из `change.md` отражены в соответствующих документах.
-3. Проверить, что `_sdd/manifest.yaml`, `navigation.md` и `coverage.md` обновлены или явно требуют refresh.
-4. Если все подтверждено, можно заменить статус change на `Реализовано`.
-5. Если не подтверждено, вывести список документов и gaps для ручной правки.
+Default mode не изменяет master-spec documents.
+
+1. Проверить локальные refs:
+
+```bash
+git rev-parse --verify <base_ref>
+git rev-parse --verify <analyst_ref>
+```
+
+2. Для `three-dot` проверить merge-base:
+
+```bash
+git merge-base <base_ref> <analyst_ref>
+```
+
+3. Повторить diff summary:
+
+```bash
+git diff --name-status --find-renames <range> -- openspec/<service>/
+git diff --stat <range> -- openspec/<service>/
+```
+
+4. Если есть `.spec-diff/changed-files.yaml`, сравнить текущий `name-status` с записанным metadata.
+5. Проверить, что master-spec изменения действительно существуют в `analyst_ref` через `git show <analyst_ref>:<path>`.
+6. Проверить, что изменения требований из `change.md` отражены в changed/context documents.
+7. Проверить, что `_sdd/manifest.yaml`, `navigation.md` и `coverage.md` обновлены или явно требуют refresh.
+8. Если нужно проверить, что текущая ветка уже содержит документы analyst ref, использовать:
+
+```bash
+git diff --quiet <analyst_ref> -- openspec/<service>/
+```
+
+Если команда показывает отличия, вывести warning, но не применять изменения автоматически.
+
+9. Если все подтверждено, можно заменить статус change на `Реализовано`.
+10. Если не подтверждено, вывести список документов и gaps для ручной правки.
+
+Explicit apply override разрешен только по явному запросу пользователя. Перед ним обязательно:
+
+1. Проверить clean status master-spec root:
+
+```bash
+git status --porcelain -- openspec/<service>/
+```
+
+2. Если есть незакоммиченные изменения — остановиться.
+3. Предупредить, что операция изменит master-spec documents текущей ветки и не является default branch-diff workflow.
+4. Получить явное подтверждение пользователя.
+5. Только после этого выполнить:
+
+```bash
+git checkout <analyst_ref> -- openspec/<service>/
+```
 
 #### `manual-change`
 
@@ -121,6 +173,7 @@ openspec/changes/<name>/change.md
 ## Guardrails
 
 - Не выполняй автоматический merge в произвольные folder-based documents без явного подтверждения пользователя.
+- Для `branch-diff` default mode — verify only, без изменения master-spec documents.
 - Не требуй single-file target spec.
 - Не создавай `.bak`-файлы.
 - Не скрывай gaps: если документ не обновлен, покажи это как blocker.

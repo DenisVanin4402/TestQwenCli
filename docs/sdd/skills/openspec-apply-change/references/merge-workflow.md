@@ -22,11 +22,43 @@ Master specification теперь является папкой `openspec/<servi
 
 Проверки:
 
+- `Base ref` и `Analyst ref` существуют локально;
+- для `three-dot` merge-base совпадает с metadata change;
+- повторный `git diff --name-status --find-renames <range> -- openspec/<service>/` совпадает с `.spec-diff/changed-files.yaml`, если artifact есть;
 - документы из `## 0. Источники master specification` имеют релевантный diff;
 - измененные entities/endpoints/integrations/events отражены в документах;
 - manifest hash обновлен или требуется refresh;
 - coverage gaps не скрыты;
 - `stale-files.md` пустой или содержит понятные manual-review пункты.
+
+Default mode для `branch-diff` ничего не применяет в текущий worktree. Проверочные команды:
+
+```bash
+git rev-parse --verify <base_ref>
+git rev-parse --verify <analyst_ref>
+git diff --name-status --find-renames <base_ref>...<analyst_ref> -- openspec/<service>/
+git diff --stat <base_ref>...<analyst_ref> -- openspec/<service>/
+```
+
+Если нужно проверить, что текущая ветка уже содержит master-spec документы analyst ref:
+
+```bash
+git diff --quiet <analyst_ref> -- openspec/<service>/
+```
+
+Несовпадение выводится как warning. Автоматически применять изменения нельзя.
+
+Explicit apply override:
+
+1. Проверить `git status --porcelain -- openspec/<service>/`.
+2. Остановиться при незакоммиченных изменениях.
+3. Предупредить пользователя о правке master-spec documents текущей ветки.
+4. Получить явное подтверждение.
+5. Только затем выполнить:
+
+```bash
+git checkout <analyst_ref> -- openspec/<service>/
+```
 
 ### `manual-change`
 
@@ -63,6 +95,7 @@ Master specification теперь является папкой `openspec/<servi
 
 - Не создавать `.bak`-файлы.
 - Не выполнять blind merge в несколько документов.
+- Не применять branch-diff docs в текущий worktree без clean status и явного подтверждения.
 - Не игнорировать бинарные или нечитаемые артефакты.
 - Не считать отсутствие diff успешной проверкой.
 - Не обновлять manifest вручную без пересчета hash.

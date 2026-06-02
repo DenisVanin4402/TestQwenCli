@@ -13,6 +13,7 @@
 | `openspec-init-master-spec` | Инициализация или refresh `openspec/<service>/_sdd/manifest.yaml`, `navigation.md`, `coverage.md`, `stale-files.md` |
 | `openspec-explore` | Read-only structured research кодовой базы или зоны изменения |
 | `openspec-propose` | Создание предложения об изменении master specification (`change.md`) |
+| `openspec-change-from-diff` | Создание `change.md` из git diff двух локальных refs по `openspec/<service>/` |
 | `openspec-design` | Создание технического проекта (`design.md`) и плана задач (`tasks.md`) на основе согласованного `change.md` |
 | `openspec-implement` | Реализация `tasks.md` с последовательным выполнением задач и обязательной верификацией |
 | `openspec-apply-change` | Осторожный manual-apply/verify интерфейс; автоматический single-file merge больше не является основным путем |
@@ -24,19 +25,27 @@
 0. Если агент впервые работает с OpenSpec в проекте или пользователь спрашивает про процесс — запусти `openspec-teach`.
 1. Помести документацию сервиса в `openspec/<service-name>/`.
 2. Запусти `openspec-init-master-spec`: он создаст `_sdd/manifest.yaml`, `_sdd/navigation.md`, `_sdd/coverage.md` и при необходимости `_sdd/stale-files.md`.
-3. Для изменения требований запусти `openspec-propose`: он создаст `openspec/changes/<name>/change.md` и выберет документы master spec через manifest.
+3. Для изменения требований запусти:
+   - `openspec-propose`, если требования формируются сейчас через интервью и чтение master spec;
+   - `openspec-change-from-diff`, если аналитик уже изменил `openspec/<service>/` в отдельной локальной ветке/ref.
 4. После PR-ревью аналитик вручную ставит статус `Согласовано`.
 5. Для сложного CR запусти `openspec-design`: он создаст `design.md` и `tasks.md`.
 6. Запусти `openspec-implement`: он выполнит задачи из `tasks.md` и прогонит сборку/тесты/линтер перед завершением.
 7. Дальнейшее обновление master spec зависит от `Spec update mode`:
-   - `branch-diff` — проверь, что документы master spec уже обновлены в ветке;
+   - `branch-diff` — проверь, что документы master spec уже находятся в `Analyst ref`;
    - `manual-change` — явно обнови нужные документы master spec или используй `openspec-apply-change` как ручной gateway.
 8. Запусти `openspec-archive-change`, чтобы перенести change в `openspec/changes/archive/YYYY-MM-DD-<name>/`.
 
 ```text
-teach -> init-master-spec -> propose -> review/approve -> design? -> implement -> verify/apply? -> archive-change
+teach -> init-master-spec -> propose/change-from-diff -> review/approve -> design? -> implement -> verify/apply? -> archive-change
                        \                                      /
                         -------- explore (read-only) --------
+```
+
+Branch-diff lifecycle:
+
+```text
+init-master-spec -> change-from-diff -> design -> implement -> verify/archive
 ```
 
 ## Layout
@@ -60,6 +69,7 @@ openspec/
       change.md
       design.md
       tasks.md
+      .spec-diff/
       .research/
       .research-notes.md
     archive/
@@ -72,7 +82,7 @@ openspec/
 
 | Статус | Кто ставит | Когда |
 |---|---|---|
-| На согласовании | `openspec-propose` | Change создан, идет ревью в PR |
+| На согласовании | `openspec-propose` / `openspec-change-from-diff` | Change создан, идет ревью в PR |
 | Согласовано | Аналитик вручную | PR с `change.md` вмержен, change одобрен |
 | В реализации | `openspec-implement` | Первый запуск implement, идет кодинг по `tasks.md` |
 | Реализовано | Пользователь / verify / apply | Код и master spec обновлены выбранным mode |
@@ -97,6 +107,7 @@ skills/
 ├── openspec-init-master-spec/SKILL.md
 ├── openspec-explore/SKILL.md
 ├── openspec-propose/SKILL.md
+├── openspec-change-from-diff/SKILL.md
 ├── openspec-design/SKILL.md
 ├── openspec-implement/SKILL.md
 ├── openspec-apply-change/SKILL.md
@@ -106,7 +117,8 @@ skills/
 
 ## Roadmap
 
-- [ ] Branch-diff verify для проверки, что master-spec documents уже обновлены в ветке
+- [x] Branch-diff generation для `change.md` из двух локальных refs
+- [ ] Улучшение автоматизированного branch-diff verify после реализации
 - [ ] Git WorkTree для проектирования нескольких фичей одновременно
 - [ ] Поддержка MCP для PlantUML, Mermaid и Draw.io
 - [ ] Локальные overrides для skills и references
@@ -126,6 +138,11 @@ skills/
    - Команда: `создай change add-callback-retry-policy для external-gateway`
    - Естественная фраза: `хочу поменять retry policy для callback delivery, оформи change-request`
    - Ожидаемый шаг: `openspec-propose` читает `_sdd/navigation.md`, `_sdd/manifest.yaml`, выбирает релевантные документы и создает `openspec/changes/<name>/change.md`.
+
+2a. Оформить изменение из ветки аналитика:
+   - Команда: `создай change из diff веток service=external-gateway base_ref=release/2026-06 analyst_ref=analysis/add-callback-retry change_name=add-callback-retry-policy`
+   - Естественная фраза: `аналитик уже поменял master spec в ветке analysis/add-callback-retry, сгенерируй change.md по diff`
+   - Ожидаемый шаг: `openspec-change-from-diff` проверяет локальные refs, выполняет `git diff <base_ref>...<analyst_ref> -- openspec/<service>/`, создает `change.md` и `.spec-diff/` без checkout веток.
 
 3. Согласовать change:
    - Команда: `change add-callback-retry-policy согласован`
@@ -162,6 +179,7 @@ skills/
 | Исследовать сервис read-only | `research codebase target=spec service=external-gateway` | `картируй сервис external-gateway без правок` | `openspec-explore` |
 | Исследовать зону изменения | `research target=change service=external-gateway anchor=callback delivery` | `собери карту зоны изменения вокруг callback delivery` | `openspec-explore` |
 | Создать change | `propose add-callback-retry-policy` | `нужно добавить retry policy для callback delivery, оформи CR` | `openspec-propose` |
+| Создать change из diff веток | `change-from-diff service=external-gateway base_ref=release/2026-06 analyst_ref=analysis/add-callback-retry change_name=add-callback-retry-policy` | `ветка аналитика уже изменила master spec, получи change по base branch и analyst branch` | `openspec-change-from-diff` |
 | Подготовить design/tasks | `design add-callback-retry-policy` | `спроектируй реализацию и разбей на задачи` | `openspec-design` |
 | Продолжить реализацию | `implement add-callback-retry-policy` | `продолжи реализацию с первой невыполненной задачи` | `openspec-implement` |
 | Проверить обновление документации | `apply-change add-callback-retry-policy` | `проверь, что change отражен в master spec documents` | `openspec-apply-change` |
@@ -171,7 +189,8 @@ skills/
 
 - Если `openspec/<service>/_sdd/manifest.yaml` отсутствует, следующий шаг всегда `openspec-init-master-spec`.
 - Если `stale-files.md` непустой, сначала сделай refresh или явно подтверди продолжение с риском stale manifest.
+- Для `openspec-change-from-diff` refs должны существовать локально; skill не делает `git fetch`, `git pull` и checkout base/analyst веток.
 - Если change еще `На согласовании`, нельзя запускать реализацию; нужно завершить ревью и поставить `Согласовано`.
 - Если `tasks.md` отсутствует, перед реализацией запусти `openspec-design`.
-- Если `Spec update mode = branch-diff`, после реализации проверяется diff документов master spec.
+- Если `Spec update mode = branch-diff`, после реализации проверяется source-of-truth в `Analyst ref` и diff metadata.
 - Если `Spec update mode = manual-change`, после реализации нужно явно обновить выбранные документы master spec и затем сделать refresh `_sdd`.

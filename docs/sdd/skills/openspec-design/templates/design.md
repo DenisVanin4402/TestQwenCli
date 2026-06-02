@@ -25,6 +25,17 @@
 | <!-- openspec/changes/<name>/change.md --> | <!-- требования change --> |
 | <!-- openspec/changes/<name>/.research-notes.md --> | <!-- контекст реализации / gaps --> |
 
+### Diff metadata (для `Spec update mode: branch-diff`)
+
+| Поле | Значение |
+|---|---|
+| Base ref | <!-- ... --> |
+| Analyst ref | <!-- ... --> |
+| Diff mode | <!-- three-dot/two-dot --> |
+| Merge base | <!-- ... --> |
+| Changed files | <!-- openspec/changes/<name>/.spec-diff/changed-files.yaml --> |
+| Context files | <!-- openspec/changes/<name>/.spec-diff/context-files.yaml --> |
+
 ---
 
 ## Context

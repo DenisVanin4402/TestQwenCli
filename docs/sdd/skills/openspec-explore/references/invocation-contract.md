@@ -1,6 +1,6 @@
 # Контракт вызова `openspec-explore`
 
-Для лид-скилов (`openspec-new-spec`, `openspec-propose`), которые делегируют исследование в `openspec-explore`. Цель файла — убрать двусмысленность в точках, где слабая модель (Qwen 9B, окно 200к) чаще всего ломается: невалидный YAML, адаптация плейсхолдеров, fallback, передача промптов, потеря промежуточных результатов при compact.
+Для lead-skills, которые делегируют исследование в `openspec-explore`, прежде всего `openspec-propose`. Цель файла — убрать двусмысленность в точках, где слабая модель (Qwen 9B, окно 200к) чаще всего ломается: невалидный YAML, адаптация плейсхолдеров, fallback, передача промптов, потеря промежуточных результатов при compact.
 
 ---
 
@@ -219,7 +219,7 @@ tool: <имя из § 3.1>
 Для **spec** (`target=spec`):
 
 ```
-openspec/specs/<service>/
+openspec/<service>/
 ├── .research/
 │   ├── api.yaml
 │   ├── business-logic.yaml
@@ -231,7 +231,7 @@ openspec/specs/<service>/
 │   ├── nfr.yaml
 │   └── _aggregate.yaml          # итоговая склейка после дедупа
 ├── .research-notes.md            # markdown-сводка для интервью (human-readable)
-└── <service>.md                  # финальная спека (создаётся позже)
+└── _sdd/                         # manifest/navigation/coverage создаёт openspec-init-master-spec
 ```
 
 Для **change** (`target=change`):
@@ -247,7 +247,7 @@ openspec/changes/<name>/
 └── change.md                     # финальный change (создаётся позже)
 ```
 
-Директорию создать через `mkdir -p openspec/specs/<service>/.research` (аналогично для change) **до** запуска субагентов.
+Директорию создать через `mkdir -p openspec/<service>/.research` (аналогично для change) **до** запуска субагентов.
 
 ### 8.2. Кто пишет — лид или субагент
 
@@ -283,7 +283,7 @@ Tool: Write
 ## Запись результата
 
 После подготовки YAML-ответа:
-1. Сначала запиши YAML в файл `openspec/specs/<service>/.research/<role>.yaml` (для change — `openspec/changes/<name>/.research/<role>.yaml`) через Write.
+1. Сначала запиши YAML в файл `openspec/<service>/.research/<role>.yaml` (для change — `openspec/changes/<name>/.research/<role>.yaml`) через Write.
 2. Затем верни в stdout только одну строку: `RESULT_WRITTEN_TO: <путь>`.
 
 Не возвращай YAML дважды (и в файл, и в stdout) — это удваивает токены лида.
@@ -340,11 +340,11 @@ Tool: Write
 
 ### 8.6. Очистка
 
-После создания финального артефакта (`<service>.md` или `change.md` готов и прошёл ревью) каталог `.research/` и `.research-notes.md` можно удалить. Они не коммитятся — добавить в `.gitignore`:
+После создания финального артефакта (`_sdd` navigation layer или `change.md` готов и прошёл ревью) каталог `.research/` и `.research-notes.md` можно удалить. Они не коммитятся — добавить в `.gitignore`:
 
 ```
-openspec/specs/*/.research/
-openspec/specs/*/.research-notes.md
+openspec/*/.research/
+openspec/*/.research-notes.md
 openspec/changes/*/.research/
 openspec/changes/*/.research-notes.md
 ```

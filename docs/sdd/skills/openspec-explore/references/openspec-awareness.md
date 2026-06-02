@@ -1,77 +1,86 @@
-# Осведомлённость об OpenSpec
+# Осведомленность об OpenSpec
 
-Этот файл — справочник для **лид-агента structured-режима**. Conversational («думать вслух без артефактов») в этом скиле не поддерживается — см. секцию «Обзор» в `SKILL.md`. Назначение файла: быстро определить состояние OpenSpec-артефактов и выбрать правильный скил для фиксации.
-
----
+Этот файл — справочник для lead-agent structured-режима. Conversational-режим в `openspec-explore` не поддерживается. Назначение файла: быстро определить состояние OpenSpec-артефактов и выбрать правильный skill для фиксации.
 
 ## 1. Что такое OpenSpec
 
-OpenSpec — каталог спецификаций сервисов и журнал изменений в репозитории. Артефакты:
+OpenSpec — каталог master specifications и журнал изменений в репозитории.
 
-- `openspec/specs/<service>/<service>.md` — живая спека сервиса (service-spec.md).
-- `openspec/changes/<name>/change.md` — отдельное изменение (активный change).
-- `openspec/changes/archive/<name>/` — завершённые, архивированные изменения.
-- `openspec/changes/<name>/design.md` — опциональный artefact для сложных архитектурных решений.
-- `openspec/changes/<name>/tasks.md` — чеклист реализации.
+Артефакты:
 
-`openspec-explore` их **не создаёт и не правит** — только читает для контекста. Фиксация — соответствующий скил.
+- `openspec/<service>/` — folder-based master specification сервиса.
+- `openspec/<service>/_sdd/manifest.yaml` — машинный индекс master spec.
+- `openspec/<service>/_sdd/navigation.md` — карта чтения.
+- `openspec/<service>/_sdd/coverage.md` — покрытие документацией.
+- `openspec/<service>/_sdd/stale-files.md` — stale/warning отчет.
+- `openspec/changes/<name>/change.md` — активный change.
+- `openspec/changes/<name>/design.md` — опциональный технический проект.
+- `openspec/changes/<name>/tasks.md` — план реализации.
+- `openspec/changes/archive/<name>/` — архивированные changes.
 
----
+`openspec-explore` не создает и не правит эти артефакты, кроме `.research/*.yaml` и `.research-notes.md`.
 
-## 2. Проверка состояния (детерминированные шаги)
+## 2. Проверка состояния
 
-Выполняй ДО запуска ролей исследования:
+Выполняй до запуска ролей исследования:
 
-```bash
-ls openspec/changes/ 2>/dev/null                   # активные change и archive/
-ls openspec/specs/<service>/ 2>/dev/null           # есть ли целевая спека
+```text
+list openspec/changes/
+check openspec/<service>/
+check openspec/<service>/_sdd/manifest.yaml
 ```
 
-Фиксируй результат одним из трёх состояний:
+Состояния:
 
 | Состояние | Признак | Следствие |
-|-----------|---------|-----------|
-| **A. Нет спеки, нет активного change** | `openspec/specs/<service>/` пуст/не существует | `target=spec`, цель — предзаполнить service-spec.md; фиксация в `openspec-new-spec`. |
-| **B. Есть спека, нет change в зоне** | спека существует, в `openspec/changes/` нет активного change, относящегося к `anchor` | `target=change`, цель — предзаполнить change.md; фиксация в `openspec-propose`. |
-| **C. Есть активный change** | `openspec/changes/<name>/change.md` относится к `anchor` | прочитай `change.md` для контекста; после исследования предложи либо обновить change, либо создать design-artifact (`openspec-design`), либо приступать к реализации (`openspec-implement`). |
+|---|---|---|
+| Нет master-spec folder | `openspec/<service>/` отсутствует | Нужна папка документов; предложить пользователю создать ее |
+| Folder есть, manifest отсутствует | `openspec/<service>/` есть, `_sdd/manifest.yaml` нет | Следующий шаг — `openspec-init-master-spec` |
+| Manifest есть, active change нет | `_sdd/manifest.yaml` есть, change по anchor нет | Для требований — `openspec-propose`; для разового картирования можно продолжать research |
+| Active change есть | `openspec/changes/<name>/change.md` относится к anchor | Прочитать change для контекста; после research предложить design/implement/update change |
 
-Если `anchor` неизвестен и `target` не указан — **не запускайся**, запроси параметры у вызывающего скила или у пользователя (см. секцию «Вход» в `SKILL.md`).
-
----
+Если `anchor` неизвестен и `target` не указан, не запускайся: запроси параметры.
 
 ## 3. Что читать из существующих артефактов
 
-Если состояние **B** или **C**:
+Для folder-based master spec:
 
-1. Прочитай `openspec/specs/<service>/<service>.md` целиком — это базовый контракт.
-2. Для состояния **C** — прочитай `openspec/changes/<name>/change.md` и, если есть, `design.md` и `tasks.md`.
-3. В агрегированный YAML добавь отдельную секцию `existing_artifacts:` с:
-   - `spec_path`, `spec_version`, `spec_sections_present: [1, 2.1, 2.4, ...]`
-   - `active_change_path` (если есть), `active_change_status`, `anchor_overlap: true|false`.
-4. В `gaps[]` зафиксируй противоречия: что в коде есть, но не описано в спеке; что в change.md запланировано, но ещё не в коде.
+1. Прочитай `openspec/<service>/_sdd/navigation.md`.
+2. Прочитай `openspec/<service>/_sdd/manifest.yaml`.
+3. Если `stale-files.md` существует и непустой, зафиксируй warning.
+4. Для change-контекста прочитай documents из `## 0. Источники master specification`.
+5. Для active change прочитай `change.md`, а также `design.md` и `tasks.md`, если они есть.
 
----
+В агрегированный YAML добавь `existing_artifacts`:
 
-## 4. Маршрутизация инсайтов (куда направлять пользователя после исследования)
+- `master_spec_root`;
+- `manifest_path`;
+- `navigation_path`;
+- `coverage_path`;
+- `stale_files_path`;
+- `active_change_path`;
+- `active_change_status`;
+- `spec_update_mode`;
+- `anchor_overlap`.
 
-После возврата агрегата к вызывающему скилу — таблица подсказок для лида. Сам ничего не создаёшь, только рекомендуешь.
+В `gaps[]` фиксируй противоречия между кодом, change и master-spec documents.
 
-| Инсайт из исследования | Куда направить |
-|------------------------|----------------|
-| Сервис без спеки, код есть | `openspec-new-spec` (создаст service-spec.md) |
-| Спека существует, зафиксировано новое требование / изменение | `openspec-propose` (создаст change.md) |
-| Требование изменилось в уже активном change | Обновить существующий `change.md` через `openspec-propose` |
-| Архитектурное решение требует обоснования | `openspec-design` (создаст design.md рядом с change) |
-| Change согласован, пора планировать реализацию | `openspec-design` (создаст design.md + tasks.md) |
-| Change согласован, tasks.md уже есть — пора кодить | `openspec-implement` (выполнит tasks.md) |
-| Change реализован, проверен — пора архивировать | `openspec-archive-change` |
-| Change готов, применить результат к спеке | `openspec-apply-change` |
+## 4. Маршрутизация инсайтов
 
----
+| Инсайт | Куда направить |
+|---|---|
+| Папка документов есть, manifest отсутствует | `openspec-init-master-spec` |
+| Сервис требует change | `openspec-propose` |
+| Требование изменилось в active change | Обновить `change.md` через `openspec-propose` |
+| Архитектурное решение требует обоснования | `openspec-design` |
+| Change согласован, пора планировать реализацию | `openspec-design` |
+| Change согласован, tasks.md уже есть | `openspec-implement` |
+| Код реализован, master-spec update нужно проверить | `openspec-apply-change` или branch-diff verify |
+| Change завершен | `openspec-archive-change` |
 
-## 5. Запреты в рамках explore-режима
+## 5. Запреты explore-режима
 
-- Не создавать и не редактировать `change.md`, `design.md`, `tasks.md`, `<service>.md`. `.research-notes.md` пишется обязательно по финальному шагу «Запиши результат» в `SKILL.md`.
-- Не вести «свободное обсуждение» и не предлагать варианты архитектуры без запроса — твой вывод структурирован и возвращается вызывающему скилу.
-- Не запускать субагентов из субагентов. Рекурсия запрещена (см. `research-orchestration.md § 7`).
-- Не читать сырые файлы после возврата субагентов — только их YAML-сводки.
+- Не создавать и не редактировать `change.md`, `design.md`, `tasks.md`, master-spec documents.
+- Не вести свободное обсуждение и не предлагать архитектуру без запроса.
+- Не запускать субагентов из субагентов.
+- Не читать сырые файлы после возврата субагентов, если достаточно YAML-сводок.

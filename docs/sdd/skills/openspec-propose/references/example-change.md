@@ -8,7 +8,21 @@
 >
 > **Версия**: 1.0
 >
-> **Целевая спецификация**: openspec/specs/notification-service/notification-service.md
+> **Мастер-спецификация**: openspec/notification-service/
+>
+> **Manifest**: openspec/notification-service/_sdd/manifest.yaml
+>
+> **Spec update mode**: manual-change
+
+---
+
+## 0. Источники master specification
+
+| Роль | Файл | Почему использован |
+|---|---|---|
+| workflow | openspec/notification-service/workflow/notification-flow.md | high-priority, изменяется клиентский флоу |
+| integration | openspec/notification-service/integrations/webhooks.md | integration match для webhook |
+| data | openspec/notification-service/data/notification-models.md | entity match для Notification и WebhookBatch |
 
 ---
 
@@ -37,7 +51,7 @@
 ### Затронутые компоненты
 
 - [x] notification-service — основная функциональность webhook batch отправки
-- [x] openspec/specs/notification-service/notification-service.md — дополнение спецификации
+- [x] openspec/notification-service/integrations/webhooks.md — дополнение master specification
 - [ ] external-consumer-services — адаптация внешних систем для приёма webhook'ов (отдельный CR)
 
 ### Приоритет

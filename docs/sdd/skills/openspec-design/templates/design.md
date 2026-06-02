@@ -10,6 +10,23 @@
 
 ---
 
+## Источники требований
+
+### Master specification documents
+
+| Файл | Что взято |
+|---|---|
+| <!-- openspec/<service-name>/<path> --> | <!-- требование, правило, ограничение, контракт --> |
+
+### Change and research
+
+| Файл | Что взято |
+|---|---|
+| <!-- openspec/changes/<name>/change.md --> | <!-- требования change --> |
+| <!-- openspec/changes/<name>/.research-notes.md --> | <!-- контекст реализации / gaps --> |
+
+---
+
 ## Context
 
 <!-- Краткое описание изменения на основе change.md:

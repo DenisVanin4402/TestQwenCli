@@ -1,6 +1,6 @@
 # Оркестрация исследования
 
-Инструкция для лид-агента: как провести structured research кодовой базы под целевой артефакт (service-spec.md или change.md), чтобы собрать достаточно данных для заполнения всех разделов и не спалить окно контекста.
+Инструкция для lead-agent: как провести structured research кодовой базы под целевой артефакт (folder-based master specification или change.md), чтобы собрать достаточно данных для навигации, coverage или change и не спалить окно контекста.
 
 Правила написаны так, чтобы их могла применять слабая модель (Qwen Coder Next 9B, окно 200к): числа заданы явно, промпты — в [research-roles.md](research-roles.md) как готовые шаблоны, рекурсия субагентов запрещена.
 
@@ -8,10 +8,10 @@
 
 ## 1. Вход
 
-Лид-агент (`openspec-new-spec` или `openspec-propose`) передаёт:
+Lead-agent передает:
 - **target**: `spec` или `change`
 - **service / scope**: имя сервиса или зона изменения (набор каталогов / пакетов)
-- **anchor files** (для change): путь целевой спеки, затронутые файлы, если уже известны
+- **anchor files** (для change): master-spec documents, затронутые файлы, endpoints/entities, если уже известны
 
 Без этих трёх параметров исследование не запускается — сначала уточняем у пользователя.
 
@@ -45,9 +45,9 @@ ls -1 src 2>/dev/null || ls -1
 
 ### 3.1. `target=spec` — ось «по слоям»
 
-Каталог ролей для новой/существующей спеки сервиса. Полный список — [research-roles.md § «Роли для spec»](research-roles.md).
+Каталог ролей для картирования сервиса под folder-based master specification. Полный список — [research-roles.md § «Роли для spec»](research-roles.md).
 
-| Роль | Целевые разделы service-spec.md |
+| Роль | Целевые области master specification |
 |------|---------------------------------|
 | `api` | 2.1, 2.4, 2.9, 2.10, 2.11 |
 | `business-logic` | 2.1, 2.2, 2.3, 3 |
@@ -117,13 +117,13 @@ ls -1 src 2>/dev/null || ls -1
    - change: `current_implementation.*`, `schemas_in_scope[]`, `ddl_in_scope[]`, `callers[]`, `breaking_risk[]`, `migration_plan.*`, `migration_hints[]`, `acceptance_hints[]` (из всех трёх ролей), `errors_in_scope[]`, `headers_in_scope[]`, `log_events_in_scope[]`, `metrics_in_scope[]`, `config_params_in_scope[]`.
 2. **Сними дубли** по ключам: endpoints → `method+path`, entities → `name`, params → `name`, metrics → `name`, flows → `id`, acceptance_hints → `when+then`, migrations → `file+version`.
 3. **Сводные gaps** — объединить все `gaps[]`. Это вопросы к Этапу 2 интервью.
-4. **Проверка полноты**: для каждого раздела целевого артефакта (service-spec.md или change.md) — есть ли хотя бы одна запись? Если раздел пуст — это gap, не отсутствие данных. Спецификация проверки — § 6.1 ниже.
+4. **Проверка полноты**: для каждой области целевого артефакта (master-spec folder или change.md) — есть ли хотя бы одна запись? Если область пустая — это gap, не отсутствие данных. Спецификация проверки — § 6.1 ниже.
 
-Результат агрегации возвращается в вызывающий скил (`new-spec` / `propose`) в виде единого YAML или markdown-сводки — его формат определяет вызывающий скил.
+Результат агрегации возвращается в вызывающий skill в виде единого YAML или markdown-сводки — его формат определяет вызывающий skill.
 
 ### 6.1. Таблица «раздел артефакта → поля агрегата»
 
-**service-spec.md** (target=spec):
+**master-spec folder** (target=spec):
 
 | Раздел | Поля агрегата |
 |--------|---------------|
@@ -179,7 +179,7 @@ ls -1 src 2>/dev/null || ls -1
 - **Сырые тексты из субагентов в контекст лида не копируются**. Храни только YAML-сводки.
 - **Персистентность обязательна для Среднего и Крупного**, рекомендуется для Малого. Каждый возвратный YAML сразу идёт в `openspec/<specs|changes>/<name>/.research/<role>.yaml`, итоговый агрегат — в `.research/_aggregate.yaml` и `.research-notes.md`. Подробная схема — [invocation-contract.md § 8](invocation-contract.md). Это страховка от compact и ошибок ретрая.
 - **Близко к 200к** — после записи YAML в файлы **выгружай сырые выводы из контекста лида** (не копируй в последующие сообщения). Работай с агрегатом через `.research/_aggregate.yaml` и `.research-notes.md`.
-- **После финального артефакта** (`<service>.md` / `change.md` готов и прошёл ревью) — `.research/` и `.research-notes.md` удаляются. Они не должны попасть в git — добавить в `.gitignore` (см. § 8.6 в invocation-contract.md).
+- **После финального артефакта** (`_sdd` navigation layer / `change.md` готов и прошёл ревью) — `.research/` и `.research-notes.md` удаляются. Они не должны попасть в git — добавить в `.gitignore` (см. § 8.6 в invocation-contract.md).
 
 ---
 

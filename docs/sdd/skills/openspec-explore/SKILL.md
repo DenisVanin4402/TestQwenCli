@@ -1,6 +1,6 @@
 ---
 name: openspec-explore
-description: Structured research кодовой базы под OpenSpec. Запускает параллельных read-only субагентов по специализированным ролям (api, business-logic, data, integrations, config, observability, security, nfr для target=spec; feature-scope, dependencies, cross-cutting для target=change), агрегирует YAML и сохраняет в `openspec/**/.research/`. Используй напрямую когда нужно разовое картирование сервиса или зоны изменения — триггеры «исследуй кодовую базу», «картируй сервис», «research codebase», «собери карту сервиса», «мапни зону изменения». Дополнительно работает как prompt-library для `openspec-new-spec` / `openspec-propose` (они переиспользуют `references/research-roles.md` и `references/invocation-contract.md`, оркестрируя субагентов сами).
+description: Structured research кодовой базы под OpenSpec. Запускает параллельных read-only субагентов по специализированным ролям (api, business-logic, data, integrations, config, observability, security, nfr для target=spec; feature-scope, dependencies, cross-cutting для target=change), агрегирует YAML и сохраняет в `openspec/**/.research/`. Используй напрямую когда нужно разовое картирование сервиса или зоны изменения. Дополнительно работает как prompt-library для `openspec-propose`.
 license: MIT
 compatibility: Требуется доступ к bash/git и встроенный tool запуска read-only субагента (имя и subagent_type — по таблице § 3.1 references/invocation-contract.md). Опционально Serena/LSP/embedding MCP-серверы — сильно повышают качество исследования.
 metadata:
@@ -13,7 +13,7 @@ Structured research кодовой базы — **не модифицирует 
 **Две роли скила:**
 
 1. **Standalone** — пользователь зовёт напрямую («картируй сервис X», «research codebase»). Тогда лид этого скила сам принимает параметры, запускает субагентов и возвращает сводку пользователю.
-2. **Prompt-library для `openspec-new-spec` и `openspec-propose`** — эти скилы не вызывают `openspec-explore` как субагента. Они читают `references/research-roles.md` и `references/invocation-contract.md` (или `references/research-orchestration.md`) из каталога `openspec-explore` и оркестрируют субагентов сами. Контракт вызова для них — в `references/invocation-contract.md`.
+2. **Prompt-library для `openspec-propose`** — этот skill не вызывает `openspec-explore` как субагента. Он читает `references/research-roles.md` и `references/invocation-contract.md` (или `references/research-orchestration.md`) из каталога `openspec-explore` и оркестрирует субагентов сам. Контракт вызова — в `references/invocation-contract.md`.
 
 **Bundle-пути.** `references/X` — относительно директории этого скила. Если harness даёт строку `Skill directory: <abs>` в обёртке активации — используй её. Иначе один раз `Glob("**/openspec-skills/skills/openspec-explore/references/<file>")` и возьми первый результат. Пусто → спроси пользователя путь установки, не ищи вручную.
 
@@ -25,7 +25,7 @@ Structured research кодовой базы — **не модифицирует 
 
 Параметры, которые должны быть известны ДО запуска исследования:
 
-- **target**: `spec` (картируем сервис для service-spec.md) или `change` (картируем зону изменения для change.md).
+- **target**: `spec` (картируем сервис для folder-based master specification) или `change` (картируем зону изменения для change.md).
 - **service**: имя сервиса (kebab-case) и/или корневые пути, которые относятся к сервису.
 - **anchor** (только для `target=change`): пути или символы, попадающие в скоуп изменения.
 - **thoroughness** (опционально): `quick` (default) / `medium`.
@@ -36,7 +36,7 @@ Structured research кодовой базы — **не модифицирует 
 
 ## Шаги
 
-1. **Осведомлённость об OpenSpec.** Быстро проверь `ls openspec/changes/ 2>/dev/null` и наличие целевой спеки. Подробности — [`references/openspec-awareness.md`](references/openspec-awareness.md).
+1. **Осведомлённость об OpenSpec.** Быстро проверь active changes и наличие master-spec folder с `_sdd/manifest.yaml`. Подробности — [`references/openspec-awareness.md`](references/openspec-awareness.md).
 
 2. **Классифицируй размер.** Быстрые bash-команды подсчёта файлов и модулей → Малый / Средний / Крупный. Таблица и правила — [`references/research-orchestration.md` § 2](references/research-orchestration.md).
 
@@ -52,7 +52,7 @@ Structured research кодовой базы — **не модифицирует 
 
    ```bash
    # target=spec
-   mkdir -p openspec/specs/<service>/.research
+   mkdir -p openspec/<service>/.research
    # target=change
    mkdir -p openspec/changes/<name>/.research
    ```
@@ -85,15 +85,15 @@ Structured research кодовой базы — **не модифицирует 
 
 7. **Собери YAML-выводы.** После возврата всех субагентов — пройдись по каждой роли, склей поля в сводные коллекции, сними дубли по ключам (endpoints: method+path, entities: name, params: name, metrics: name). Инструкции — [`references/research-orchestration.md` § 6](references/research-orchestration.md).
 
-8. **Проверь полноту**. Для каждого раздела целевого артефакта (service-spec.md или change.md) — есть ли хотя бы одна запись? Раздел без данных — это gap, фиксируется в общий список gaps.
+8. **Проверь полноту**. Для каждой области целевого артефакта (master-spec folder или change.md) — есть ли хотя бы одна запись? Область без данных — это gap, фиксируется в общий список gaps.
 
 9. **Запиши результат и верни ссылки.** Персистентность — **обязательно**, не по ситуации:
-   - `target=spec`: пиши в `openspec/specs/<service>/.research/<role>.yaml` (по ролям) + `openspec/specs/<service>/.research/_aggregate.yaml` + `openspec/specs/<service>/.research-notes.md`.
+   - `target=spec`: пиши в `openspec/<service>/.research/<role>.yaml` (по ролям) + `openspec/<service>/.research/_aggregate.yaml` + `openspec/<service>/.research-notes.md`.
    - `target=change`: пиши в `openspec/changes/<name>/.research/<role>.yaml` + `.research/_aggregate.yaml` + `.research-notes.md`.
 
    Формат `.research-notes.md` — в `references/invocation-contract.md § 8.4`. Каталог `.research/` уже создан на шаге 5.
 
-   Верни вызывающему **короткую сводку + путь к `.research-notes.md`**, не сырой YAML. Вызов от пользователя → покажи ту же сводку и предложи `openspec-new-spec` / `openspec-propose` (см. `references/openspec-awareness.md`).
+   Верни вызывающему **короткую сводку + путь к `.research-notes.md`**, не сырой YAML. Вызов от пользователя → покажи ту же сводку и предложи `openspec-init-master-spec` / `openspec-propose` (см. `references/openspec-awareness.md`).
 
 ---
 
@@ -116,8 +116,8 @@ Structured research кодовой базы — **не модифицирует 
 
 ## Ограничения
 
-- **Не трогает исходный код проекта.** Не создаёт и не редактирует OpenSpec-артефакты (`change.md`, `design.md`, `tasks.md`, спеки сервисов). Единственные записи — `.research/*.yaml` и `.research-notes.md` внутри `openspec/**/`. Фиксация артефактов — только через соответствующий скил (`openspec-new-spec`, `openspec-propose`, `openspec-design`).
-- **Без conversational-режима.** Если пользователь пришёл с размытой идеей без `target`/`service` — задай уточняющие вопросы и направь в подходящий скил (`openspec-propose` или `openspec-new-spec`). Не пытайся «просто подумать вслух» в рамках этого скила.
+- **Не трогает исходный код проекта.** Не создаёт и не редактирует OpenSpec-артефакты (`change.md`, `design.md`, `tasks.md`, master-spec documents). Единственные записи — `.research/*.yaml` и `.research-notes.md` внутри `openspec/**/`. Фиксация артефактов — только через соответствующий skill (`openspec-init-master-spec`, `openspec-propose`, `openspec-design`).
+- **Без conversational-режима.** Если пользователь пришёл с размытой идеей без `target`/`service` — задай уточняющие вопросы и направь в подходящий skill (`openspec-propose` или `openspec-init-master-spec`). Не пытайся «просто подумать вслух» в рамках этого skill.
 - **Рекурсия субагентов запрещена.** Субагент не имеет права звать другого.
 - **Границы субагентов не пересекаются.** Если зоны пересекаются — укрупни задачи, уменьши число агентов.
 - **Лид не читает сырые файлы после запуска субагентов.** Работай с YAML-сводками. Точечный Grep/Read допустим только для уточнения конкретной gap.

@@ -1,47 +1,37 @@
 ---
 name: openspec-propose
-description: Создать change.md — предложение на изменение спецификации. Единый документ (16 основных разделов + 1.5 «Флоу клиента» + 7А «Обработчики по триггерам») объединяет мотивацию (ЗАЧЕМ), системные требования (ЧТО МЕНЯЕТСЯ) и пошаговое поведение обработчиков — от бизнес-логики до критериев приёмки. Ведёт двухэтапное интервью, запускает параллельных read-only субагентов для исследования кода (роли feature-scope, dependencies, cross-cutting), затем заполняет шаблон. Используй когда пользователь формулирует новую фичу, баг-фикс, рефактор спецификации, изменение требований, говорит "хочу добавить X", "нужно поменять Y", "сделай change", "propose", "предложение на изменение", "change-request" — до написания кода.
+description: Создать `change.md` — предложение на изменение folder-based master specification. Использует `openspec/<service>/_sdd/navigation.md` и `manifest.yaml`, выбирает релевантные документы по tags/entities/integrations/endpoints/events/relations, проводит интервью и structured research зоны изменения. Используй до написания кода, когда пользователь формулирует новую фичу, баг-фикс, изменение требований или change-request.
 license: MIT
-compatibility: Требуется openspec/ layout в проекте, доступ к bash/git, AskUserQuestion tool, встроенный tool запуска read-only субагента (имя и subagent_type — по таблице § 3.1 openspec-explore/references/invocation-contract.md). Опционально Serena/LSP/embedding MCP-серверы для анализа кода.
+compatibility: Требуется `openspec/` layout, master-spec folder `openspec/<service>/`, AskUserQuestion tool, доступ к bash/git и tool запуска read-only субагентов.
 metadata:
   author: openspec-distillate
-  version: "4.0"
+  version: "5.0"
 ---
 
-Создать предложение на изменение спецификации — единый `change.md` (мотивация + системные требования + изменения глоссария / инвариантов / FSM). После ревью и реализации в коде запусти `openspec-apply-change` для вливания в основную спецификацию.
+Создать предложение на изменение master specification — `openspec/changes/<name>/change.md`.
 
-**Input**: Название изменения (kebab-case) ИЛИ описание того, что нужно изменить.
+`change.md` описывает ЗАЧЕМ и ЧТО меняется. Он не описывает КАК реализовать изменение в коде и не требует single-file target spec.
 
-**Bundle-пути.**
+**Input**: название change в kebab-case или описание изменения. Нужно определить `service` и `change name`.
 
-- Собственные `templates/X` и `references/X` — относительно директории этого скила.
-- Внешние файлы из `openspec-explore` — **сосед по директории**, резолв через `<Skill dir>/../openspec-explore/references/<file>`.
-- Если harness даёт строку `Skill directory: <abs>` в обёртке активации — используй её как корень для обоих. Например: `Read("<Skill dir>/templates/change.md")`, `Read("<Skill dir>/../openspec-explore/references/invocation-contract.md")`.
-- Если строки нет — один раз `Glob("**/openspec-skills/skills/openspec-propose/<file>")` и `Glob("**/openspec-skills/skills/openspec-explore/references/<file>")`, бери первый результат.
-- Пусто → спроси пользователя путь установки, не ищи вручную по `~`/cwd.
+**Bundle-пути**
 
-**Bundled materials** (относительно этого SKILL.md):
+- `templates/change.md`
+- `references/interview-playbook.md`
+- `references/section-guide.md`
+- `references/guardrails.md`
+- `references/change-examples.md`
+- `references/example-change.md`
+- `references/common-requirements.md`
+- `references/analytics-rules.md`
+- `references/terms-and-abbreviations.md`
 
-- `templates/change.md` — шаблон изменения (16 основных разделов: предложение, бизнес-логика, глоссарий, инварианты, FSM, модели данных, интеграции, ошибки, хедеры, валидация, безопасность, миграция, логирование, мониторинг, конфигурация, критерии приёмки; плюс подраздел 1.5 «Флоу клиента» и дополнительный раздел 7А «Обработчики по триггерам»).
-- `references/interview-playbook.md` — детальный сценарий 2 этапов интервью.
-- `references/section-guide.md` — ожидания по каждому разделу (16 основных + 1.5 «Флоу клиента» и 7А «Обработчики») и частые ошибки.
-- `references/guardrails.md` — полный чеклист запретов/правил и ревью.
-- `references/change-examples.md` — форматы, таблицы, сниппеты по разделам.
-- `references/example-change.md` — полный реальный пример заполненного change.md.
-- `references/common-requirements.md` — логи, коды ошибок, RFC 7807, HTTP-статусы.
-- `references/analytics-rules.md` — правила аналитического стиля.
-- `references/terms-and-abbreviations.md` — термины и сокращения.
+Внешние references:
 
-**Внешние references (скил `openspec-explore`, target-specific чтение):**
-
-- `openspec-explore/references/invocation-contract.md` — **канонический контракт вызова субагентов** (tool, subagent_type, алгоритм обнаружения, параллель, fallback, валидация YAML, персистентность). Читай целиком перед шагом 2.
-- `openspec-explore/references/research-roles.md` — **промпты ролей** для `target=change` (`feature-scope`, `dependencies`, `cross-cutting`). Копируй **дословно**.
-- `openspec-explore/references/research-orchestration.md` § 3.2 — **группировка ролей** по размеру проекта для `target=change`.
-- `openspec-explore/references/code-analysis-priority.md` — Serena → LSP → embeddings → MCP → Grep/Glob.
-
-**Scope исследования кода.** Лид **не читает код напрямую**. Оркестрирует субагентов по контракту из `openspec-explore/references/invocation-contract.md`. Скил `openspec-explore` как отдельный субагент **не запускается** — этот скил переиспользует его references.
-
-**AskUserQuestion fallback**: если инструмент недоступен в клиенте — задай тот же вопрос обычным текстом и дождись ответа пользователя. Не угадывай.
+- `../openspec-explore/references/invocation-contract.md`
+- `../openspec-explore/references/research-roles.md`
+- `../openspec-explore/references/research-orchestration.md`
+- `../openspec-explore/references/code-analysis-priority.md`
 
 ---
 
@@ -49,128 +39,173 @@ metadata:
 
 ### 1. Этап 1 интервью — ЧТО и ЗАЧЕМ
 
-Открытый вопрос + уточнения порциями по 2–3 (мотивация, скоуп, пользователи, ожидаемый результат, ограничения). Не создавай change.md после одного ответа. Подведи итог и получи явное подтверждение. Детали и примеры — `references/interview-playbook.md`.
+Задай открытый вопрос и уточнения порциями по 2-3:
 
-Выведи kebab-case имя change из описания.
+- мотивация;
+- скоуп;
+- пользователи;
+- ожидаемый результат;
+- ограничения;
+- обратная совместимость;
+- предполагаемый `Spec update mode`: `manual-change` или `branch-diff`.
 
-### 2. Изучи контекст — параллельные read-only субагенты
+Не создавай `change.md` после одного ответа. Подведи итог и получи явное подтверждение.
 
-**Лид НЕ читает исходный код проекта напрямую** (ни Read, ни Grep, ни Glob, ни Serena по `src/**`, `app/**` и т. д.).
+### 2. Найди master-spec root
 
-**Что разрешено** лиду до запуска субагентов:
-- Целевая спека `openspec/specs/<service>/<service>.md` и соседние `openspec/changes/**` — полностью.
-- Собственные bundle-файлы (`templates/`, `references/`) и внешние explore-references (`<Skill dir>/../openspec-explore/references/*`).
-- Быстрые bash-команды подсчёта файлов (`find … | wc -l`) без чтения содержимого.
+Определи `service` и root:
 
-**После возврата субагентов** — точечный Read/Grep только для разрешения конкретной `gap` (≤3 файлов за раз).
-
-**2.1. Проверь целевую спеку.** Прочитай `openspec/specs/<service>/<service>.md`.
-
-Если файл отсутствует — через AskUserQuestion: «Сервис `<service>` существует в коде проекта или это новый?» (опции: «существует» / «новый»).
-
-| Ситуация | Действие |
-|----------|----------|
-| Файл есть | Читай и связанные спеки из `openspec/specs/`. Иди на 2.2. |
-| Файл нет + ответ «новый сервис» | Выйди, предложи сначала `openspec-new-spec` (нельзя менять то, чего ещё нет). |
-| Файл нет + ответ «существующий» | AskUserQuestion: (a) запустить `openspec-new-spec` сначала (дефолт), (b) продолжить без спеки, пометив в шапке change.md «Целевая спецификация: отсутствует». |
-
-**2.2. Прочитай канонический контракт.** Целиком: `openspec-explore/references/invocation-contract.md`. Там: обнаружение tool-а и `subagent_type` (§ 3.1), fallback-цепочка (§ 4), адаптация путей под стек (§ 5), валидация YAML (§ 6), дедупликация (§ 7), персистентность (§ 8). Дополнительно § 3.2 в `openspec-explore/references/research-orchestration.md` — группировка ролей для `target=change` по размеру проекта.
-
-**2.3. Собери параметры.**
-
-- `target=change`
-- `name=<kebab-case>` (из Этапа 1)
-- `anchor` — пути/символы, попадающие в скоуп изменения (из описания задачи или Этапа 1).
-- `thoroughness=quick` (дефолт).
-
-**2.4. Создай каталог.**
-
-```bash
-mkdir -p openspec/changes/<name>/.research
+```text
+openspec/<service>/
 ```
 
-**2.5. Классифицируй размер и группу.** По § 2 `research-orchestration.md`: <50 файлов = Малый; 50–500 = Средний; >500 = Крупный. Группы ролей для `target=change` — § 3.2 того же файла (Малый/Средний — 2 группы: `[feature-scope + cross-cutting]`, `[dependencies]`; Крупный — 3 группы по отдельной роли).
+Проверь:
 
-**2.6. Прочитай промпты ролей.** Из `openspec-explore/references/research-roles.md` — секции `feature-scope`, `dependencies`, `cross-cutting`. **Копируй дословно**, не переформулируй «Цель / Границы / Формат вывода». Подставь реальные пути проекта в плейсхолдеры `<controllers/**>` и `<anchor_paths>` по таблице эвристик § 5 `invocation-contract.md`.
+- root существует;
+- service не равен `changes`, `archive`, `_sdd`, `_system`;
+- `openspec/<service>/_sdd/navigation.md` существует;
+- `openspec/<service>/_sdd/manifest.yaml` существует.
 
-**2.7. Запусти субагентов — один ответ, один блок tool-use, несколько вызовов.**
+Если root есть, но `_sdd/manifest.yaml` отсутствует, остановись и предложи сначала `openspec-init-master-spec`.
 
-Имя tool-а запуска субагента и `subagent_type` зависят от harness'а — **обнаружь по алгоритму § 3.1 `invocation-contract.md`** (регекс по списку доступных инструментов) и возьми значения из таблицы там же.
+Если `stale-files.md` существует и непустой, предупреди пользователя и спроси подтверждение продолжения. По умолчанию предложи refresh через `openspec-init-master-spec`.
 
-Параметры каждого вызова:
-- `subagent_type` — read-only форма из таблицы § 3.1. При «unknown subagent type» — general-форма + блок «Дополнительные запреты» из § 4.
-- `description` — 3–5 слов.
-- `prompt` — склеенные промпты ролей группы **дословно** с подставленными путями и anchor.
-- `task_id` — **не использовать**.
+### 3. Прочитай navigation и manifest
 
-Псевдокод (Малый/Средний — 2 группы; `<TOOL>`/`<ST>` — из § 3.1; реальный вызов через native tool-call API harness'а):
+Порядок:
 
+1. Прочитай `openspec/<service>/_sdd/navigation.md`.
+2. Прочитай `openspec/<service>/_sdd/manifest.yaml`.
+3. Выбери документы по:
+   - `tags`;
+   - `entities`;
+   - `integrations`;
+   - `endpoints`;
+   - `events`;
+   - `related_files`;
+   - `depends_on`;
+   - `read_priority=high`.
+4. Прочитай только выбранные документы и high-priority documents.
+
+Не читай всю master-spec папку рекурсивно при наличии manifest.
+
+### 4. Зафиксируй sources
+
+Собери таблицу для раздела `## 0. Источники master specification`:
+
+| Роль | Файл | Почему использован |
+|---|---|---|
+
+Каждый прочитанный документ master spec должен иметь причину: high-priority, entity match, integration match, endpoint match, relation, coverage gap.
+
+### 5. Structured research зоны изменения
+
+Лид не читает исходный код проекта массово. Для кода используй read-only субагентов по контракту `openspec-explore`:
+
+- `feature-scope`;
+- `dependencies`;
+- `cross-cutting`.
+
+Параметры:
+
+- `target=change`;
+- `name=<change-name>`;
+- `service=<service>`;
+- `master_spec_root=openspec/<service>/`;
+- `anchor=<пути/символы/endpoint/entities из интервью и manifest>`;
+- `thoroughness=quick` по умолчанию.
+
+Создай каталог:
+
+```text
+openspec/changes/<name>/.research
 ```
-<TOOL>(subagent_type="<ST>", description="Research feature-scope+cross-cutting", prompt="<feature-scope + cross-cutting дословно, пути и anchor подставлены>")
-<TOOL>(subagent_type="<ST>", description="Research dependencies", prompt="<dependencies дословно, пути>")
+
+Сохрани `.research/<role>.yaml`, `.research/_aggregate.yaml`, `.research-notes.md` до перехода к этапу 2.
+
+### 6. Этап 2 интервью — детали изменения
+
+Привязывай вопросы к:
+
+- выбранным master-spec documents;
+- gaps из `coverage.md`, `stale-files.md`, `.research-notes.md`;
+- текущей реализации в зоне изменения;
+- breaking risk и миграции.
+
+Подведи итог всех требований и получи явное подтверждение перед записью файла.
+
+### 7. Проверь change-директорию
+
+Путь:
+
+```text
+openspec/changes/<name>/
 ```
 
-Последовательные вызовы в разных сообщениях = НЕ параллель, переделай.
+Если `change.md` уже существует, спроси: продолжить редактирование или выбрать другое имя.
 
-Fallback: tool запуска субагента не найден → последовательный sweep по ролям (§ 4 шаг 3 `invocation-contract.md`), запиши в `.research/<role>.yaml`.
+### 8. Заполни `change.md`
 
-**2.8. Запиши результаты, валидация, агрегация.**
+Открой `templates/change.md`.
 
-1. Сохрани каждый возврат субагента в `.research/<role>.yaml` **до** валидации (§ 8.2 вариант A).
-2. Валидируй YAML по § 6 (парсится, есть `summary`/`key_files` + доменные коллекции, summary ≤ 200 слов). Невалидно → одна попытка retry-промптом из § 6.
-3. Склей коллекции и дедупни по ключам § 7.
-4. Запиши `.research/_aggregate.yaml` + `.research-notes.md` (шаблон § 8.4).
-5. Собранный `gaps[]` — вопросы для Этапа 2.
+Заполни шапку:
 
-Не выходи со скила, пока 2.7 → 2.8 не выполнены целиком.
+- статус `На согласовании`;
+- дату;
+- автора;
+- версию;
+- `Мастер-спецификация: openspec/<service>/`;
+- `Manifest: openspec/<service>/_sdd/manifest.yaml`;
+- `Spec update mode: manual-change | branch-diff`.
 
-### 3. Этап 2 интервью — детали реализации — КАК
+Заполни `## 0. Источники master specification`.
 
-Привязывай вопросы к конкретике из кода/спеки: модели данных, интеграции, ошибки, миграция, безопасность, конфигурация, мониторинг. Подведи итог ВСЕХ требований и получи явное подтверждение перед переходом дальше. Категории вопросов и правила перехода — `references/interview-playbook.md`.
+Для каждого раздела:
 
-### 4. Проверь change-директорию
+- если раздел затрагивается — реальные данные из интервью, master-spec sources и research;
+- если не затрагивается — ровно `Нет изменений.`;
+- не копируй примеры из references как реальные данные.
 
-Каталог `openspec/changes/<name>/` уже создан на шаге 2.4 (через `mkdir -p .../.research`). Если `change.md` в нём уже есть (например, повторный запуск скила) — спроси через AskUserQuestion: продолжить редактирование существующего файла или создать новый под другим именем.
+Запиши файл:
 
-### 5. Прочитай шаблон
+```text
+openspec/changes/<name>/change.md
+```
 
-Открой `templates/change.md` (путь относительно этого SKILL.md — стандартный bundle скила) — это даст структуру 16 основных разделов + 1.5 и 7А и встроенные подсказки.
+### 9. Ревью
 
-### 6. Создай `change.md`
+Проверь:
 
-Запиши в `openspec/changes/<name>/change.md`. Заполни шапку: статус `На согласовании`, дата, автор, целевая спецификация. Для каждого раздела (16 основных + 1.5 «Флоу клиента» и 7А «Обработчики»):
-
-- Если раздел затрагивается — реальные данные из интервью и агрегата.
-- Если не затрагивается — ровно строка `Нет изменений.`.
-
-Форматы по разделам, частые ошибки и ссылки на примеры — `references/section-guide.md`. Запреты (код приложения, тесты, yaml-файлы) и уровни ДОЛЖЕН/СЛЕДУЕТ/МОЖЕТ — `references/guardrails.md`. Большие change записывай по частям, предупредив пользователя.
-
-### 7. Ревью в субагенте
-
-Если доступен tool запуска субагента (имя и `subagent_type` — по таблице § 3.1 `openspec-explore/references/invocation-contract.md`) — запусти отдельный субагент с чеклистом. Иначе проведи ревью самостоятельно. Чеклист (полнота, точность, непротиворечивость, конкретность, реализуемость, границы роли, форматы) — `references/guardrails.md`. Исправь найденные проблемы и сообщи пользователю, что было изменено.
+- change не содержит технический план реализации;
+- все затронутые master-spec documents указаны в sources;
+- `Spec update mode` заполнен;
+- нет ссылки на single-file target spec;
+- все 16 основных разделов, подраздел 1.5 и раздел 7А присутствуют;
+- gaps и open questions не скрыты.
 
 ---
 
 ## Output
 
-- Имя change и путь к файлу.
-- Какие разделы заполнены, какие — `Нет изменений.`.
-- Целевая спецификация.
-- Результат ревью (замечания и исправления, если были).
-- Подсказка: «Change создан со статусом `На согласовании`. Отправь на ревью (PR). После merge PR — поставь статус `Согласовано` вручную в шапке change.md. Дальнейший воркфлоу:
-  - **Сложное** изменение (новые сервисы, существенные архитектурные решения, несколько сервисов): `openspec-design` → `openspec-implement` → `openspec-apply-change`.
-  - **Простой** CR (локальная правка одной секции, текстовая доработка, мелкая корректировка валидации/конфига): можно пропустить `openspec-design` и сразу работать по задачам из `change.md` / вручную, затем `openspec-apply-change`».
+Сообщи:
+
+- имя change и путь к `change.md`;
+- master-spec root;
+- manifest;
+- `Spec update mode`;
+- какие master-spec documents использованы;
+- какие разделы заполнены, какие — `Нет изменений.`;
+- результат ревью;
+- следующий шаг: PR review, затем ручной статус `Согласовано`, затем `openspec-design` для сложного CR или ручная работа для простого.
 
 ---
 
 ## Guardrails
 
-- `change.md` — документ системного аналитика: описывает **ЧТО** и **ЗАЧЕМ**, а не **КАК в коде**. Код приложения, unit-тесты, конфиги целиком, план внедрения с техническими шагами — **запрещены**. Разрешены: бизнес-правила ЕСЛИ/ТОГДА/ИНАЧЕ, таблицы полей/параметров, контракты API, КОГДА/ТОГДА для критериев приёмки, DDL/DML как рекомендации, JSON-schema/Protobuf/Avro. Полный список запретов и примеры — `references/guardrails.md`.
-- **Статусы change.md** (проставляются вручную по ходу воркфлоу):
-  - `На согласовании` — создан скилом, отправлен на ревью.
-  - `Согласовано` — PR с change.md замержен; можно идти в design/implement.
-  - `В реализации` — начата реализация (design/implement).
-  - `Реализовано` — код влит, ждёт `openspec-apply-change`.
-  - `Архивировано` — вливание в основную спецификацию выполнено (`openspec-apply-change` / `openspec-archive-change`).
-- **Маппинг между скилами**: `openspec-propose` → `openspec-design` (опционально) → `openspec-implement` → `openspec-apply-change` → `openspec-archive-change`.
-- Не создавай change.md, пока остаются неясности. Всегда изучи целевую спецификацию ПЕРЕД созданием. Не копируй примеры из references в итоговый файл. Проверь, что все 16 основных разделов + 1.5 «Флоу клиента» + 7А «Обработчики» на месте.
+- Не создавай `change.md`, пока остаются неясности.
+- Всегда читай `_sdd/navigation.md` и `_sdd/manifest.yaml` перед выбором документов.
+- Не требуй single-file target spec.
+- Если manifest отсутствует или stale — предложи `openspec-init-master-spec`.
+- `change.md` описывает ЧТО и ЗАЧЕМ, не КАК в коде.
+- Код приложения, unit-тесты и технический план внедрения в `change.md` запрещены.
+- `Spec update mode` обязателен.

@@ -1,5 +1,6 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardRequestPriority;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;

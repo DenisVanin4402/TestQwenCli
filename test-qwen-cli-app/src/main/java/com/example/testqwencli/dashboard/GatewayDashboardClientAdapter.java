@@ -1,10 +1,13 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardCallStatus;
+import com.example.testqwencli.dashboard.enums.DashboardRequestPriority;
+import com.example.testqwencli.dashboard.enums.DashboardSubmitStatus;
 import com.example.testqwencli.gateway.exception.AsyncIdempotencyConflictException;
 import com.example.testqwencli.gateway.exception.ExternalGatewayException;
 import com.example.testqwencli.gateway.exception.NoSlotAvailableException;
-import com.example.testqwencli.gateway.model.async.AsyncDeliveryMode;
-import com.example.testqwencli.gateway.model.async.AsyncPriority;
+import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.enums.AsyncPriority;
 import com.example.testqwencli.gateway.model.async.AsyncSubmitResponse;
 import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
 import com.example.testqwencli.gateway.model.callback.CallbackDelivery;

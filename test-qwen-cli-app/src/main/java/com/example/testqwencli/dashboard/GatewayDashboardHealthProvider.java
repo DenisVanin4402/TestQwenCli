@@ -2,10 +2,10 @@ package com.example.testqwencli.dashboard;
 
 import com.example.testqwencli.gateway.config.ExternalGatewaySlotProperties;
 import com.example.testqwencli.gateway.model.async.AsyncTaskRepositoryStats;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.model.callback.CallbackDeliveryRepositoryStats;
-import com.example.testqwencli.gateway.model.slot.SlotKind;
+import com.example.testqwencli.gateway.model.slot.enums.SlotKind;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import com.example.testqwencli.gateway.repository.CallbackDeliveryRepository;
 import com.example.testqwencli.gateway.repository.SlotRepository;

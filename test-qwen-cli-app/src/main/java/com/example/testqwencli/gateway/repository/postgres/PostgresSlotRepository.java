@@ -2,7 +2,7 @@ package com.example.testqwencli.gateway.repository.postgres;
 
 import com.example.testqwencli.gateway.config.ExternalGatewayPostgresProperties;
 import com.example.testqwencli.gateway.config.ExternalGatewaySlotProperties;
-import com.example.testqwencli.gateway.model.slot.SlotKind;
+import com.example.testqwencli.gateway.model.slot.enums.SlotKind;
 import com.example.testqwencli.gateway.model.slot.SlotLease;
 import com.example.testqwencli.gateway.repository.postgres.PostgresTableNames;
 import com.example.testqwencli.gateway.repository.SlotRepository;

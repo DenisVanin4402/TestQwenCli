@@ -1,4 +1,4 @@
-package com.example.testqwencli.gateway.model.async;
+package com.example.testqwencli.gateway.model.async.enums;
 
 /**
  * Приоритет async-задачи при выборе dispatcher-ом.

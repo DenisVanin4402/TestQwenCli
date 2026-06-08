@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.model.sync;
 
+import com.example.testqwencli.gateway.model.sync.enums.ExternalSyncStatus;
 import java.util.Map;
 import java.util.UUID;
 

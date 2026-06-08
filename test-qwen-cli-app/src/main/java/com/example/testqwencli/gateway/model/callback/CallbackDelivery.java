@@ -1,6 +1,6 @@
 package com.example.testqwencli.gateway.model.callback;
 
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Objects;

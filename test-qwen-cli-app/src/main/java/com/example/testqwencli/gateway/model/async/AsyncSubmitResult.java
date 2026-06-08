@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.model.async;
 
+import com.example.testqwencli.gateway.model.async.enums.AsyncSubmitResultType;
 import java.util.List;
 import java.util.Objects;
 

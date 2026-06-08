@@ -1,5 +1,7 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardCallStatus;
+import com.example.testqwencli.dashboard.enums.DashboardRequestPriority;
 import com.example.testqwencli.gateway.exception.UpstreamTimeoutException;
 import com.example.testqwencli.gateway.services.ExternalAsyncService;
 import com.example.testqwencli.gateway.services.ExternalSyncService;

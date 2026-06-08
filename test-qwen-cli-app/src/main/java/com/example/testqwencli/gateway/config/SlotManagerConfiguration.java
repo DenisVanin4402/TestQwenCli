@@ -1,6 +1,6 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.model.slot.SyncAcquireWaitMode;
+import com.example.testqwencli.gateway.model.slot.enums.SyncAcquireWaitMode;
 import com.example.testqwencli.gateway.services.impl.ListenNotifySyncSlotWaitStrategy;
 import com.example.testqwencli.gateway.services.impl.LocalSyncSlotReleaseNotifier;
 import com.example.testqwencli.gateway.services.impl.PollingSyncSlotWaitStrategy;

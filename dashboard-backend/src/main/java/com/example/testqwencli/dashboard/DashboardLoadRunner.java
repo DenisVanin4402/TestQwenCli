@@ -1,5 +1,8 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardCallStatus;
+import com.example.testqwencli.dashboard.enums.DashboardRequestPriority;
+import com.example.testqwencli.dashboard.enums.DashboardSubmitStatus;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;

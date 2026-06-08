@@ -1,7 +1,7 @@
 package com.example.testqwencli.gateway.exception;
 
 import com.example.testqwencli.gateway.exception.ExternalGatewayException;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 

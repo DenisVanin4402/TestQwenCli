@@ -1,5 +1,7 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardCallStatus;
+import com.example.testqwencli.dashboard.enums.DashboardSubmitStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;

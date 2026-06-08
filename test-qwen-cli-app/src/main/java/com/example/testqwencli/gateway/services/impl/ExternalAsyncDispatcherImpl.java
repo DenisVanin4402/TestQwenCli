@@ -6,7 +6,7 @@ import com.example.testqwencli.gateway.model.upstream.ExternalUpstreamResponse;
 import com.example.testqwencli.gateway.config.ExternalGatewayAsyncProperties;
 import com.example.testqwencli.gateway.model.async.AsyncTask;
 import com.example.testqwencli.gateway.model.async.AsyncTaskClaim;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import com.example.testqwencli.gateway.model.slot.SlotLease;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import com.example.testqwencli.gateway.services.CallbackDeliveryPlanner;

@@ -1,6 +1,6 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.model.slot.SyncAcquireWaitMode;
+import com.example.testqwencli.gateway.model.slot.enums.SyncAcquireWaitMode;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;

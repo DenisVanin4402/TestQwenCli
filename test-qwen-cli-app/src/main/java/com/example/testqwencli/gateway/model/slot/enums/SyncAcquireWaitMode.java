@@ -1,4 +1,4 @@
-package com.example.testqwencli.gateway.model.slot;
+package com.example.testqwencli.gateway.model.slot.enums;
 
 /**
  * Стратегия ожидания освобождения sync-слота.

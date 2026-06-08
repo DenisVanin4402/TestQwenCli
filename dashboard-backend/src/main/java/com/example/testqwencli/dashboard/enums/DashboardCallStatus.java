@@ -1,4 +1,4 @@
-package com.example.testqwencli.dashboard;
+package com.example.testqwencli.dashboard.enums;
 
 /**
  * Категория результата sync-вызова, по которой дашборд обновляет счетчики и latency-метрики.

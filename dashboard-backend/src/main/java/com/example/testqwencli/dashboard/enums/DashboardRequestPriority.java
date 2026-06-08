@@ -1,4 +1,4 @@
-package com.example.testqwencli.dashboard;
+package com.example.testqwencli.dashboard.enums;
 
 /**
  * Приоритет тестового запроса, который дашборд транслирует в async-приоритет gateway.

@@ -1,5 +1,7 @@
 package com.example.testqwencli.gateway.model.async;
 
+import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.enums.AsyncPriority;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;

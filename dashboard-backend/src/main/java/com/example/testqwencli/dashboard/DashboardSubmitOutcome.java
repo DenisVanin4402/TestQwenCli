@@ -1,5 +1,6 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardSubmitStatus;
 /**
  * Результат одного async-submit вызова gateway из нагрузочного дашборда.
  *

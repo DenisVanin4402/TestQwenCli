@@ -1,4 +1,4 @@
-package com.example.testqwencli.gateway.model.sync;
+package com.example.testqwencli.gateway.model.sync.enums;
 
 /**
  * Статус синхронного ответа gateway.

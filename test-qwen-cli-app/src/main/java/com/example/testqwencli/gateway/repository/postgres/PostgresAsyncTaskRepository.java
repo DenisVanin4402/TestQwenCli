@@ -1,15 +1,15 @@
 package com.example.testqwencli.gateway.repository.postgres;
 
 import com.example.testqwencli.gateway.config.ExternalGatewayPostgresProperties;
-import com.example.testqwencli.gateway.model.async.AsyncDeliveryMode;
-import com.example.testqwencli.gateway.model.async.AsyncPriority;
+import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.enums.AsyncPriority;
 import com.example.testqwencli.gateway.model.async.AsyncSubmitResult;
 import com.example.testqwencli.gateway.model.async.AsyncTask;
 import com.example.testqwencli.gateway.model.async.AsyncTaskClaim;
 import com.example.testqwencli.gateway.model.async.AsyncTaskRepositoryStats;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import com.example.testqwencli.gateway.model.async.AsyncTaskUpdateResult;
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
 import com.example.testqwencli.gateway.model.async.SyncRequestTrace;
 import com.example.testqwencli.gateway.model.async.TaskError;

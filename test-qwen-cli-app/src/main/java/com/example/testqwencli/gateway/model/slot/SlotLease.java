@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.model.slot;
 
+import com.example.testqwencli.gateway.model.slot.enums.SlotKind;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;

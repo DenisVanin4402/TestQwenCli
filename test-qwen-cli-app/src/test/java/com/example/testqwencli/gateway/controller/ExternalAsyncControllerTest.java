@@ -1,6 +1,6 @@
 package com.example.testqwencli.gateway.controller;
 
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;

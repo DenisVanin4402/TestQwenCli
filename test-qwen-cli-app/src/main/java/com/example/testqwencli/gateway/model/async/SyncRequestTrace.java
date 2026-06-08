@@ -1,5 +1,7 @@
 package com.example.testqwencli.gateway.model.async;
 
+import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;

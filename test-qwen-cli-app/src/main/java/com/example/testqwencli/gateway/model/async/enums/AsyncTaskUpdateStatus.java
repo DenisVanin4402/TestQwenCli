@@ -1,4 +1,4 @@
-package com.example.testqwencli.gateway.model.async;
+package com.example.testqwencli.gateway.model.async.enums;
 
 /**
  * Итог команды изменения async-задачи.

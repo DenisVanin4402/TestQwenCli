@@ -1,5 +1,6 @@
 package com.example.testqwencli.dashboard;
 
+import com.example.testqwencli.dashboard.enums.DashboardCallStatus;
 /**
  * Результат одного синхронного вызова gateway из нагрузочного дашборда.
  *

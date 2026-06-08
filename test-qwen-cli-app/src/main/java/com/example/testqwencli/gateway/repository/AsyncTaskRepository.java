@@ -5,7 +5,7 @@ import com.example.testqwencli.gateway.model.async.AsyncTask;
 import com.example.testqwencli.gateway.model.async.AsyncTaskClaim;
 import com.example.testqwencli.gateway.model.async.AsyncTaskRepositoryStats;
 import com.example.testqwencli.gateway.model.async.AsyncTaskUpdateResult;
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
 import com.example.testqwencli.gateway.model.async.SyncRequestTrace;
 import java.time.Duration;

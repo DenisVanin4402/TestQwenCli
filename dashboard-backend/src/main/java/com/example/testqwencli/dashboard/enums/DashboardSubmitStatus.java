@@ -1,4 +1,4 @@
-package com.example.testqwencli.dashboard;
+package com.example.testqwencli.dashboard.enums;
 
 /**
  * Категория результата async-submit операции, по которой дашборд обновляет счетчики нагрузки.

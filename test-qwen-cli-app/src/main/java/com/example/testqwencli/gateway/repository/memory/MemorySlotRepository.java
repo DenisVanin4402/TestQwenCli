@@ -1,7 +1,7 @@
 package com.example.testqwencli.gateway.repository.memory;
 
 import com.example.testqwencli.gateway.config.ExternalGatewaySlotProperties;
-import com.example.testqwencli.gateway.model.slot.SlotKind;
+import com.example.testqwencli.gateway.model.slot.enums.SlotKind;
 import com.example.testqwencli.gateway.model.slot.SlotLease;
 import com.example.testqwencli.gateway.repository.SlotRepository;
 import java.time.Duration;

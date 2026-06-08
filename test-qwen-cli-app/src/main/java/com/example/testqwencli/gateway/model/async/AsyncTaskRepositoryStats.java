@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.model.async;
 
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.Map;

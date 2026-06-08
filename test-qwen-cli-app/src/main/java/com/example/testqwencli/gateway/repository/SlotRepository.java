@@ -1,6 +1,6 @@
 package com.example.testqwencli.gateway.repository;
 
-import com.example.testqwencli.gateway.model.slot.SlotKind;
+import com.example.testqwencli.gateway.model.slot.enums.SlotKind;
 import com.example.testqwencli.gateway.model.slot.SlotLease;
 import java.time.Instant;
 import java.util.Optional;

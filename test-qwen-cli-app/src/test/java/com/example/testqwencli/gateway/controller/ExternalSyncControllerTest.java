@@ -1,9 +1,9 @@
 package com.example.testqwencli.gateway.controller;
 
-import com.example.testqwencli.gateway.model.async.AsyncDeliveryMode;
+import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
 import com.example.testqwencli.gateway.model.async.AsyncTask;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
-import com.example.testqwencli.gateway.model.async.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
 import com.example.testqwencli.gateway.model.slot.SlotLease;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import com.example.testqwencli.gateway.services.SlotManager;

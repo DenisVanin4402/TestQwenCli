@@ -1,7 +1,7 @@
 package com.example.testqwencli.gateway.model.callback;
 
 import com.example.testqwencli.gateway.model.async.AsyncTask;
-import com.example.testqwencli.gateway.model.async.AsyncTaskStatus;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
 import com.example.testqwencli.gateway.model.async.TaskError;
 import java.time.Instant;
 import java.util.Collections;

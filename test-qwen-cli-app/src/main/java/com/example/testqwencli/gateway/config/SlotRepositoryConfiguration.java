@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.config.ExternalGatewayPostgresProperties;
 import com.example.testqwencli.gateway.repository.memory.MemorySlotRepository;
 import com.example.testqwencli.gateway.repository.postgres.PostgresSlotRepository;
 import com.example.testqwencli.gateway.repository.SlotRepository;

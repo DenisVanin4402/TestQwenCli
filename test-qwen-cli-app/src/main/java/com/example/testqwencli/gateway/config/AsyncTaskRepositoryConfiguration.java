@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.config.ExternalGatewayPostgresProperties;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import com.example.testqwencli.gateway.repository.memory.MemoryAsyncTaskRepository;
 import com.example.testqwencli.gateway.repository.postgres.PostgresAsyncTaskRepository;

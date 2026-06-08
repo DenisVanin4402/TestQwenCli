@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.config.ExternalGatewayPostgresProperties;
 import com.example.testqwencli.gateway.repository.CallbackDeliveryRepository;
 import com.example.testqwencli.gateway.repository.memory.MemoryCallbackDeliveryRepository;
 import com.example.testqwencli.gateway.repository.postgres.PostgresCallbackDeliveryRepository;

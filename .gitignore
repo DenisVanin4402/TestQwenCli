@@ -2,3 +2,7 @@
 target/
 *.class
 *.log
+openspec/specs/*/.research/
+openspec/specs/*/.research-notes.md
+openspec/changes/*/.research/
+openspec/changes/*/.research-notes.md

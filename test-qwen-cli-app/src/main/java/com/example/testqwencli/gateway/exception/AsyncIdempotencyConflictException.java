@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.exception;
 
-import com.example.testqwencli.gateway.exception.ExternalGatewayException;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;

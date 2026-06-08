@@ -14,8 +14,6 @@ import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
 import com.example.testqwencli.gateway.model.async.SyncRequestTrace;
 import com.example.testqwencli.gateway.model.async.TaskError;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
-import com.example.testqwencli.gateway.repository.postgres.PostgresJsonMapper;
-import com.example.testqwencli.gateway.repository.postgres.PostgresTableNames;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -457,7 +455,7 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 
 	private Optional<StoredAsyncTask> findStoredByIdempotencyKey(String clientService, UUID externalId) {
 		String sql = baseSelect() + """
-				
+
 				WHERE client_service = :clientService
 				  AND external_id = :externalId
 				  AND %s

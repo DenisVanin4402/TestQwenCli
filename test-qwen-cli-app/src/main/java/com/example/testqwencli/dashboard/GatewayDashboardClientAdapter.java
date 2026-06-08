@@ -7,7 +7,6 @@ import com.example.testqwencli.gateway.model.async.AsyncDeliveryMode;
 import com.example.testqwencli.gateway.model.async.AsyncPriority;
 import com.example.testqwencli.gateway.model.async.AsyncSubmitResponse;
 import com.example.testqwencli.gateway.model.async.ExternalAsyncRequest;
-import com.example.testqwencli.gateway.model.callback.CallbackDelivery;
 import com.example.testqwencli.gateway.model.sync.ExternalSyncHeaders;
 import com.example.testqwencli.gateway.model.sync.ExternalSyncRequest;
 import com.example.testqwencli.gateway.services.ExternalAsyncService;

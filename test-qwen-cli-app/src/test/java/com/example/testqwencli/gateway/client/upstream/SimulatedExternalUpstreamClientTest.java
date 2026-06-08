@@ -4,7 +4,6 @@ import com.example.testqwencli.dashboard.DashboardGatewayRequest;
 import com.example.testqwencli.dashboard.DashboardSimulationSettings;
 import com.example.testqwencli.dashboard.DashboardSimulationSettingsStore;
 import com.example.testqwencli.gateway.model.upstream.ExternalUpstreamRequest;
-import com.example.testqwencli.gateway.client.upstream.SimulatedExternalUpstreamClient;
 import com.example.testqwencli.gateway.config.ExternalGatewayUpstreamProperties;
 import com.example.testqwencli.gateway.exception.UpstreamTimeoutException;
 import java.time.Duration;

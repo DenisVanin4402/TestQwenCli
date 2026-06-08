@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.repository.postgres;
 
-import com.example.testqwencli.gateway.model.callback.CallbackDelivery;
 import java.util.Objects;
 import java.util.regex.Pattern;
 

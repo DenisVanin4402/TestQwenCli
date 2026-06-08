@@ -9,8 +9,6 @@ import com.example.testqwencli.gateway.model.callback.CallbackDelivery;
 import com.example.testqwencli.gateway.model.callback.CallbackDeliveryRepositoryStats;
 import com.example.testqwencli.gateway.model.callback.CallbackPayload;
 import com.example.testqwencli.gateway.repository.CallbackDeliveryRepository;
-import com.example.testqwencli.gateway.repository.postgres.PostgresJsonMapper;
-import com.example.testqwencli.gateway.repository.postgres.PostgresTableNames;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.sql.ResultSet;

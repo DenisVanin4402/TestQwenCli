@@ -22,6 +22,8 @@
 	<properties>
 		<java.version>21</java.version>
 		<springdoc-openapi.version>2.8.5</springdoc-openapi.version>
+		<maven-checkstyle-plugin.version>3.3.1</maven-checkstyle-plugin.version>
+		<spotless-maven-plugin.version>2.43.0</spotless-maven-plugin.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 	</properties>
@@ -32,6 +34,50 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
 					<skip>true</skip>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>${spotless-maven-plugin.version}</version>
+				<configuration>
+					<formats>
+						<format>
+							<includes>
+								<include>pom.xml</include>
+								<include>*/pom.xml</include>
+							</includes>
+							<excludes>
+								<exclude>**/target/**</exclude>
+							</excludes>
+							<trimTrailingWhitespace/>
+							<endWithNewline/>
+						</format>
+					</formats>
+					<java>
+						<includes>
+							<include>src/**/*.java</include>
+							<include>*/src/**/*.java</include>
+						</includes>
+						<excludes>
+							<exclude>**/target/**</exclude>
+						</excludes>
+						<removeUnusedImports/>
+						<trimTrailingWhitespace/>
+						<endWithNewline/>
+					</java>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-checkstyle-plugin</artifactId>
+				<version>${maven-checkstyle-plugin.version}</version>
+				<configuration>
+					<configLocation>${maven.multiModuleProjectDirectory}/config/checkstyle/checkstyle.xml</configLocation>
+					<consoleOutput>true</consoleOutput>
+					<failsOnError>true</failsOnError>
+					<includeTestSourceDirectory>true</includeTestSourceDirectory>
+					<linkXRef>false</linkXRef>
 				</configuration>
 			</plugin>
 		</plugins>

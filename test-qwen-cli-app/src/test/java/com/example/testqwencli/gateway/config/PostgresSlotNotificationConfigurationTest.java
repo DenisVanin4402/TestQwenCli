@@ -1,6 +1,5 @@
 package com.example.testqwencli.gateway.config;
 
-import com.example.testqwencli.gateway.config.PostgresSlotNotificationConfiguration;
 import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationListener;
 import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationPublisher;
 import com.example.testqwencli.gateway.services.impl.LocalSyncSlotReleaseNotifier;

@@ -42,6 +42,11 @@
 - [x] Добавить PostgreSQL e2e негативные API-сценарии для sync и async API.
 - [x] Проверить `NO_SLOT_AVAILABLE`, malformed JSON, validation error, async idempotency conflict, cancel и retry state conflict.
 - [x] Проверить persisted state для негативных сценариев, где состояние должно изменяться или сохраняться.
+- [x] Добавить PostgreSQL LISTEN/NOTIFY integration-тест для sync wait strategy.
+- [x] Проверить пробуждение ожидающего sync acquire через реальный PostgreSQL `NOTIFY`.
+- [x] Проверить fallback при потерянной PostgreSQL notification без длинного ожидания polling interval.
+- [x] Проверить, что при 10 ожидающих sync acquire один освобожденный slot получает ровно один waiter.
+- [x] Проверить, что при 10 ожидающих sync acquire `n` освобожденных slots получают ровно `n` waiters без дублей.
 - [x] Запустить `mvn test`.
 - [x] Добиться успешного `mvn verify -Pintegration-tests` в текущем окружении.
 
@@ -58,7 +63,8 @@
 | CR001-T007: e2e happy path sync и async polling | Выполнена | Добавлен `PostgresExternalGatewayHappyPathIT` с `webEnvironment = RANDOM_PORT`, `TestRestTemplate` и `PostgresIntegrationTestSupport`. Тест проверяет `POST /v1/external/sync` через реальный HTTP-порт и persisted SYNC trace в PostgreSQL, а также `POST /v1/external/async` в polling mode, работу scheduled async dispatcher и `GET /v1/external/async/{taskId}` до статуса `DONE`. |
 | CR001-T008: e2e async callback | Выполнена | Добавлен `PostgresExternalGatewayCallbackIT` с реальным HTTP endpoint на loopback, динамическим allow-list callback URL и включенными async/callback schedulers. Тест отправляет async-запрос в callback mode, проверяет HTTP callback body и заголовки `X-Callback-Attempt`/`X-Request-Id`, а затем сверяет `DONE` задачу и `DELIVERED` callback delivery в PostgreSQL без повторной доставки. |
 | CR001-T009: e2e негативные API-сценарии | Выполнена | Добавлен `PostgresExternalGatewayNegativeApiIT` с `webEnvironment = RANDOM_PORT`, `TestRestTemplate`, PostgreSQL backend и отключенными async/callback schedulers. Тест покрывает занятые sync-слоты с `429`/`Retry-After`/persisted `FAILED` trace, malformed JSON `INVALID_REQUEST`, validation error `VALIDATION_ERROR`, async idempotency conflict `409`, cancel pending task с повторным cancel и retry pending task с `TASK_STATE_CONFLICT`. |
-| CR001-T010 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
+| CR001-T010: LISTEN/NOTIFY integration | Выполнена | Добавлен `PostgresSlotListenNotifyIT` с postgres mode и `sync-acquire-wait-mode=listen_notify`. Тест подтверждает, что ожидающий sync acquire просыпается после освобождения слота и реального PostgreSQL `NOTIFY`, что потерянная notification компенсируется fallback timeout, а также что при 10 ожидающих contenders ровно число освобожденных slots получает lease без дублей. |
+| CR001-T011 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
 
 ## История выполнения
 
@@ -193,12 +199,36 @@
     - Результат: точечный `mvn -pl test-qwen-cli-app -am '-Dit.test=PostgresExternalGatewayNegativeApiIT' '-Dfailsafe.failIfNoSpecifiedTests=false' verify -Pintegration-tests` успешно выполнил 6 сценариев `PostgresExternalGatewayNegativeApiIT`.
     - Результат: полный `mvn verify -Pintegration-tests` успешно выполнил Surefire-набор из 82 тестов и Failsafe-набор из 40 integration-тестов: `PostgresExternalGatewayNegativeApiIT` на 6 e2e-сценариев, `PostgresExternalGatewayCallbackIT`, `PostgresExternalGatewayHappyPathIT` на 2 e2e-сценария, `PostgresLiquibaseSmokeIT`, 11 сценариев `PostgresAsyncTaskRepositoryIT`, 10 сценариев `PostgresCallbackDeliveryRepositoryIT` и 9 сценариев `PostgresSlotRepositoryIT`.
 
+40. Добавлен `PostgresSlotListenNotifyIT` для CR001-T010.
+    - Результат: integration-тест запускает postgres mode с `external-gateway.slots.sync-acquire-wait-mode=listen_notify`, проверяет старт `PostgresSlotReleaseNotificationListener` и подтверждает получение тестового `NOTIFY` через реальный PostgreSQL.
+    - Результат: основной сценарий занимает все sync-слоты, дожидается блокировки ожидающего sync acquire, освобождает слот прямым SQL без локального publisher и отправляет `NOTIFY external_gateway_slot_released`. Ожидающий acquire получает освобожденный slot быстрее полного fallback interval, что закрепляет LISTEN/NOTIFY path отдельно от polling.
+    - Результат: fallback-сценарий освобождает слот прямым SQL без `NOTIFY`; ожидающий acquire завершается через короткий fallback timeout и очищает sync waiter.
+
+41. Запущены проверки после CR001-T010.
+    - Результат: `mvn test` успешно выполнил 82 теста без failures/errors/skipped; новый `PostgresSlotListenNotifyIT` скомпилирован и не запущен в Surefire.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am '-Dit.test=PostgresSlotListenNotifyIT' '-Dfailsafe.failIfNoSpecifiedTests=false' verify -Pintegration-tests` успешно выполнил 2 сценария `PostgresSlotListenNotifyIT`.
+    - Результат: полный `mvn verify -Pintegration-tests` успешно выполнил Surefire-набор из 82 тестов и Failsafe-набор из 42 integration-тестов: `PostgresSlotListenNotifyIT` на 2 сценария, `PostgresExternalGatewayNegativeApiIT` на 6 e2e-сценариев, `PostgresExternalGatewayCallbackIT`, `PostgresExternalGatewayHappyPathIT` на 2 e2e-сценария, `PostgresLiquibaseSmokeIT`, 11 сценариев `PostgresAsyncTaskRepositoryIT`, 10 сценариев `PostgresCallbackDeliveryRepositoryIT` и 9 сценариев `PostgresSlotRepositoryIT`.
+
+42. Расширен `PostgresSlotListenNotifyIT` для конкурентных LISTEN/NOTIFY сценариев.
+    - Результат: добавлены проверки, где 10 sync waiters одновременно просыпаются после PostgreSQL `NOTIFY`, но при одном освобожденном slot lease получает ровно один waiter.
+    - Результат: добавлена зеркальная проверка, где при 10 sync waiters и 3 освобожденных slots lease получают ровно 3 waiters; дополнительно проверяется отсутствие дублей по `slotId` и `leaseId`.
+    - Результат: новые тесты и вспомогательные методы снабжены русскими комментариями, включая комментарии к переменным класса `PostgresSlotListenNotifyIT`.
+    - Результат: `mvn test` успешно выполнил 82 теста без failures/errors/skipped.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am '-Dit.test=PostgresSlotListenNotifyIT' '-Dfailsafe.failIfNoSpecifiedTests=false' verify -Pintegration-tests` успешно выполнил 4 сценария `PostgresSlotListenNotifyIT`.
+    - Результат: после добавления комментариев выполнен `mvn -pl test-qwen-cli-app -am test-compile`, тестовые классы успешно компилируются.
+
+43. Запущен полный Docker-зависимый контур после расширения `PostgresSlotListenNotifyIT`.
+    - Команда: `mvn verify -Pintegration-tests`.
+    - Результат: build завершился успешно за 01:36 min.
+    - Результат: Surefire-набор успешно выполнил 82 теста без failures/errors/skipped.
+    - Результат: Failsafe-набор успешно выполнил 44 integration-теста без failures/errors/skipped, включая `PostgresSlotListenNotifyIT` на 4 сценария.
+
 ## Текущий результат
 
 - Быстрый тестовый контур `mvn test` сохранен и проходит.
 - Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests`.
 - PostgreSQL smoke-тест для Liquibase добавлен, компилируется, запускается Failsafe и проходит на реальном `postgres:16-alpine`.
-- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008 и CR001-T009 закрыты по приемке.
+- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009 и CR001-T010 закрыты по приемке.
 - PostgreSQL/e2e support готов для следующих contract/e2e тестов: есть очистка БД, фабрики тестовых запросов, mutable clock и bounded async waits с диагностикой timeout.
 - `SlotRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая конкурентный sync acquire.
 - `AsyncTaskRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая idempotency, retry/cancel, JSON payload claim, SYNC trace и stats.
@@ -206,12 +236,13 @@
 - Happy path sync и async polling закреплены e2e-тестом на реальном HTTP-порту с PostgreSQL backend и реальным async dispatcher.
 - Happy path async callback закреплен e2e-тестом с реальным HTTP callback endpoint, production `HttpCallbackClient`, PostgreSQL backend и проверкой `DONE`/`DELIVERED` persisted state.
 - Негативные sync/async API-сценарии закреплены e2e-тестом на реальном HTTP-порту с PostgreSQL backend и проверкой контракта ошибок и persisted state.
+- LISTEN/NOTIFY sync wait закреплен integration-тестом на реальном PostgreSQL: проверены notification path, fallback при потерянном `NOTIFY` и конкурентное пробуждение 10 waiters с выдачей lease ровно по числу освобожденных slots.
 - PostgreSQL integration-контексты не переиспользуют `DataSource` к остановленному Testcontainers PostgreSQL между IT-классами.
 - В тестовом выводе остаются отдельные технические долги вне текущего фикса: ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading.
 
 ## Следующие шаги
 
-- Перейти к CR001-T010: LISTEN/NOTIFY integration.
-- Затем расширять PostgreSQL/e2e покрытие по CR001-T011 и следующим задачам из `work-items.md`.
-- Отдельно закрыть уточненный пробел `MT-P0-001` для PostgreSQL `SlotManager` sync wait на занятых слотах, если он остается актуальным перед e2e happy path.
+- Перейти к CR001-T011: контракт `HttpCallbackClient`.
+- Затем расширять PostgreSQL/e2e покрытие по CR001-T012 и следующим задачам из `work-items.md`.
+- Пробел `MT-P0-001` по PostgreSQL `SlotManager` sync wait на занятых слотах закрыт в рамках CR001-T010.
 - В рамках CR001-T017 убрать ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и отдельно решить предупреждение Mockito agent.

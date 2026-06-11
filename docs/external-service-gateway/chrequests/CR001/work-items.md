@@ -25,7 +25,7 @@
 | 13 | CR001-T013: тесты `dashboard-backend` | Исключена | Не выполняется в рамках CR001 по решению от 2026-06-12. |
 | 14 | CR001-T014: OpenAPI и error contract | P1 | Документированный контракт сверяется с фактическим API. |
 | 15 | CR001-T015: functional-тесты scheduler-слоя | P2 | Scheduler logic проверяется без ожидания реального времени. |
-| 16 | CR001-T016: concurrency correctness | P2 | Параллельные workers не дублируют обработку и не ломают lease reserve. |
+| 16 | CR001-T016: concurrency correctness | P2 | `PostgresConcurrencyIT` закрепляет отсутствие дублей обработки и сохранение sync reserve. |
 | 17 | CR001-T017: configuration binding и test output hygiene | P2 | Конфигурация и тестовый вывод становятся устойчивыми к рефакторингу. |
 | 18 | CR001-T018: static UI и browser smoke | P2 | Dashboard UI проверяется минимальным функциональным smoke-тестом. |
 
@@ -283,6 +283,8 @@
 
 ### CR001-T016: concurrency correctness
 
+Статус: выполнена в рамках CR001 2026-06-12. Добавлен `PostgresConcurrencyIT` в Docker-зависимый Failsafe-контур.
+
 Цель: проверить корректность параллельной обработки без performance-метрик.
 
 Объем работ:
@@ -295,6 +297,12 @@
 - Проверяется корректность результата, не скорость.
 - Тесты имеют ограниченные timeouts и диагностические сообщения.
 - Нет случайных зависимостей от порядка thread scheduling.
+
+Результат:
+- Два `ExternalAsyncDispatcherImpl` поверх одной PostgreSQL БД завершают одну pending-задачу ровно один раз.
+- Две `CallbackDeliveryDispatcherImpl` worker-группы доставляют одну pending callback delivery ровно один раз.
+- 12 конкурентных async submit с одним `clientService + externalId` создают одну строку и возвращают согласованный `taskId`.
+- Ожидающий sync acquire забирает освобожденный slot, а конкурентные async lease attempts не нарушают reserve для sync.
 
 ### CR001-T017: configuration binding и test output hygiene
 

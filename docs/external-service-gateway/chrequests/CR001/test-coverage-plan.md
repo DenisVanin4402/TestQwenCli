@@ -7,21 +7,23 @@
 ## Текущее состояние
 
 - `mvn test` проходит: 110 тестов, 0 failures, 0 errors, 0 skipped.
+- `mvn verify -Pintegration-tests` проходит: 110 Surefire-тестов и 48 Failsafe integration-тестов, 0 failures, 0 errors, 0 skipped.
 - Собственные тесты есть только в модуле `test-qwen-cli-app`.
 - `dashboard-backend` и `dashboard-ui` не имеют `src/test` и в reactor выводят `No tests to run`.
-- Текущий набор хорошо покрывает in-memory бизнес-логику: слоты, async submit, idempotency, retry/dead переходы, callback lifecycle и часть конкурентного поведения.
-- HTTP-проверки используют `@SpringBootTest` + `MockMvc` в memory mode. Это integration smoke, но не полноценный e2e: приложение не поднимается на реальном порту, внешние HTTP-вызовы не проходят по сети, PostgreSQL не используется.
-- Testcontainers, `PostgreSQLContainer`, WireMock/MockWebServer, RestAssured/WebTestClient в зависимостях и тестах не найдены.
-- PostgreSQL-ветка сейчас проверяется в основном конфигурационно: наличие changelog и создание notification bean. Миграции, SQL-запросы, row lock, `FOR UPDATE SKIP LOCKED`, LISTEN/NOTIFY и JSONB-маппинг реальной БД тестами не исполняются.
+- Текущий быстрый набор покрывает in-memory бизнес-логику: слоты, async submit, idempotency, retry/dead переходы, callback lifecycle, scheduler orchestration, controller/API contracts и OpenAPI/error contract.
+- PostgreSQL/Testcontainers-контур покрывает Liquibase, repository contracts, e2e sync/async/callback flows, негативные API-сценарии, LISTEN/NOTIFY, row locking, JSONB-маппинг и concurrency correctness.
+- HTTP-проверки включают быстрые `@SpringBootTest` + `MockMvc` сценарии в memory mode и e2e-сценарии на реальном HTTP-порту в PostgreSQL mode.
+- Testcontainers, `PostgreSQLContainer` и loopback HTTP server используются в выделенном Docker-зависимом контуре; внешний сетевой доступ тестам не нужен.
 
 ## Риски текущего покрытия
 
-- Большой рефакторинг persistence-слоя может сломать `PostgresSlotRepository`, `PostgresAsyncTaskRepository`, `PostgresCallbackDeliveryRepository` или Liquibase changelog без падения `mvn test`.
-- Callback HTTP-клиент не проверяется против реального HTTP endpoint: заголовки, тело, статус-коды и ошибки сети остаются непокрытыми.
+- Большой рефакторинг persistence-слоя теперь ловится Docker-зависимыми контрактами `PostgresSlotRepository`, `PostgresAsyncTaskRepository`, `PostgresCallbackDeliveryRepository` и Liquibase smoke, но требует запуска `mvn verify -Pintegration-tests`, а не только `mvn test`.
+- Callback HTTP-клиент проверяется против реального loopback HTTP endpoint; retry/dead последствия HTTP-ошибок закреплены dispatcher flow-тестом.
 - Dashboard backend не имеет локальных unit/controller тестов, хотя содержит REST API, генератор функциональной нагрузки и метрики; риск принят, CR001-T013 исключена из работ по решению от 2026-06-12.
 - OpenAPI YAML в `docs/openapi` сверяется с generated `/v3/api-docs` быстрым MockMvc-тестом по стабильным paths, параметрам, status codes, schema refs и публичным полям gateway API; callback YAML сверяется с сериализуемым `CallbackPayload`.
 - Scheduler-слой проверяется быстрым functional-набором без ожидания реального расписания: async/callback dispatch ticks, callback recovery, slot lease reaper, enabled/disabled flags и запись dashboard-метрик только при положительном count.
-- Часть конкурентных тестов опирается на реальные таймауты, latch и `Thread.sleep`, поэтому после расширения набора стоит вынести общие test helpers и уменьшить риск flaky-тестов.
+- PostgreSQL concurrency correctness проверяется `PostgresConcurrencyIT`: два async dispatcher instance, две callback worker группы, конкурентный idempotent submit и sync reserve против конкурентных async lease attempts.
+- Конкурентные тесты используют bounded `CountDownLatch`, `Future.get(timeout)` и диагностические сообщения; при дальнейшем расширении набора стоит вынести общие concurrent helpers, чтобы не дублировать обвязку.
 - `PostgresSlotNotificationConfigurationTest` создает listener с недоступным `DataSource`, из-за чего в `mvn test` появляется ожидаемый WARN из фонового потока. Это не падение, но шумит и может скрывать реальные проблемы.
 - Mockito в текущем запуске предупреждает о dynamic agent loading. Перед обновлением JDK/Mockito нужно явно настроить mockito agent или убрать inline-mocking там, где он не нужен.
 
@@ -121,6 +123,7 @@
    - Проверять без реального ожидания времени через управляемый scheduler/clock.
 
 3. Concurrency correctness без performance-метрик.
+   - Статус: выполнено в рамках CR001-T016.
    - Два dispatcher instance с одной PostgreSQL БД не обрабатывают одну задачу дважды.
    - Две callback delivery worker группы не доставляют один callback дважды.
    - Конкурентные async submit с одинаковым idempotency key дают одну запись и согласованный ответ.

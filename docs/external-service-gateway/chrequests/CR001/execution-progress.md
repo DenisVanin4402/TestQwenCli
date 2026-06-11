@@ -63,6 +63,11 @@
 - [x] Добавить functional-тесты scheduler-слоя без ожидания реального расписания.
 - [x] Проверить enabled/disabled flags для async и callback schedulers.
 - [x] Проверить запись scheduler-метрик только при положительном count.
+- [x] Добавить PostgreSQL concurrency integration-тесты без performance-замеров.
+- [x] Проверить, что два async dispatcher instance не обрабатывают одну PostgreSQL-задачу дважды.
+- [x] Проверить, что две callback worker группы не доставляют один PostgreSQL callback дважды.
+- [x] Проверить конкурентный async submit с одним idempotency key.
+- [x] Проверить, что конкурентные sync/async lease не нарушают reserve для sync.
 - [x] Запустить `mvn test`.
 - [x] Добиться успешного `mvn verify -Pintegration-tests` в текущем окружении.
 
@@ -85,7 +90,8 @@
 | CR001-T013: тесты `dashboard-backend` | Не выполняется | Исключена из CR001 по решению от 2026-06-12. |
 | CR001-T014: OpenAPI и error contract | Выполнена | Добавлен `ExternalGatewayOpenApiContractTest`, который сверяет generated `/v3/api-docs` с `docs/openapi` по gateway paths, operationId, параметрам, status codes, response schema refs, публичным schema fields и наличию dashboard API paths; callback YAML сверяется с сериализуемым `CallbackPayload`. |
 | CR001-T015: functional-тесты scheduler-слоя | Выполнена | Schedulers обновлены записью dashboard-метрик для положительных результатов. Добавлен `GatewaySchedulerTest`, который напрямую вызывает tick-методы async dispatcher, callback dispatcher/recovery и slot lease reaper, а также проверяет conditional creation async/callback scheduler beans по enabled/disabled flags. |
-| CR001-T016 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
+| CR001-T016: concurrency correctness | Выполнена | Добавлен `PostgresConcurrencyIT`, который проверяет корректность параллельной обработки на PostgreSQL без performance-метрик: два async dispatcher instance не обрабатывают одну задачу дважды, две callback worker группы не доставляют один callback дважды, конкурентный async submit с одним idempotency key создает одну строку, а ожидающий sync acquire не теряет reserve из-за конкурентных async lease attempts. |
+| CR001-T017 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
 
 ## История выполнения
 
@@ -296,12 +302,24 @@
     - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:02 min; Surefire-набор выполнил 110 тестов без failures/errors/skipped, Failsafe-набор выполнил 44 integration-теста без failures/errors/skipped.
     - Наблюдение: в тестовом выводе по-прежнему присутствуют ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017.
 
+53. Добавлены PostgreSQL concurrency-тесты для CR001-T016.
+    - Результат: добавлен `PostgresConcurrencyIT` в Docker-зависимый Failsafe-контур.
+    - Результат: тест `concurrentAsyncDispatchersDoNotProcessSamePostgresTaskTwice` запускает два `ExternalAsyncDispatcherImpl` поверх одной PostgreSQL БД и одного pending task; bounded fake upstream удерживает первый claim, второй dispatcher получает `false`, а задача завершается `DONE` ровно с одной попыткой.
+    - Результат: тест `concurrentCallbackDispatchersDoNotDeliverSamePostgresDeliveryTwice` запускает две `CallbackDeliveryDispatcherImpl` worker-группы поверх одной pending delivery; bounded fake callback client получает один вызов, delivery становится `DELIVERED`, aggregate status async task синхронизируется в `DELIVERED`.
+    - Результат: тест `concurrentAsyncSubmitWithSameIdempotencyKeyCreatesSinglePostgresRow` запускает 12 конкурентных submit с одинаковым `clientService + externalId` и проверяет один persisted row, один новый submit и 11 согласованных idempotent повторов.
+    - Результат: тест `waitingSyncAcquireKeepsReleasedSlotFromConcurrentAsyncLeaseAttempts` удерживает все sync-slots, регистрирует ожидающий sync acquire, освобождает один slot и параллельно запускает async lease attempts; sync waiter забирает освобожденный slot, async lease не получает slot, reserve для sync сохраняется.
+
+54. Запущены проверки после CR001-T016.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dit.test=PostgresConcurrencyIT" "-Dfailsafe.failIfNoSpecifiedTests=false" verify -Pintegration-tests` успешно выполнил 110 быстрых Surefire-тестов и 4 теста `PostgresConcurrencyIT` без failures/errors/skipped.
+    - Результат: полный `mvn verify -Pintegration-tests` завершился успешно за 02:19 min; Surefire-набор выполнил 110 тестов без failures/errors/skipped, Failsafe-набор выполнил 48 integration-тестов без failures/errors/skipped.
+    - Наблюдение: в тестовом выводе по-прежнему присутствует предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017. Ожидаемый шум из `PostgresSlotNotificationConfigurationTest` также остается предметом CR001-T017.
+
 ## Текущий результат
 
 - Быстрый тестовый контур `mvn test` сохранен и проходит: 110 тестов без failures/errors/skipped.
-- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 110 Surefire-тестов и 44 Failsafe integration-теста без failures/errors/skipped.
+- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 110 Surefire-тестов и 48 Failsafe integration-тестов без failures/errors/skipped.
 - PostgreSQL smoke-тест для Liquibase добавлен, компилируется, запускается Failsafe и проходит на реальном `postgres:16-alpine`.
-- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014 и CR001-T015 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
+- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014, CR001-T015 и CR001-T016 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
 - PostgreSQL/e2e support готов для следующих contract/e2e тестов: есть очистка БД, фабрики тестовых запросов, mutable clock и bounded async waits с диагностикой timeout.
 - `SlotRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая конкурентный sync acquire.
 - `AsyncTaskRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая idempotency, retry/cancel, JSON payload claim, SYNC trace и stats.
@@ -314,13 +332,14 @@
 - Быстрые controller/API тесты в memory mode расширены для async/sync негативных сценариев, polling после `DONE`, manual retry `DEAD` и повторных SYNC trace с одинаковым `externalId`.
 - OpenAPI и error contract закреплены быстрым MockMvc-тестом: generated `/v3/api-docs` сверяется с `docs/openapi` по стабильным частям gateway API, а callback YAML сверяется с сериализуемым `CallbackPayload`.
 - Scheduler-слой закреплен быстрыми functional-тестами без ожидания реального расписания: проверены batch size, enabled/disabled flags, startup/scheduled callback recovery и запись dashboard-метрик только при положительных результатах.
+- PostgreSQL concurrency correctness закреплен отдельным Failsafe-тестом: проверены конкурентные async dispatchers, callback workers, idempotent submit и sync reserve при конкурентных async lease attempts.
 - PostgreSQL integration-контексты не переиспользуют `DataSource` к остановленному Testcontainers PostgreSQL между IT-классами.
 - В тестовом выводе остаются отдельные технические долги вне текущего фикса: ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading.
 
 ## Следующие шаги
 
 - CR001-T013 пропустить по решению от 2026-06-12.
-- Перейти к CR001-T016: concurrency correctness.
-- Затем расширять покрытие по CR001-T017 и следующим задачам из `work-items.md`.
+- Перейти к CR001-T017: configuration binding и test output hygiene.
+- Затем расширять покрытие по CR001-T018 и следующим задачам из `work-items.md`.
 - Пробел `MT-P0-001` по PostgreSQL `SlotManager` sync wait на занятых слотах закрыт в рамках CR001-T010.
 - В рамках CR001-T017 убрать ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и отдельно решить предупреждение Mockito agent.

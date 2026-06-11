@@ -26,6 +26,14 @@ Spring Boot 3.4.3 / Java 21 проект для проверки `external-servi
 mvn test
 ```
 
+Docker-зависимые integration-тесты запускаются отдельно через Maven Failsafe:
+
+```powershell
+mvn verify -Pintegration-tests
+```
+
+Эта команда запускает классы `*IT` и требует доступный Docker. Обычный `mvn test` контейнеры не поднимает.
+
 Сборка jar:
 
 ```powershell

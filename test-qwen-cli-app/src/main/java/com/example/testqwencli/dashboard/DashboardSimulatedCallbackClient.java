@@ -6,11 +6,17 @@ import com.example.testqwencli.gateway.model.callback.CallbackPayload;
 import java.net.URI;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.Objects;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 @Component
 @Primary
+@ConditionalOnProperty(
+		name = "external-gateway.callback.simulated-client-enabled",
+		havingValue = "true",
+		matchIfMissing = true
+)
 class DashboardSimulatedCallbackClient implements CallbackClient {
 
 	private final DashboardSimulationSettingsStore settingsStore;

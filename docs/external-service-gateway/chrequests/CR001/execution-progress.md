@@ -47,6 +47,22 @@
 - [x] Проверить fallback при потерянной PostgreSQL notification без длинного ожидания polling interval.
 - [x] Проверить, что при 10 ожидающих sync acquire один освобожденный slot получает ровно один waiter.
 - [x] Проверить, что при 10 ожидающих sync acquire `n` освобожденных slots получают ровно `n` waiters без дублей.
+- [x] Добавить контрактный тест `HttpCallbackClient` против реального loopback HTTP server.
+- [x] Проверить `POST`, target URI, JSON body, `X-Callback-Attempt` и `X-Request-Id`.
+- [x] Проверить отсутствие пустого `X-Request-Id`.
+- [x] Проверить `2xx`, `4xx/5xx`, read timeout и connection failure без внешней сети.
+- [x] Проверить retry/dead последствия non-2xx callback response в dispatcher flow.
+- [x] Расширить controller/API тесты в memory mode.
+- [x] Проверить async not found, чужой `X-Client-Service`, malformed JSON и отсутствие optional headers.
+- [x] Проверить polling response после `DONE` и manual retry для `DEAD` retryable задачи.
+- [x] Проверить sync upstream timeout/error и повторные SYNC trace с одинаковым `externalId`.
+- [x] Проверить `X-Request-Id` в новых error responses и стабильные JSON-поля публичных ответов.
+- [x] Добавить OpenAPI metadata и явные response/parameter annotations для gateway API.
+- [x] Сверить generated `/v3/api-docs` с `docs/openapi` по стабильным paths, параметрам, status codes и schema fields.
+- [x] Сверить callback OpenAPI-документ с сериализуемым `CallbackPayload`.
+- [x] Добавить functional-тесты scheduler-слоя без ожидания реального расписания.
+- [x] Проверить enabled/disabled flags для async и callback schedulers.
+- [x] Проверить запись scheduler-метрик только при положительном count.
 - [x] Запустить `mvn test`.
 - [x] Добиться успешного `mvn verify -Pintegration-tests` в текущем окружении.
 
@@ -64,7 +80,12 @@
 | CR001-T008: e2e async callback | Выполнена | Добавлен `PostgresExternalGatewayCallbackIT` с реальным HTTP endpoint на loopback, динамическим allow-list callback URL и включенными async/callback schedulers. Тест отправляет async-запрос в callback mode, проверяет HTTP callback body и заголовки `X-Callback-Attempt`/`X-Request-Id`, а затем сверяет `DONE` задачу и `DELIVERED` callback delivery в PostgreSQL без повторной доставки. |
 | CR001-T009: e2e негативные API-сценарии | Выполнена | Добавлен `PostgresExternalGatewayNegativeApiIT` с `webEnvironment = RANDOM_PORT`, `TestRestTemplate`, PostgreSQL backend и отключенными async/callback schedulers. Тест покрывает занятые sync-слоты с `429`/`Retry-After`/persisted `FAILED` trace, malformed JSON `INVALID_REQUEST`, validation error `VALIDATION_ERROR`, async idempotency conflict `409`, cancel pending task с повторным cancel и retry pending task с `TASK_STATE_CONFLICT`. |
 | CR001-T010: LISTEN/NOTIFY integration | Выполнена | Добавлен `PostgresSlotListenNotifyIT` с postgres mode и `sync-acquire-wait-mode=listen_notify`. Тест подтверждает, что ожидающий sync acquire просыпается после освобождения слота и реального PostgreSQL `NOTIFY`, что потерянная notification компенсируется fallback timeout, а также что при 10 ожидающих contenders ровно число освобожденных slots получает lease без дублей. |
-| CR001-T011 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
+| CR001-T011: контракт `HttpCallbackClient` | Выполнена | Добавлен `HttpCallbackClientTest` с JDK `HttpServer` на loopback. Тест проверяет `POST`, target URI, JSON body, `X-Callback-Attempt`, заданный/пустой `X-Request-Id`, `2xx`, `4xx/5xx`, read timeout и connection failure без внешней сети. `CallbackDeliveryFlowTest` дополнительно закрепляет non-2xx response как retry/dead путь dispatcher. |
+| CR001-T012: расширение controller/API тестов в memory mode | Выполнена | `ExternalAsyncControllerTest` расширен сценариями malformed JSON, not found, отсутствующих optional headers, чужого `X-Client-Service`, polling response после `DONE` и manual retry для `DEAD` retryable задачи. `ExternalSyncControllerTest` проверяет upstream timeout, simulated upstream failure и повторные SYNC trace с одинаковым `externalId`. |
+| CR001-T013: тесты `dashboard-backend` | Не выполняется | Исключена из CR001 по решению от 2026-06-12. |
+| CR001-T014: OpenAPI и error contract | Выполнена | Добавлен `ExternalGatewayOpenApiContractTest`, который сверяет generated `/v3/api-docs` с `docs/openapi` по gateway paths, operationId, параметрам, status codes, response schema refs, публичным schema fields и наличию dashboard API paths; callback YAML сверяется с сериализуемым `CallbackPayload`. |
+| CR001-T015: functional-тесты scheduler-слоя | Выполнена | Schedulers обновлены записью dashboard-метрик для положительных результатов. Добавлен `GatewaySchedulerTest`, который напрямую вызывает tick-методы async dispatcher, callback dispatcher/recovery и slot lease reaper, а также проверяет conditional creation async/callback scheduler beans по enabled/disabled flags. |
+| CR001-T016 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
 
 ## История выполнения
 
@@ -223,12 +244,64 @@
     - Результат: Surefire-набор успешно выполнил 82 теста без failures/errors/skipped.
     - Результат: Failsafe-набор успешно выполнил 44 integration-теста без failures/errors/skipped, включая `PostgresSlotListenNotifyIT` на 4 сценария.
 
+44. Добавлен контракт `HttpCallbackClient` для CR001-T011.
+    - Результат: добавлен быстрый `HttpCallbackClientTest` без Docker и внешней сети. Тест поднимает JDK `HttpServer` на loopback и проверяет фактический `RestClient`-запрос: `POST`, target URI с query string, JSON body callback payload, `Content-Type`, `X-Callback-Attempt` и `X-Request-Id`.
+    - Результат: отдельно проверено, что пустой `requestId` не добавляет `X-Request-Id`.
+    - Результат: отдельно проверены `2xx` как успешный `CallbackClientResponse`, `400`/`503` как `RestClientResponseException`, read timeout как `ResourceAccessException` и connection failure на закрытом loopback port как `ResourceAccessException`.
+    - Результат: `CallbackDeliveryFlowTest` расширен сценарием non-2xx callback response: первый `503` переводит доставку в `RETRY`, повтор после backoff переводит ее в `DEAD`, а async task получает соответствующий aggregate callback status.
+
+45. Запущены проверки после CR001-T011.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=HttpCallbackClientTest,CallbackDeliveryFlowTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 15 тестов без failures/errors/skipped.
+    - Результат: `mvn test` успешно выполнил 89 тестов без failures/errors/skipped.
+    - Результат: `mvn verify -Pintegration-tests` завершился успешно за 01:42 min; Surefire-набор выполнил 89 тестов без failures/errors/skipped, Failsafe-набор выполнил 44 integration-теста без failures/errors/skipped.
+
+46. Расширены controller/API тесты в memory mode для CR001-T012.
+    - Результат: `ExternalAsyncControllerTest` дополнен проверками malformed JSON `INVALID_REQUEST`, `TASK_NOT_FOUND` с `X-Request-Id`, `TASK_NOT_FOUND` без optional headers, фильтрации чужого `X-Client-Service`, polling response после `DONE` и успешного manual retry для `DEAD` retryable задачи.
+    - Результат: сценарии `DONE` и `DEAD` подготавливают состояние через публичный `AsyncTaskRepository`; методы изолированы через `@DirtiesContext(methodMode = BEFORE_METHOD)`, чтобы накопленные memory-задачи из соседних controller-тестов не влияли на claim.
+    - Результат: `ExternalSyncControllerTest` дополнен проверками `UPSTREAM_TIMEOUT`, `UPSTREAM_SIMULATED_FAILURE` и повторных SYNC trace с одинаковым `externalId`.
+    - Результат: новые error-сценарии проверяют `X-Request-Id`, `retryable`, `details` и persisted sync trace; polling response после `DONE` дополнительно фиксирует стабильные публичные JSON-поля `AsyncTask`.
+
+47. Запущены проверки после CR001-T012.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalAsyncControllerTest,ExternalSyncControllerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 19 controller-тестов без failures/errors/skipped.
+    - Результат: `mvn test` успешно выполнил 98 тестов без failures/errors/skipped.
+    - Наблюдение: в тестовом выводе по-прежнему присутствуют ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017.
+
+48. CR001-T013 исключена из работ, CR001-T014 возвращена в очередь.
+    - Решение: задачу `CR001-T013: тесты dashboard-backend` не выполняем в рамках CR001; `CR001-T014: OpenAPI и error contract` остается рабочей задачей.
+    - Результат: `work-items.md`, `test-coverage-plan.md` и этот журнал обновлены; после CR001-T012 очередь переходит к CR001-T014.
+
+49. Добавлен OpenAPI/error contract для CR001-T014.
+    - Результат: в `TestQwenCliApplication` добавлена общая OpenAPI metadata для generated `/v3/api-docs`.
+    - Результат: `ExternalSyncController` и `ExternalAsyncController` снабжены OpenAPI-аннотациями для публичных operationId, response codes, JSON response schemas и стабильных header/path параметров.
+    - Результат: `docs/openapi/external-gateway-sync.yaml` приведен к фактическому HTTP-поведению: upstream timeout документируется как `504`, неиспользуемый `502` удален, а `upstreamStatus` отмечен как обязательное публичное поле sync response.
+    - Результат: `docs/openapi/external-gateway-async.yaml` приведен к текущей реализации: неиспользуемый `413` удален, `alreadyExisted` и `callbackDeliveryStatus` отмечены как обязательные публичные поля соответствующих response-схем.
+    - Результат: добавлен `ExternalGatewayOpenApiContractTest`, который через MockMvc получает generated `/v3/api-docs`, читает YAML из `docs/openapi` и сверяет gateway paths, operationId, параметры, status codes, response schema refs, schema fields и наличие dashboard API paths.
+    - Результат: callback OpenAPI-документ дополнительно сверяется с фактически сериализуемым `CallbackPayload`, так как callback endpoint реализуется сервисами-клиентами и не публикуется в generated `/v3/api-docs` текущего приложения.
+
+50. Запущены проверки после CR001-T014.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 2 OpenAPI contract-теста без failures/errors/skipped.
+    - Результат: `mvn test` успешно выполнил 100 тестов без failures/errors/skipped.
+    - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:03 min; Surefire-набор выполнил 100 тестов без failures/errors/skipped, Failsafe-набор выполнил 44 integration-теста без failures/errors/skipped.
+    - Наблюдение: в тестовом выводе по-прежнему присутствуют ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017.
+
+51. Добавлены functional-тесты scheduler-слоя для CR001-T015.
+    - Результат: `ExternalAsyncDispatcherScheduler` теперь записывает `DashboardMetricsRegistry.recordAsyncDispatchIterations` после `dispatchBatch`, а `DashboardMetricsRegistry` учитывает только положительный count.
+    - Результат: `CallbackDeliveryDispatcherScheduler` теперь записывает `DashboardMetricsRegistry.recordCallbackDispatchIterations` после `dispatchBatch`; recovery tick и startup recovery по-прежнему вызывают `recoverTimedOutDeliveries` без ожидания реального расписания.
+    - Результат: `SlotLeaseReaperScheduler` теперь записывает `DashboardMetricsRegistry.recordExpiredLeases` после `reapExpiredLeases`, с тем же правилом учета только положительного count.
+    - Результат: добавлен быстрый `GatewaySchedulerTest` на 10 сценариев: async/callback batch size, positive/zero metrics, callback startup/scheduled recovery, slot lease reaper metrics и conditional creation async/callback scheduler beans при enabled/disabled flags.
+
+52. Запущены проверки после CR001-T015.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=GatewaySchedulerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 10 scheduler-тестов без failures/errors/skipped.
+    - Результат: `mvn test` успешно выполнил 110 тестов без failures/errors/skipped.
+    - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:02 min; Surefire-набор выполнил 110 тестов без failures/errors/skipped, Failsafe-набор выполнил 44 integration-теста без failures/errors/skipped.
+    - Наблюдение: в тестовом выводе по-прежнему присутствуют ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017.
+
 ## Текущий результат
 
-- Быстрый тестовый контур `mvn test` сохранен и проходит.
-- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests`.
+- Быстрый тестовый контур `mvn test` сохранен и проходит: 110 тестов без failures/errors/skipped.
+- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 110 Surefire-тестов и 44 Failsafe integration-теста без failures/errors/skipped.
 - PostgreSQL smoke-тест для Liquibase добавлен, компилируется, запускается Failsafe и проходит на реальном `postgres:16-alpine`.
-- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009 и CR001-T010 закрыты по приемке.
+- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014 и CR001-T015 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
 - PostgreSQL/e2e support готов для следующих contract/e2e тестов: есть очистка БД, фабрики тестовых запросов, mutable clock и bounded async waits с диагностикой timeout.
 - `SlotRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая конкурентный sync acquire.
 - `AsyncTaskRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая idempotency, retry/cancel, JSON payload claim, SYNC trace и stats.
@@ -237,12 +310,17 @@
 - Happy path async callback закреплен e2e-тестом с реальным HTTP callback endpoint, production `HttpCallbackClient`, PostgreSQL backend и проверкой `DONE`/`DELIVERED` persisted state.
 - Негативные sync/async API-сценарии закреплены e2e-тестом на реальном HTTP-порту с PostgreSQL backend и проверкой контракта ошибок и persisted state.
 - LISTEN/NOTIFY sync wait закреплен integration-тестом на реальном PostgreSQL: проверены notification path, fallback при потерянном `NOTIFY` и конкурентное пробуждение 10 waiters с выдачей lease ровно по числу освобожденных slots.
+- Низкоуровневый `HttpCallbackClient` закреплен тестом на реальном loopback HTTP server, включая успешный ответ, HTTP error responses и сетевые ошибки без внешнего доступа.
+- Быстрые controller/API тесты в memory mode расширены для async/sync негативных сценариев, polling после `DONE`, manual retry `DEAD` и повторных SYNC trace с одинаковым `externalId`.
+- OpenAPI и error contract закреплены быстрым MockMvc-тестом: generated `/v3/api-docs` сверяется с `docs/openapi` по стабильным частям gateway API, а callback YAML сверяется с сериализуемым `CallbackPayload`.
+- Scheduler-слой закреплен быстрыми functional-тестами без ожидания реального расписания: проверены batch size, enabled/disabled flags, startup/scheduled callback recovery и запись dashboard-метрик только при положительных результатах.
 - PostgreSQL integration-контексты не переиспользуют `DataSource` к остановленному Testcontainers PostgreSQL между IT-классами.
 - В тестовом выводе остаются отдельные технические долги вне текущего фикса: ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading.
 
 ## Следующие шаги
 
-- Перейти к CR001-T011: контракт `HttpCallbackClient`.
-- Затем расширять PostgreSQL/e2e покрытие по CR001-T012 и следующим задачам из `work-items.md`.
+- CR001-T013 пропустить по решению от 2026-06-12.
+- Перейти к CR001-T016: concurrency correctness.
+- Затем расширять покрытие по CR001-T017 и следующим задачам из `work-items.md`.
 - Пробел `MT-P0-001` по PostgreSQL `SlotManager` sync wait на занятых слотах закрыт в рамках CR001-T010.
 - В рамках CR001-T017 убрать ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и отдельно решить предупреждение Mockito agent.

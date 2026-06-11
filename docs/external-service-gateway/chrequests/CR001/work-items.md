@@ -22,7 +22,7 @@
 | 10 | CR001-T010: LISTEN/NOTIFY integration | P1 | PostgreSQL notification path проверен отдельно от polling. |
 | 11 | CR001-T011: контракт `HttpCallbackClient` | P1 | HTTP client проверен против реального тестового сервера. |
 | 12 | CR001-T012: расширение controller/API тестов в memory mode | P1 | Быстрый `mvn test` ловит основные HTTP-регрессии без Docker. |
-| 13 | CR001-T013: тесты `dashboard-backend` | P1 | У dashboard backend появляются собственные unit/controller тесты. |
+| 13 | CR001-T013: тесты `dashboard-backend` | Исключена | Не выполняется в рамках CR001 по решению от 2026-06-12. |
 | 14 | CR001-T014: OpenAPI и error contract | P1 | Документированный контракт сверяется с фактическим API. |
 | 15 | CR001-T015: functional-тесты scheduler-слоя | P2 | Scheduler logic проверяется без ожидания реального времени. |
 | 16 | CR001-T016: concurrency correctness | P2 | Параллельные workers не дублируют обработку и не ломают lease reserve. |
@@ -232,6 +232,8 @@
 - Ошибки controller layer ловятся до запуска Docker-набора.
 
 ### CR001-T013: тесты `dashboard-backend`
+
+Статус: не выполняется в рамках CR001 по решению от 2026-06-12. Очередь работ после CR001-T012 переходит сразу к CR001-T014.
 
 Цель: дать dashboard backend собственный тестовый контур в своем модуле.
 

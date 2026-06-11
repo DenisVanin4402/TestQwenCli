@@ -1,18 +1,27 @@
 package com.example.testqwencli.gateway.controller;
 
-import com.example.testqwencli.gateway.model.async.enums.CallbackDeliveryStatus;
+import com.example.testqwencli.gateway.model.async.AsyncTask;
+import com.example.testqwencli.gateway.model.async.AsyncTaskClaim;
+import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
+import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,6 +44,9 @@ class ExternalAsyncControllerTest {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private AsyncTaskRepository taskRepository;
 
 	@Test
 	void postAsyncCreatesPendingTaskAndReturnsStatusUrl() throws Exception {
@@ -92,6 +104,24 @@ class ExternalAsyncControllerTest {
 	}
 
 	@Test
+	void malformedJsonReturnsInvalidRequestWithRequestId() throws Exception {
+		String malformedJson = """
+				{"externalId":"6ee9456e-d793-4e83-af23-53fdd8fd7b7f","clientService":"invest-pay","payload":
+				""";
+
+		mockMvc.perform(post("/v1/external/async")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", "req-async-malformed")
+						.content(malformedJson))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+				.andExpect(jsonPath("$.message").value("Некорректный JSON или тип поля в запросе"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value("req-async-malformed"))
+				.andExpect(jsonPath("$.details.reason").value("Тело запроса не соответствует контракту"));
+	}
+
+	@Test
 	void getByTaskIdAndExternalIdReturnTask() throws Exception {
 		UUID externalId = UUID.fromString("b508d915-7c35-49c3-8c01-9022c1886f6b");
 		long taskId = taskId(submit(defaultRequest(externalId), "req-async-get-create"));
@@ -113,6 +143,42 @@ class ExternalAsyncControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.taskId").value(taskId))
 				.andExpect(jsonPath("$.externalId").value(externalId.toString()));
+	}
+
+	@Test
+	void getUnknownTaskReturnsNotFoundWithRequestId() throws Exception {
+		mockMvc.perform(get("/v1/external/async/{taskId}", 990_001)
+						.header("X-Client-Service", CLIENT_SERVICE)
+						.header("X-Request-Id", "req-async-not-found"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"))
+				.andExpect(jsonPath("$.message").value("Async-задача не найдена"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value("req-async-not-found"))
+				.andExpect(jsonPath("$.details.taskId").value(990_001));
+	}
+
+	@Test
+	void getUnknownTaskWithoutOptionalHeadersReturnsNotFoundWithoutRequestId() throws Exception {
+		mockMvc.perform(get("/v1/external/async/{taskId}", 990_002))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"))
+				.andExpect(jsonPath("$.requestId").doesNotExist())
+				.andExpect(jsonPath("$.details.taskId").value(990_002));
+	}
+
+	@Test
+	void getTaskWithForeignClientServiceReturnsNotFound() throws Exception {
+		UUID externalId = UUID.fromString("237cf9db-faae-43b4-afad-14ecce96e827");
+		long taskId = taskId(submit(defaultRequest(externalId), "req-async-foreign-create"));
+
+		mockMvc.perform(get("/v1/external/async/{taskId}", taskId)
+						.header("X-Client-Service", "risk-core")
+						.header("X-Request-Id", "req-async-foreign-get"))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("TASK_NOT_FOUND"))
+				.andExpect(jsonPath("$.requestId").value("req-async-foreign-get"))
+				.andExpect(jsonPath("$.details.taskId").value(taskId));
 	}
 
 	@Test
@@ -156,6 +222,38 @@ class ExternalAsyncControllerTest {
 	}
 
 	@Test
+	@DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
+	void pollingTaskAfterDoneReturnsResultAndStablePublicFields() throws Exception {
+		UUID externalId = UUID.fromString("1186b66f-ee2d-406d-a9b1-aeb46819dac0");
+		long taskId = taskId(submit(pollingRequest(externalId), "req-async-done-create"));
+		completeOnlyPendingTask(taskId, Map.of("decision", "APPROVED", "score", "82"));
+
+		MvcResult result = mockMvc.perform(get("/v1/external/async/{taskId}", taskId)
+						.header("X-Client-Service", CLIENT_SERVICE)
+						.header("X-Request-Id", "req-async-done-get"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.taskId").value(taskId))
+				.andExpect(jsonPath("$.externalId").value(externalId.toString()))
+				.andExpect(jsonPath("$.clientService").value(CLIENT_SERVICE))
+				.andExpect(jsonPath("$.priority").value("LOW"))
+				.andExpect(jsonPath("$.deliveryMode").value("POLLING"))
+				.andExpect(jsonPath("$.status").value("DONE"))
+				.andExpect(jsonPath("$.callbackDeliveryStatus").value("NOT_REQUIRED"))
+				.andExpect(jsonPath("$.result.decision").value("APPROVED"))
+				.andExpect(jsonPath("$.result.score").value("82"))
+				.andExpect(jsonPath("$.attempts").value(1))
+				.andExpect(jsonPath("$.maxAttempts").value(3))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andReturn();
+
+		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+		assertThat(fieldNames(response)).contains("taskId", "externalId", "clientService", "priority",
+				"deliveryMode", "status", "callbackDeliveryStatus", "result", "error", "attempts",
+				"maxAttempts", "createdAt", "availableAt", "startedAt", "finishedAt", "lastError",
+				"retryable");
+	}
+
+	@Test
 	void retryPendingTaskReturnsConflict() throws Exception {
 		UUID externalId = UUID.fromString("b2d74479-b393-4756-a8cc-7704b5750bbb");
 		long taskId = taskId(submit(defaultRequest(externalId), "req-async-retry-create"));
@@ -167,6 +265,27 @@ class ExternalAsyncControllerTest {
 				.andExpect(jsonPath("$.code").value("TASK_STATE_CONFLICT"))
 				.andExpect(jsonPath("$.requestId").value("req-async-retry"))
 				.andExpect(jsonPath("$.details.currentStatus").value("PENDING"));
+	}
+
+	@Test
+	@DirtiesContext(methodMode = DirtiesContext.MethodMode.BEFORE_METHOD)
+	void retryDeadRetryableTaskReturnsItToPending() throws Exception {
+		UUID externalId = UUID.fromString("9ad5412c-21d0-4f60-80dc-e2fb456a4ba1");
+		long taskId = taskId(submit(pollingRequest(externalId), "req-async-dead-create"));
+		moveOnlyPendingTaskToDead(taskId);
+
+		mockMvc.perform(post("/v1/external/async/{taskId}/retry", taskId)
+						.header("X-Client-Service", CLIENT_SERVICE)
+						.header("X-Request-Id", "req-async-dead-retry"))
+				.andExpect(status().isAccepted())
+				.andExpect(jsonPath("$.taskId").value(taskId))
+				.andExpect(jsonPath("$.externalId").value(externalId.toString()))
+				.andExpect(jsonPath("$.status").value("PENDING"))
+				.andExpect(jsonPath("$.callbackDeliveryStatus").value("NOT_REQUIRED"))
+				.andExpect(jsonPath("$.attempts").value(0))
+				.andExpect(jsonPath("$.error").doesNotExist())
+				.andExpect(jsonPath("$.lastError").doesNotExist())
+				.andExpect(jsonPath("$.retryable").value(false));
 	}
 
 	private MvcResult submit(Map<String, Object> request, String requestId) throws Exception {
@@ -183,12 +302,54 @@ class ExternalAsyncControllerTest {
 		return response.path("taskId").asLong();
 	}
 
+	private void completeOnlyPendingTask(long taskId, Map<String, String> result) {
+		Instant startedAt = Instant.parse("2026-06-12T00:00:00Z");
+		AsyncTaskClaim claim = claimNextPending(startedAt);
+		assertThat(claim.task().taskId()).isEqualTo(taskId);
+		taskRepository.complete(taskId, result, startedAt.plusMillis(1)).orElseThrow();
+	}
+
+	private void moveOnlyPendingTaskToDead(long taskId) {
+		Instant now = Instant.parse("2026-06-12T00:00:00Z");
+		AsyncTask task = null;
+		for (int attempt = 0; attempt < 5 && (task == null || task.status() != AsyncTaskStatus.DEAD); attempt++) {
+			AsyncTaskClaim claim = claimNextPending(now.plusMillis(attempt * 2L));
+			assertThat(claim.task().taskId()).isEqualTo(taskId);
+			task = taskRepository.failTransient(taskId, "Временная ошибка upstream", Duration.ZERO,
+					now.plusMillis(attempt * 2L + 1)).orElseThrow();
+		}
+		assertThat(task).isNotNull();
+		assertThat(task.status()).isEqualTo(AsyncTaskStatus.DEAD);
+		assertThat(task.retryable()).isTrue();
+	}
+
+	private AsyncTaskClaim claimNextPending(Instant now) {
+		return taskRepository.executeInProcessingTransaction(() -> taskRepository.claimNextPending(now))
+				.orElseThrow();
+	}
+
+	private static Set<String> fieldNames(JsonNode node) {
+		LinkedHashSet<String> names = new LinkedHashSet<>();
+		node.fieldNames().forEachRemaining(names::add);
+		return names;
+	}
+
 	private static Map<String, Object> defaultRequest(UUID externalId) {
 		return Map.of(
 				"externalId", externalId,
 				"clientService", CLIENT_SERVICE,
 				"priority", "HIGH",
 				"deliveryMode", "CALLBACK",
+				"payload", Map.of("operation", "calculate", "amount", 100)
+		);
+	}
+
+	private static Map<String, Object> pollingRequest(UUID externalId) {
+		return Map.of(
+				"externalId", externalId,
+				"clientService", CLIENT_SERVICE,
+				"priority", "LOW",
+				"deliveryMode", "POLLING",
 				"payload", Map.of("operation", "calculate", "amount", 100)
 		);
 	}

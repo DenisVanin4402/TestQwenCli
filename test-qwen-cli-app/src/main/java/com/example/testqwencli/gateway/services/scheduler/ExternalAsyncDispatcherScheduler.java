@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.services.scheduler;
 
+import com.example.testqwencli.dashboard.DashboardMetricsRegistry;
 import com.example.testqwencli.gateway.config.ExternalGatewayAsyncProperties;
 import com.example.testqwencli.gateway.services.ExternalAsyncDispatcher;
 import java.util.Objects;
@@ -13,14 +14,21 @@ class ExternalAsyncDispatcherScheduler {
 
 	private final ExternalAsyncDispatcher dispatcher;
 	private final ExternalGatewayAsyncProperties properties;
+	private final DashboardMetricsRegistry metricsRegistry;
 
-	ExternalAsyncDispatcherScheduler(ExternalAsyncDispatcher dispatcher, ExternalGatewayAsyncProperties properties) {
+	ExternalAsyncDispatcherScheduler(
+			ExternalAsyncDispatcher dispatcher,
+			ExternalGatewayAsyncProperties properties,
+			DashboardMetricsRegistry metricsRegistry
+	) {
 		this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher must not be null");
 		this.properties = Objects.requireNonNull(properties, "properties must not be null");
+		this.metricsRegistry = Objects.requireNonNull(metricsRegistry, "metricsRegistry must not be null");
 	}
 
 	@Scheduled(fixedDelayString = "${external-gateway.async.dispatch-interval-ms:100}")
 	void dispatch() {
-		dispatcher.dispatchBatch(properties.dispatchBatchSize());
+		int dispatched = dispatcher.dispatchBatch(properties.dispatchBatchSize());
+		metricsRegistry.recordAsyncDispatchIterations(dispatched);
 	}
 }

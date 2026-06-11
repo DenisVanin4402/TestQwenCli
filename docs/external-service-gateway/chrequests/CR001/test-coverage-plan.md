@@ -6,7 +6,7 @@
 
 ## Текущее состояние
 
-- `mvn test` проходит: 55 тестов, 0 failures, 0 errors, 0 skipped.
+- `mvn test` проходит: 110 тестов, 0 failures, 0 errors, 0 skipped.
 - Собственные тесты есть только в модуле `test-qwen-cli-app`.
 - `dashboard-backend` и `dashboard-ui` не имеют `src/test` и в reactor выводят `No tests to run`.
 - Текущий набор хорошо покрывает in-memory бизнес-логику: слоты, async submit, idempotency, retry/dead переходы, callback lifecycle и часть конкурентного поведения.
@@ -18,8 +18,9 @@
 
 - Большой рефакторинг persistence-слоя может сломать `PostgresSlotRepository`, `PostgresAsyncTaskRepository`, `PostgresCallbackDeliveryRepository` или Liquibase changelog без падения `mvn test`.
 - Callback HTTP-клиент не проверяется против реального HTTP endpoint: заголовки, тело, статус-коды и ошибки сети остаются непокрытыми.
-- Dashboard backend не имеет локальных unit/controller тестов, хотя содержит REST API, генератор функциональной нагрузки и метрики.
-- OpenAPI YAML в `docs/openapi` не сверяется с фактическим HTTP-поведением и generated `/v3/api-docs`.
+- Dashboard backend не имеет локальных unit/controller тестов, хотя содержит REST API, генератор функциональной нагрузки и метрики; риск принят, CR001-T013 исключена из работ по решению от 2026-06-12.
+- OpenAPI YAML в `docs/openapi` сверяется с generated `/v3/api-docs` быстрым MockMvc-тестом по стабильным paths, параметрам, status codes, schema refs и публичным полям gateway API; callback YAML сверяется с сериализуемым `CallbackPayload`.
+- Scheduler-слой проверяется быстрым functional-набором без ожидания реального расписания: async/callback dispatch ticks, callback recovery, slot lease reaper, enabled/disabled flags и запись dashboard-метрик только при положительном count.
 - Часть конкурентных тестов опирается на реальные таймауты, latch и `Thread.sleep`, поэтому после расширения набора стоит вынести общие test helpers и уменьшить риск flaky-тестов.
 - `PostgresSlotNotificationConfigurationTest` создает listener с недоступным `DataSource`, из-за чего в `mvn test` появляется ожидаемый WARN из фонового потока. Это не падение, но шумит и может скрывать реальные проблемы.
 - Mockito в текущем запуске предупреждает о dynamic agent loading. Перед обновлением JDK/Mockito нужно явно настроить mockito agent или убрать inline-mocking там, где он не нужен.
@@ -97,6 +98,7 @@
    - Проверить стабильность JSON field names для всех публичных responses.
 
 4. Dashboard backend tests.
+   - Статус: не выполняется в рамках CR001 по решению от 2026-06-12.
    - Unit-тесты `DashboardMetricsRegistry`: счетчики, active requests, rate window, percentiles, reset.
    - Unit-тесты `DashboardLoadRunner`: start/stop/update profile, генерация sync/async запросов, обработка исключений клиента.
    - `@WebMvcTest` или `@SpringBootTest` для `DashboardController`: snapshot, health, profile update validation, simulation settings validation, reset.
@@ -141,6 +143,6 @@
 - Docker-зависимый набор запускается отдельной командой и проходит на чистой машине с Docker.
 - Memory и PostgreSQL реализации проходят общий repository contract suite.
 - Есть хотя бы один полный e2e сценарий sync, async polling и async callback в PostgreSQL mode.
-- Dashboard backend имеет собственные тесты в своем модуле.
+- Dashboard backend исключен из Definition of Done для CR001 по решению от 2026-06-12.
 - OpenAPI и HTTP error contract зафиксированы тестами.
 - В тестовом выводе нет ожидаемых WARN из фоновых потоков, которые маскируют реальные проблемы.

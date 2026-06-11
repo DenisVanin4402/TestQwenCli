@@ -52,12 +52,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '413':
-          description: Payload превышает допустимый размер
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
   /v1/external/async/{taskId}:
     get:
       tags:
@@ -250,6 +244,7 @@ components:
         - status
         - statusUrl
         - deliveryMode
+        - alreadyExisted
       properties:
         taskId:
           type: integer
@@ -278,6 +273,7 @@ components:
         - priority
         - deliveryMode
         - status
+        - callbackDeliveryStatus
         - result
         - error
         - attempts

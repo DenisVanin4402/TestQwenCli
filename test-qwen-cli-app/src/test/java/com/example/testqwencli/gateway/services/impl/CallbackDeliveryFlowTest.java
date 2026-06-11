@@ -208,6 +208,41 @@ class CallbackDeliveryFlowTest {
 	}
 
 	@Test
+	void callbackNon2xxResponseMovesDeliveryToRetryThenDeadWithHttpStatusMessage() {
+		MutableClock clock = new MutableClock(NOW);
+		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();
+		MemoryCallbackDeliveryRepository deliveryRepository = new MemoryCallbackDeliveryRepository();
+		ExternalAsyncDispatcher asyncDispatcher = asyncDispatcher(taskRepository, deliveryRepository, clock,
+				clientsWithInvestPay(), RecordingUpstreamClient.succeeding(doneResult()));
+		AsyncTask task = submit(taskRepository, "4cd4a083-4468-47b8-8454-28ac47d4c817",
+				AsyncDeliveryMode.CALLBACK, "invest-pay", 3, clock.instant());
+		asyncDispatcher.dispatchOnce();
+		RecordingCallbackClient callbackClient = RecordingCallbackClient.succeeding(503);
+		CallbackDeliveryDispatcher callbackDispatcher = callbackDispatcher(taskRepository, deliveryRepository,
+				callbackClient, clock, 2);
+
+		assertThat(callbackDispatcher.dispatchOnce()).isTrue();
+
+		CallbackDelivery retryDelivery = deliveryRepository.findByTaskId(task.taskId()).orElseThrow();
+		assertThat(retryDelivery.status()).isEqualTo(CallbackDeliveryStatus.RETRY);
+		assertThat(retryDelivery.attempt()).isEqualTo(1);
+		assertThat(retryDelivery.availableAt()).isEqualTo(NOW.plus(CALLBACK_RETRY_BACKOFF));
+		assertThat(retryDelivery.lastError()).isEqualTo("Callback endpoint вернул HTTP 503");
+		AsyncTask retryTask = taskRepository.findByTaskId(task.taskId(), Optional.empty()).orElseThrow();
+		assertThat(retryTask.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.RETRY);
+
+		clock.advance(CALLBACK_RETRY_BACKOFF);
+		assertThat(callbackDispatcher.dispatchOnce()).isTrue();
+
+		CallbackDelivery deadDelivery = deliveryRepository.findByTaskId(task.taskId()).orElseThrow();
+		assertThat(deadDelivery.status()).isEqualTo(CallbackDeliveryStatus.DEAD);
+		assertThat(deadDelivery.attempt()).isEqualTo(2);
+		assertThat(deadDelivery.lastError()).isEqualTo("Callback endpoint вернул HTTP 503");
+		AsyncTask deadTask = taskRepository.findByTaskId(task.taskId(), Optional.empty()).orElseThrow();
+		assertThat(deadTask.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.DEAD);
+	}
+
+	@Test
 	void timedOutDeliveringCallbackDeliveryReturnsToRetry() {
 		MutableClock clock = new MutableClock(NOW);
 		MemoryAsyncTaskRepository taskRepository = new MemoryAsyncTaskRepository();

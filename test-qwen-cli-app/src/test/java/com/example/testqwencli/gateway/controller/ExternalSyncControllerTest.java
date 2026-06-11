@@ -1,5 +1,8 @@
 package com.example.testqwencli.gateway.controller;
 
+import com.example.testqwencli.dashboard.DashboardGatewayRequest;
+import com.example.testqwencli.dashboard.DashboardSimulationSettings;
+import com.example.testqwencli.dashboard.DashboardSimulationSettingsStore;
 import com.example.testqwencli.gateway.model.async.enums.AsyncDeliveryMode;
 import com.example.testqwencli.gateway.model.async.AsyncTask;
 import com.example.testqwencli.gateway.model.async.enums.AsyncTaskStatus;
@@ -49,6 +52,9 @@ class ExternalSyncControllerTest {
 	@Autowired
 	private AsyncTaskRepository taskRepository;
 
+	@Autowired
+	private DashboardSimulationSettingsStore simulationSettingsStore;
+
 	@Test
 	void syncReturnsSucceededResponseWithResultMap() throws Exception {
 		Map<String, Object> request = Map.of(
@@ -77,6 +83,113 @@ class ExternalSyncControllerTest {
 		assertThat(trace.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.NOT_REQUIRED);
 		assertThat(trace.result()).containsEntry("decision", "APPROVED");
 		assertThat(trace.attempts()).isEqualTo(1);
+	}
+
+	@Test
+	void syncUpstreamTimeoutReturnsGatewayTimeoutAndPersistsFailedTrace() throws Exception {
+		DashboardSimulationSettings originalSettings = simulationSettingsStore.current();
+		simulationSettingsStore.update(new DashboardSimulationSettings(20, 0, 0, 1, 20, 0));
+		UUID externalId = UUID.fromString("5d0fc1d9-1087-4642-9f48-0587e38559c1");
+		try {
+			Map<String, Object> request = Map.of(
+					"externalId", externalId,
+					"clientService", "invest-pay",
+					"payload", Map.of(
+							"operation", "calculate",
+							DashboardGatewayRequest.SYNC_TIMEOUT_PAYLOAD_KEY, 1
+					)
+			);
+
+			mockMvc.perform(post("/v1/external/sync")
+							.contentType(MediaType.APPLICATION_JSON)
+							.header("X-Request-Id", "req-upstream-timeout")
+							.content(objectMapper.writeValueAsString(request)))
+					.andExpect(status().isGatewayTimeout())
+					.andExpect(jsonPath("$.code").value("UPSTREAM_TIMEOUT"))
+					.andExpect(jsonPath("$.message").value("Upstream не ответил в пределах sync timeout"))
+					.andExpect(jsonPath("$.retryable").value(true))
+					.andExpect(jsonPath("$.requestId").value("req-upstream-timeout"))
+					.andExpect(jsonPath("$.details.syncTimeoutMs").value(1))
+					.andExpect(jsonPath("$.details.plannedDelayMs").value(20));
+
+			AsyncTask trace = onlyTrace(externalId, "invest-pay");
+			assertThat(trace.deliveryMode()).isEqualTo(AsyncDeliveryMode.SYNC);
+			assertThat(trace.status()).isEqualTo(AsyncTaskStatus.FAILED);
+			assertThat(trace.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.NOT_REQUIRED);
+			assertThat(trace.attempts()).isEqualTo(1);
+			assertThat(trace.error().code()).isEqualTo("UPSTREAM_TIMEOUT");
+			assertThat(trace.error().retryable()).isTrue();
+		}
+		finally {
+			simulationSettingsStore.update(originalSettings);
+		}
+	}
+
+	@Test
+	void syncSimulatedUpstreamFailureReturnsServiceUnavailableAndPersistsFailedTrace() throws Exception {
+		DashboardSimulationSettings originalSettings = simulationSettingsStore.current();
+		simulationSettingsStore.update(new DashboardSimulationSettings(0, 0, 100, 1, 20, 0));
+		UUID externalId = UUID.fromString("24da58ee-af61-472e-ac58-afd1ac0c5a6a");
+		try {
+			Map<String, Object> request = Map.of(
+					"externalId", externalId,
+					"clientService", "invest-pay",
+					"payload", Map.of("operation", "calculate")
+			);
+
+			mockMvc.perform(post("/v1/external/sync")
+							.contentType(MediaType.APPLICATION_JSON)
+							.header("X-Request-Id", "req-upstream-error")
+							.content(objectMapper.writeValueAsString(request)))
+					.andExpect(status().isServiceUnavailable())
+					.andExpect(jsonPath("$.code").value("UPSTREAM_SIMULATED_FAILURE"))
+					.andExpect(jsonPath("$.message").value("Simulated upstream завершился ошибкой"))
+					.andExpect(jsonPath("$.retryable").value(true))
+					.andExpect(jsonPath("$.requestId").value("req-upstream-error"));
+
+			AsyncTask trace = onlyTrace(externalId, "invest-pay");
+			assertThat(trace.deliveryMode()).isEqualTo(AsyncDeliveryMode.SYNC);
+			assertThat(trace.status()).isEqualTo(AsyncTaskStatus.FAILED);
+			assertThat(trace.callbackDeliveryStatus()).isEqualTo(CallbackDeliveryStatus.NOT_REQUIRED);
+			assertThat(trace.attempts()).isEqualTo(1);
+			assertThat(trace.error().code()).isEqualTo("UPSTREAM_SIMULATED_FAILURE");
+			assertThat(trace.error().retryable()).isTrue();
+		}
+		finally {
+			simulationSettingsStore.update(originalSettings);
+		}
+	}
+
+	@Test
+	void repeatedSyncRequestsWithSameExternalIdCreateSeparateTraceRows() throws Exception {
+		UUID externalId = UUID.fromString("b38293f4-37d6-4b43-ae82-a544d4b4ac97");
+		Map<String, Object> request = Map.of(
+				"externalId", externalId,
+				"clientService", "invest-pay",
+				"payload", Map.of("operation", "calculate", "amount", 1000.50, "currency", "RUB")
+		);
+
+		mockMvc.perform(post("/v1/external/sync")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", "req-sync-repeat-first")
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("SUCCEEDED"));
+		mockMvc.perform(post("/v1/external/sync")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", "req-sync-repeat-second")
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("SUCCEEDED"));
+
+		List<AsyncTask> traces = taskRepository.findRequestTracesByExternalId(externalId,
+				Optional.of("invest-pay"));
+		assertThat(traces).hasSize(2);
+		assertThat(traces).extracting(AsyncTask::deliveryMode)
+				.containsExactly(AsyncDeliveryMode.SYNC, AsyncDeliveryMode.SYNC);
+		assertThat(traces).extracting(AsyncTask::status)
+				.containsExactly(AsyncTaskStatus.DONE, AsyncTaskStatus.DONE);
+		assertThat(traces).extracting(AsyncTask::attempts).containsExactly(1, 1);
 	}
 
 	@Test

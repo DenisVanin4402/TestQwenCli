@@ -1,5 +1,6 @@
 package com.example.testqwencli.gateway.services.scheduler;
 
+import com.example.testqwencli.dashboard.DashboardMetricsRegistry;
 import com.example.testqwencli.gateway.config.ExternalGatewayCallbackProperties;
 import com.example.testqwencli.gateway.services.CallbackDeliveryDispatcher;
 import java.util.Objects;
@@ -15,18 +16,22 @@ class CallbackDeliveryDispatcherScheduler {
 
 	private final CallbackDeliveryDispatcher dispatcher;
 	private final ExternalGatewayCallbackProperties properties;
+	private final DashboardMetricsRegistry metricsRegistry;
 
 	CallbackDeliveryDispatcherScheduler(
 			CallbackDeliveryDispatcher dispatcher,
-			ExternalGatewayCallbackProperties properties
+			ExternalGatewayCallbackProperties properties,
+			DashboardMetricsRegistry metricsRegistry
 	) {
 		this.dispatcher = Objects.requireNonNull(dispatcher, "dispatcher must not be null");
 		this.properties = Objects.requireNonNull(properties, "properties must not be null");
+		this.metricsRegistry = Objects.requireNonNull(metricsRegistry, "metricsRegistry must not be null");
 	}
 
 	@Scheduled(fixedDelayString = "${external-gateway.callback.delivery-interval-ms:100}")
 	void dispatch() {
-		dispatcher.dispatchBatch(properties.deliveryBatchSize());
+		int dispatched = dispatcher.dispatchBatch(properties.deliveryBatchSize());
+		metricsRegistry.recordCallbackDispatchIterations(dispatched);
 	}
 
 	@EventListener(ApplicationReadyEvent.class)

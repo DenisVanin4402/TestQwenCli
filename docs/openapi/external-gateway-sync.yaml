@@ -49,7 +49,7 @@ paths:
                 $ref: '#/components/schemas/ExternalSyncResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '408':
+        '504':
           description: Истекло время ожидания ответа внешнего сервиса
           content:
             application/json:
@@ -67,14 +67,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-        '502':
-          description: Внешний сервис вернул ошибку или некорректный ответ
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Gateway или координатор лимитов временно недоступен
+          description: Внешний сервис или gateway временно недоступен
           content:
             application/json:
               schema:
@@ -141,6 +135,7 @@ components:
         - externalId
         - status
         - result
+        - upstreamStatus
         - durationMs
       properties:
         externalId:

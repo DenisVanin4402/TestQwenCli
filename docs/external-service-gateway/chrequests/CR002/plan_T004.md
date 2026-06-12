@@ -47,7 +47,7 @@
 - response statuses `200`, `202`, `400`, `404`, `409`;
 - schemas `ExternalAsyncRequest`, `AsyncSubmitResponse`, `AsyncTask`, `TaskError`, `ErrorResponse`.
 
-`X-Client-Service` остается временным optional scope доступа для read/cancel/retry до внедрения service-to-service identity. `AsyncDeliveryMode.SYNC` не является допустимым значением входного async request, но может присутствовать в response-моделях, потому что `AsyncTask` описывает и async-задачи, и sync trace-строки.
+`X-Client-Service` остается временным optional scope доступа для read/cancel/retry до внедрения service-to-service identity. `AsyncDeliveryMode.SYNC` не является допустимым значением входного async request и не публикуется как значение внешних async response. Для response используется отдельная OpenAPI-схема со значениями `CALLBACK` и `POLLING`, а `SYNC` остается внутренней деталью Java-модели sync trace-строк.
 
 ## Data, State, Deployment, Operations
 
@@ -70,6 +70,7 @@ mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsur
 - Риск задокументировать `additionalProperties: false`, хотя Java records и Jackson не запрещают неизвестные JSON-поля без отдельной настройки.
 - Риск сузить `payload` или `result` до `Map<String, String>`, хотя async модели используют `Map<String, Object>`.
 - Риск случайно разрешить `SYNC` во входном async request, хотя constructor `ExternalAsyncRequest` его запрещает.
+- Риск случайно опубликовать `SYNC` как значение внешних async response, хотя внешние async endpoints возвращают только async-задачи `CALLBACK`/`POLLING`.
 - Риск обещать стабильный error body для ошибок конвертации path variables, которые не покрыты отдельным handler.
 
 Снижение рисков: сверять YAML только с `ExternalAsyncController`, async DTO и уже зафиксированной инвентаризацией T001, а после правки запускать быстрый OpenAPI contract test.

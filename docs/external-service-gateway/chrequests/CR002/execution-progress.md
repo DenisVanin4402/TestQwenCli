@@ -133,7 +133,7 @@
    - У `ExternalAsyncRequest`, `AsyncSubmitResponse`, `AsyncTask`, `TaskError` и `ErrorResponse` удален `additionalProperties: false`, потому что такое ограничение не задано контроллером, DTO или handler.
    - Для `ExternalAsyncRequest.payload` явно указано `additionalProperties: true`, что соответствует `Map<String, Object>`.
    - Для async result schema `ResultMap` значение изменено с `Map<String, String>` на `Map<String, Object>`, что соответствует `AsyncTask.result`.
-   - Для submit API добавлена отдельная схема `ExternalAsyncDeliveryMode` со значениями `CALLBACK` и `POLLING`; для read-модели `AsyncDeliveryMode` оставлены значения Java enum `CALLBACK`, `POLLING`, `SYNC`.
+   - Для submit API добавлена отдельная request-схема `ExternalAsyncDeliveryMode` со значениями `CALLBACK` и `POLLING`.
    - `AsyncTask.callbackDeliveryStatus` сделан non-null ref на `CallbackDeliveryStatus`, потому что DTO constructor требует значение.
    - Добавлены минимальные ограничения, которые прямо следуют из constructors: `statusUrl`, `AsyncTask.clientService`, `TaskError.code` и `TaskError.message` не blank.
    - Путь, HTTP-методы, `operationId`, headers, path variables, request body, response statuses и error response refs оставлены без изменений, потому что уже соответствовали `ExternalAsyncController`.
@@ -150,6 +150,18 @@
    - Рекомендация review: закрыть CR002-T004 после human approval без production-правок, а note-level замечания перенести в решение T009/T010 или отдельный follow-up.
    - По правилу остановки после этапа переход к CR002-T005 не выполняется до явной команды пользователя.
 
+19. 2026-06-12: по human approval отработано замечание 2 из `review_T004.md`.
+   - Решение человека: ввести отдельную response-схему для внешних async endpoints с `CALLBACK`/`POLLING`.
+   - Обновлен `plan_T004.md`: зафиксировано, что `SYNC` не публикуется как значение внешних async response.
+   - Обновлен `docs/external-service-gateway/openapi/external-gateway-async.yaml`.
+   - Добавлена `ExternalAsyncResponseDeliveryMode` со значениями `CALLBACK` и `POLLING`.
+   - `AsyncSubmitResponse.deliveryMode` и `AsyncTask.deliveryMode` теперь ссылаются на `ExternalAsyncResponseDeliveryMode`.
+   - `SYNC` больше не публикуется как enum value внешнего async OpenAPI; он остается только текстово описанной внутренней Java-деталью sync trace-строк.
+   - Обновлен `review_T004.md`: замечание 2 переведено в статус `accepted`.
+   - Production-код, тесты, `pom.xml`, sync/callback YAML и архитектурные документы не изменялись.
+   - Проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 2 теста без failures/errors/skipped.
+   - Замечание 1 из `review_T004.md` по ADR-008 остается в статусе `pending`.
+
 ## Текущий результат
 
 - CR002-T001 реализована как документационная инвентаризация, прошла senior architect review и принята человеком.
@@ -159,7 +171,7 @@
 - CR002-T002 реализована и прошла senior architect review без замечаний: OpenAPI contract test читает актуальный каталог `docs/external-service-gateway/openapi`.
 - CR002-T003 реализована и прошла senior architect review без замечаний: `external-gateway-sync.yaml` синхронизирован с фактическими sync DTO по ограничениям схем.
 - CR002-T004 реализована и прошла senior architect review без блокеров: `external-gateway-async.yaml` синхронизирован с фактическими async DTO по ограничениям схем и enum-значениям.
-- В `review_T004.md` есть два note-level замечания со статусом `pending`; требуется human approval для закрытия или переноса замечаний.
+- В `review_T004.md` замечание 2 по `AsyncDeliveryMode.SYNC` принято человеком и отработано; замечание 1 по ADR-008 остается в статусе `pending`.
 - Синхронизация callback YAML еще не выполнялась.
 - Подключение OpenAPI code generation и связанный рефакторинг только запланированы.
 - Stage-level senior architect review создан для T001, T002, T003 и T004.
@@ -168,5 +180,5 @@
 
 ## Следующие шаги
 
-- Получить human approval по CR002-T004: закрыть этап с двумя note-level замечаниями, принять, отклонить или отложить каждое замечание.
+- Получить human approval по оставшемуся замечанию CR002-T004: принять, отклонить или отложить конфликт ADR-008 `Map<String, String>` vs фактический `Map<String, Object>`.
 - После human approval дождаться явной команды пользователя на продолжение к CR002-T005.

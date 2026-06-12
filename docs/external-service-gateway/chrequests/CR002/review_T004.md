@@ -4,7 +4,7 @@
 
 Этап CR002-T004 в целом соответствует `work-items.md`, `plan_T004.md` и ADR-012. Изменение ограничено синхронизацией `docs/external-service-gateway/openapi/external-gateway-async.yaml` с `ExternalAsyncController` и async DTO без production-кода.
 
-Блокирующих замечаний нет. Есть два note-level замечания, которые требуют human approval и не расширяют scope T004 автоматически.
+Блокирующих замечаний нет. Из двух note-level замечаний одно принято человеком и отработано в T004, одно остается в статусе `pending`.
 
 ## Соответствие плану
 
@@ -26,6 +26,7 @@
 - response statuses `200`, `202`, `400`, `404`, `409` соответствуют контроллеру и обработанным gateway exceptions;
 - `ExternalAsyncRequest.payload` и `ResultMap` описаны как открытые JSON object/map, что соответствует `Map<String, Object>` в async DTO;
 - для submit API выделена `ExternalAsyncDeliveryMode` только с `CALLBACK` и `POLLING`, поэтому `SYNC` не документируется как допустимое входное значение async request;
+- для внешних async response выделена `ExternalAsyncResponseDeliveryMode` только с `CALLBACK` и `POLLING`, поэтому `SYNC` не документируется как значение ответа external async endpoints;
 - `callbackDeliveryStatus`, `statusUrl`, `AsyncTask.clientService`, `TaskError.code` и `TaskError.message` приведены к constructor/nullability constraints.
 
 В `execution-progress.md` зафиксирован запуск:
@@ -35,6 +36,8 @@ mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsur
 ```
 
 Результат по журналу: 2 теста выполнены успешно, failures/errors/skipped нет. В рамках review команда не перезапускалась, чтобы не создавать дополнительные артефакты за пределами `review_T004.md`.
+
+После принятой человеком доработки по `ExternalAsyncResponseDeliveryMode` точечный `ExternalGatewayOpenApiContractTest` был повторно запущен и также прошел успешно: 2 теста без failures/errors/skipped.
 
 ## Производительность
 
@@ -72,12 +75,14 @@ SSRF-защита через отсутствие произвольного `ca
 2. severity: `note`
    ссылка: `docs/external-service-gateway/openapi/external-gateway-async.yaml`, schema `AsyncDeliveryMode`; `PostgresAsyncTaskRepository.findStoredByTaskId`; `MemoryAsyncTaskRepository.findStoredByTaskId`
    риск: read-схема `AsyncTask.deliveryMode` допускает `SYNC`, потому что Java enum и общая read-модель содержат sync trace mode. При этом async endpoints фактически фильтруют `SYNC` trace-строки и возвращают только `CALLBACK`/`POLLING`. Документированный response enum шире наблюдаемого поведения внешнего async API.
-   предлагаемое действие: не менять T004 без решения человека. На T009 или T010 решить, оставлять ли общий `AsyncDeliveryMode` в OpenAPI ради соответствия DTO/generated schema или ввести отдельную response-схему для внешних async endpoints с `CALLBACK`/`POLLING`.
-   статус human approval: `pending`
+   предлагаемое действие: ввести отдельную response-схему для внешних async endpoints с `CALLBACK`/`POLLING`.
+   решение человека: принято 2026-06-12.
+   результат: в `external-gateway-async.yaml` добавлена `ExternalAsyncResponseDeliveryMode`; `AsyncSubmitResponse.deliveryMode` и `AsyncTask.deliveryMode` ссылаются на нее, а `SYNC` оставлен только как описанная внутренняя Java-деталь, не как enum value внешнего OpenAPI.
+   статус human approval: `accepted`
 
 ## Рекомендация
 
-Рекомендую закрыть CR002-T004 после human approval без production-правок. Note-level замечания перенести в решение T009/T010 или отдельный follow-up; они не требуют немедленной доработки async YAML в рамках T004.
+Рекомендую закрыть CR002-T004 после human approval по оставшемуся note-level замечанию ADR-008. Замечание по `AsyncDeliveryMode.SYNC` принято человеком и отработано без production-правок.
 
 После закрытия T004 остановиться и не начинать CR002-T005 до явной команды пользователя.
 
@@ -85,6 +90,6 @@ SSRF-защита через отсутствие произвольного `ca
 
 Ожидается решение человека:
 
-- закрыть CR002-T004 с двумя note-level замечаниями;
-- принять, отклонить или отложить каждое замечание;
+- закрыть CR002-T004 с оставшимся note-level замечанием по ADR-008;
+- принять, отклонить или отложить замечание по `Map<String, String>` vs `Map<String, Object>`;
 - отдельно подтвердить, когда можно переходить к CR002-T005.

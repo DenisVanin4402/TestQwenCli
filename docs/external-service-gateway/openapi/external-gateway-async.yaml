@@ -255,7 +255,7 @@ components:
         status:
           $ref: '#/components/schemas/AsyncTaskStatus'
         deliveryMode:
-          $ref: '#/components/schemas/ExternalAsyncDeliveryMode'
+          $ref: '#/components/schemas/ExternalAsyncResponseDeliveryMode'
         statusUrl:
           type: string
           minLength: 1
@@ -292,7 +292,7 @@ components:
         priority:
           $ref: '#/components/schemas/AsyncPriority'
         deliveryMode:
-          $ref: '#/components/schemas/AsyncDeliveryMode'
+          $ref: '#/components/schemas/ExternalAsyncResponseDeliveryMode'
         status:
           $ref: '#/components/schemas/AsyncTaskStatus'
         callbackDeliveryStatus:
@@ -370,16 +370,16 @@ components:
         результат через GET. Если поле не передано, текущий constructor
         использует CALLBACK. Внутреннее значение SYNC не принимается внешним
         async request.
-    AsyncDeliveryMode:
+    ExternalAsyncResponseDeliveryMode:
       type: string
       enum:
         - CALLBACK
         - POLLING
-        - SYNC
       description: |
-        Способ доставки в read-модели задачи. CALLBACK и POLLING соответствуют
-        внешнему async API. SYNC используется только для внутренних sync
-        trace-строк, которые хранятся в общей модели AsyncTask.
+        Публичный способ доставки async-результата во внешних async response.
+        Внешние async endpoints возвращают только CALLBACK или POLLING; внутреннее
+        значение SYNC относится к sync trace-строкам общей Java-модели и не
+        публикуется в этом OpenAPI-контракте.
     AsyncTaskStatus:
       type: string
       enum:

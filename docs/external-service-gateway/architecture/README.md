@@ -32,6 +32,7 @@
 - [07-sequence-callback.md](07-sequence-callback.md) - sequence-диаграммы callback-доставки и recovery.
 - [08-deployment-operations.md](08-deployment-operations.md) - deployment view, эксплуатация, наблюдаемость, rollout и отказоустойчивость.
 - [09-production-readiness.md](09-production-readiness.md) - разрыв между текущей реализацией и enterprise production target.
+- [decisions.md](decisions.md) - принятые архитектурные решения ADR.
 
 ## Источники истины
 
@@ -48,6 +49,10 @@
 - `test-qwen-cli-app/src/main/java/com/example/testqwencli/gateway/repository/postgres`
 - `test-qwen-cli-app/src/main/resources/db/changelog/external-gateway/db.changelog-master.yaml`
 - `dashboard-backend/src/main/java/com/example/testqwencli/dashboard`
+
+Архитектурные решения:
+
+- [decisions.md](decisions.md)
 
 ## Архитектурные инварианты
 

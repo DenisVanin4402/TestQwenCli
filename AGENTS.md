@@ -6,6 +6,18 @@
 
 Тесты находятся в `src/test/java/com/example/testqwencli` и используют Spring Boot Test, JUnit 5 и MockMvc. Проектные планы и архитектурные заметки лежат в `docs/external-service-gateway`. Каталог `target/` создается Maven и не редактируется вручную.
 
+## Проектная документация, CR и ADR
+
+Проектная документация хранится в UTF-8. При чтении Markdown-файлов через PowerShell используйте явное указание кодировки, например `Get-Content -Encoding UTF8 -Path docs\external-service-gateway\architecture\README.md`, чтобы не получить искаженный русский текст.
+
+Архитектурная документация `external-service-gateway` ведется в `docs/external-service-gateway/architecture`. Карта документов находится в `docs/external-service-gateway/architecture/README.md`, а принятые архитектурные решения ведутся в `docs/external-service-gateway/architecture/decisions.md`.
+
+Файлы доработок ведутся в `docs/external-service-gateway/chrequests/<CR-ID>`. Для каждого CR используйте `work-items.md` как постановку и очередь задач, `execution-progress.md` как журнал выполнения, а дополнительные планы добавляйте рядом только при необходимости. Каталог `docs/external-service-gateway/chrequests/PRE-WORK` хранит подготовительные материалы и не является местом для новых ADR.
+
+ADR в `decisions.md` заполняйте только для принятых архитектурных решений. Каждый ADR должен иметь заголовок `ADR-NNN`, статус, дату, ссылку на связанный CR или документ, блоки `Решение`, `Причины` и `Последствия`. В ADR фиксируйте устойчивую архитектурную договоренность: границы компонентов, протоколы, состояние, deployment/operations, security или заменяемость слоев. Не переносите в ADR низкоуровневые детали реализации, если они не меняют архитектурный договор.
+
+После каждого CR проверяйте, нужна ли правка архитектурной документации. Если CR меняет публичный контракт, C4-границы, sequence flow, модель данных/состояний, deployment/operations или production-инварианты, обновите затронутые файлы в `docs/external-service-gateway/architecture` и при необходимости добавьте ADR. Если архитектура не меняется, явно зафиксируйте это в `execution-progress.md` соответствующего CR.
+
 ## Команды сборки, тестов и запуска
 
 - `mvn test`: запускает тесты JUnit/Spring.

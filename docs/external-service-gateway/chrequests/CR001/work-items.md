@@ -27,7 +27,7 @@
 | 15 | CR001-T015: functional-тесты scheduler-слоя | P2 | Scheduler logic проверяется без ожидания реального времени. |
 | 16 | CR001-T016: concurrency correctness | P2 | `PostgresConcurrencyIT` закрепляет отсутствие дублей обработки и сохранение sync reserve. |
 | 17 | CR001-T017: configuration binding и test output hygiene | P2 | `ExternalGatewayConfigurationTest` закрепляет binding/conditional beans, listener WARN и Mockito dynamic agent warning устранены. |
-| 18 | CR001-T018: static UI и browser smoke | P2 | Dashboard UI проверяется минимальным функциональным smoke-тестом. |
+| 18 | CR001-T018: static UI и browser smoke | P2 | Частично выполнена: быстрый HTTP smoke для static UI/API lifecycle добавлен; browser interaction smoke отложен по решению от 2026-06-12. |
 
 ## Детализация задач
 
@@ -332,6 +332,8 @@
 ### CR001-T018: static UI и browser smoke
 
 Цель: минимально проверить dashboard UI как пользовательскую поверхность.
+
+Статус: частично выполнено в рамках CR001. Быстрый `DashboardStaticUiSmokeTest` поднимает приложение на реальном HTTP-порту, проверяет `/dashboard/index.html`, root элементы, `/dashboard/api/snapshot`, изменение профиля/симуляции и start/stop функциональной нагрузки. Browser interaction smoke не добавлялся по решению от 2026-06-12.
 
 Объем работ:
 - Проверить `/dashboard/index.html` и root элементы.

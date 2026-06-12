@@ -136,8 +136,10 @@
    - Проверить отсутствие `DataSource` и Liquibase в memory mode в отдельном configuration test.
 
 5. Static UI smoke.
+   - Статус: частично выполнено в рамках CR001-T018.
    - Проверить, что `/dashboard/index.html` грузится и содержит ожидаемые root элементы.
-   - Минимальный browser/e2e smoke: открыть dashboard, дождаться `/dashboard/api/snapshot`, изменить simulation settings, старт/стоп функциональной нагрузки.
+   - Быстрый `DashboardStaticUiSmokeTest` поднимает приложение на реальном HTTP-порту, проверяет `/dashboard/index.html`, `/dashboard/api/snapshot`, изменение simulation settings, обновление load profile и старт/стоп функциональной нагрузки.
+   - Минимальный browser/e2e smoke с реальными browser interactions отложен по решению от 2026-06-12.
    - Не проверять FPS, latency under load или throughput, так как performance-тесты исключены.
 
 ## Definition of Done

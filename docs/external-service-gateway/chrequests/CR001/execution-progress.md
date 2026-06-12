@@ -97,7 +97,7 @@
 | CR001-T015: functional-тесты scheduler-слоя | Выполнена | Schedulers обновлены записью dashboard-метрик для положительных результатов. Добавлен `GatewaySchedulerTest`, который напрямую вызывает tick-методы async dispatcher, callback dispatcher/recovery и slot lease reaper, а также проверяет conditional creation async/callback scheduler beans по enabled/disabled flags. |
 | CR001-T016: concurrency correctness | Выполнена | Добавлен `PostgresConcurrencyIT`, который проверяет корректность параллельной обработки на PostgreSQL без performance-метрик: два async dispatcher instance не обрабатывают одну задачу дважды, две callback worker группы не доставляют один callback дважды, конкурентный async submit с одним idempotency key создает одну строку, а ожидающий sync acquire не теряет reserve из-за конкурентных async lease attempts. |
 | CR001-T017: configuration binding и test output hygiene | Выполнена | Добавлен `ExternalGatewayConfigurationTest`, проверены defaults/parsing `ExternalGateway*Properties`, conditional beans memory/postgres и отсутствие PostgreSQL инфраструктуры в memory mode. `PostgresSlotNotificationConfigurationTest` больше не пишет ожидаемый WARN из фонового потока, а Surefire/Failsafe запускаются с явным Mockito javaagent. |
-| CR001-T018: static UI и browser smoke | Не начата | Следующая задача остается в очереди из `work-items.md`. |
+| CR001-T018: static UI и browser smoke | Частично выполнена | Быстрый `DashboardStaticUiSmokeTest` проверяет static UI/API lifecycle на реальном HTTP-порту; browser interaction smoke отложен по решению от 2026-06-12. |
 
 ## История выполнения
 
@@ -332,12 +332,26 @@
     - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:20 min; Surefire-набор выполнил 114 тестов без failures/errors/skipped, Failsafe-набор выполнил 48 integration-тестов без failures/errors/skipped.
     - Результат: проверка Surefire/Failsafe reports не нашла `Mockito`, `dynamic agent`, `Java agent has been loaded dynamically`, `OpenJDK 64-Bit Server VM warning`, `PostgreSQL LISTEN/NOTIFY.*недоступ` и `external-gateway-slot-release-listener.*WARN`.
 
+57. Предварительно запущен полный быстрый контур перед продолжением CR001-T018.
+    - Результат: `mvn test` упал в `ExternalAsyncControllerTest` на сценариях `pollingTaskAfterDoneReturnsResultAndStablePublicFields` и `retryDeadRetryableTaskReturnsItToPending`: helper claim-ил задачу на фиксированный момент `2026-06-12T00:00:00Z`, который оказался раньше фактического `availableAt` новой задачи.
+    - Результат: `ExternalAsyncControllerTest` исправлен без изменения production-кода: helper теперь берет `availableAt` из сохраненной задачи и использует его для `claimNextPending`, поэтому тест не зависит от текущей даты и времени запуска.
+
+58. Продолжена CR001-T018: static UI smoke.
+    - Результат: подтвержден `DashboardStaticUiSmokeTest`, который поднимает приложение на реальном HTTP-порту, проверяет `/dashboard/index.html`, root элементы dashboard, `/dashboard/api/snapshot`, изменение load profile, изменение simulation settings и start/stop функциональной нагрузки.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalAsyncControllerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 13 тестов без failures/errors/skipped.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=DashboardStaticUiSmokeTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 1 тест без failures/errors/skipped.
+    - Решение: browser interaction smoke через Playwright не добавлялся по указанию от 2026-06-12.
+
+59. Запущены финальные проверки после фикса и static UI smoke.
+    - Результат: `mvn test` успешно выполнил 115 тестов без failures/errors/skipped.
+    - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:03 min; Surefire-набор выполнил 115 тестов без failures/errors/skipped, Failsafe-набор выполнил 48 integration-тестов без failures/errors/skipped.
+
 ## Текущий результат
 
-- Быстрый тестовый контур `mvn test` сохранен и проходит: 114 тестов без failures/errors/skipped.
-- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 114 Surefire-тестов и 48 Failsafe integration-тестов без failures/errors/skipped.
+- Быстрый тестовый контур `mvn test` сохранен и проходит: 115 тестов без failures/errors/skipped.
+- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 115 Surefire-тестов и 48 Failsafe integration-тестов без failures/errors/skipped.
 - PostgreSQL smoke-тест для Liquibase добавлен, компилируется, запускается Failsafe и проходит на реальном `postgres:16-alpine`.
-- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014, CR001-T015, CR001-T016 и CR001-T017 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
+- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014, CR001-T015, CR001-T016 и CR001-T017 закрыты по приемке; CR001-T018 частично выполнена быстрым static UI/API smoke; CR001-T013 исключена из работ по решению от 2026-06-12.
 - PostgreSQL/e2e support готов для следующих contract/e2e тестов: есть очистка БД, фабрики тестовых запросов, mutable clock и bounded async waits с диагностикой timeout.
 - `SlotRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая конкурентный sync acquire.
 - `AsyncTaskRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая idempotency, retry/cancel, JSON payload claim, SYNC trace и stats.
@@ -354,9 +368,10 @@
 - Configuration binding закреплен быстрым `ExternalGatewayConfigurationTest`: проверены defaults/parsing properties, fail-fast при ошибке binding, memory/postgres conditional beans и отсутствие PostgreSQL infrastructure в memory mode.
 - Тестовый вывод очищен от CR001-T017 шумов: `PostgresSlotNotificationConfigurationTest` не пишет ожидаемый WARN из фонового listener, Mockito запускается через явный javaagent в Surefire/Failsafe.
 - PostgreSQL integration-контексты не переиспользуют `DataSource` к остановленному Testcontainers PostgreSQL между IT-классами.
+- Static UI/API smoke закреплен быстрым `DashboardStaticUiSmokeTest`: проверяются загрузка `/dashboard/index.html`, ключевые root элементы, `/dashboard/api/snapshot`, изменение simulation settings/load profile и start/stop функциональной нагрузки на реальном HTTP-порту.
 
 ## Следующие шаги
 
 - CR001-T013 пропустить по решению от 2026-06-12.
-- Перейти к CR001-T018: static UI и browser smoke.
+- Для полного закрытия CR001-T018 позже добавить browser interaction smoke, если это снова станет нужно; Playwright-тест не добавлялся по указанию от 2026-06-12.
 - Пробел `MT-P0-001` по PostgreSQL `SlotManager` sync wait на занятых слотах закрыт в рамках CR001-T010.

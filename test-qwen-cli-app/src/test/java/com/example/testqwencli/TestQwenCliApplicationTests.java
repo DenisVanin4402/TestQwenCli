@@ -1,17 +1,12 @@
 package com.example.testqwencli;
 
-import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationListener;
-import com.example.testqwencli.gateway.repository.postgres.PostgresSlotReleaseNotificationPublisher;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
-import javax.sql.DataSource;
-import liquibase.integration.spring.SpringLiquibase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContext;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,9 +23,6 @@ class TestQwenCliApplicationTests {
 
 	@Autowired
 	private MockMvc mockMvc;
-
-	@Autowired
-	private ApplicationContext applicationContext;
 
 	@Test
 	void contextLoads() {
@@ -78,14 +70,6 @@ class TestQwenCliApplicationTests {
 				.andExpect(jsonPath("$.load.profile.syncRps").isNumber())
 				.andExpect(jsonPath("$.health.repositoryMode").value("memory"))
 				.andExpect(jsonPath("$.health.slots.total").value(5));
-	}
-
-	@Test
-	void memoryModeDoesNotCreatePostgresInfrastructure() {
-		assertThat(applicationContext.getBeansOfType(DataSource.class)).isEmpty();
-		assertThat(applicationContext.getBeansOfType(SpringLiquibase.class)).isEmpty();
-		assertThat(applicationContext.getBeansOfType(PostgresSlotReleaseNotificationListener.class)).isEmpty();
-		assertThat(applicationContext.getBeansOfType(PostgresSlotReleaseNotificationPublisher.class)).isEmpty();
 	}
 
 	@Test

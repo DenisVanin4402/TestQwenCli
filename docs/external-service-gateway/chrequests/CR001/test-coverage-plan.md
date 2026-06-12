@@ -6,11 +6,11 @@
 
 ## Текущее состояние
 
-- `mvn test` проходит: 110 тестов, 0 failures, 0 errors, 0 skipped.
-- `mvn verify -Pintegration-tests` проходит: 110 Surefire-тестов и 48 Failsafe integration-тестов, 0 failures, 0 errors, 0 skipped.
+- `mvn test` проходит: 114 тестов, 0 failures, 0 errors, 0 skipped.
+- `mvn verify -Pintegration-tests` проходит: 114 Surefire-тестов и 48 Failsafe integration-тестов, 0 failures, 0 errors, 0 skipped.
 - Собственные тесты есть только в модуле `test-qwen-cli-app`.
 - `dashboard-backend` и `dashboard-ui` не имеют `src/test` и в reactor выводят `No tests to run`.
-- Текущий быстрый набор покрывает in-memory бизнес-логику: слоты, async submit, idempotency, retry/dead переходы, callback lifecycle, scheduler orchestration, controller/API contracts и OpenAPI/error contract.
+- Текущий быстрый набор покрывает in-memory бизнес-логику: слоты, async submit, idempotency, retry/dead переходы, callback lifecycle, scheduler orchestration, controller/API contracts, OpenAPI/error contract и configuration binding.
 - PostgreSQL/Testcontainers-контур покрывает Liquibase, repository contracts, e2e sync/async/callback flows, негативные API-сценарии, LISTEN/NOTIFY, row locking, JSONB-маппинг и concurrency correctness.
 - HTTP-проверки включают быстрые `@SpringBootTest` + `MockMvc` сценарии в memory mode и e2e-сценарии на реальном HTTP-порту в PostgreSQL mode.
 - Testcontainers, `PostgreSQLContainer` и loopback HTTP server используются в выделенном Docker-зависимом контуре; внешний сетевой доступ тестам не нужен.
@@ -24,8 +24,7 @@
 - Scheduler-слой проверяется быстрым functional-набором без ожидания реального расписания: async/callback dispatch ticks, callback recovery, slot lease reaper, enabled/disabled flags и запись dashboard-метрик только при положительном count.
 - PostgreSQL concurrency correctness проверяется `PostgresConcurrencyIT`: два async dispatcher instance, две callback worker группы, конкурентный idempotent submit и sync reserve против конкурентных async lease attempts.
 - Конкурентные тесты используют bounded `CountDownLatch`, `Future.get(timeout)` и диагностические сообщения; при дальнейшем расширении набора стоит вынести общие concurrent helpers, чтобы не дублировать обвязку.
-- `PostgresSlotNotificationConfigurationTest` создает listener с недоступным `DataSource`, из-за чего в `mvn test` появляется ожидаемый WARN из фонового потока. Это не падение, но шумит и может скрывать реальные проблемы.
-- Mockito в текущем запуске предупреждает о dynamic agent loading. Перед обновлением JDK/Mockito нужно явно настроить mockito agent или убрать inline-mocking там, где он не нужен.
+- CR001-T017 закрыл шум тестового вывода: `PostgresSlotNotificationConfigurationTest` больше не пишет ожидаемый WARN из фонового listener, а Surefire/Failsafe запускаются с явным Mockito javaagent без dynamic agent warning.
 
 ## Рекомендуемая структура тестов
 
@@ -130,10 +129,11 @@
    - Конкурентные sync и async lease не нарушают reserve для sync.
 
 4. Configuration binding tests.
+   - Статус: выполнено в рамках CR001-T017.
    - Проверить defaults всех `ExternalGateway*Properties`.
    - Проверить parsing duration values в `.properties`.
    - Проверить conditional beans для memory/postgres и enabled/disabled scheduler flags.
-   - Проверить отсутствие `DataSource` и Liquibase в memory mode уже есть, но стоит вынести в отдельный configuration test.
+   - Проверить отсутствие `DataSource` и Liquibase в memory mode в отдельном configuration test.
 
 5. Static UI smoke.
    - Проверить, что `/dashboard/index.html` грузится и содержит ожидаемые root элементы.

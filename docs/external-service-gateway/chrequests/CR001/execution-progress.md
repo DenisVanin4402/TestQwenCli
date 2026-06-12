@@ -68,6 +68,11 @@
 - [x] Проверить, что две callback worker группы не доставляют один PostgreSQL callback дважды.
 - [x] Проверить конкурентный async submit с одним idempotency key.
 - [x] Проверить, что конкурентные sync/async lease не нарушают reserve для sync.
+- [x] Добавить configuration binding тесты для `ExternalGateway*Properties`.
+- [x] Проверить conditional beans для memory/postgres mode.
+- [x] Вынести проверку отсутствия `DataSource` и Liquibase в memory mode в отдельный configuration test.
+- [x] Убрать ожидаемый WARN из `PostgresSlotNotificationConfigurationTest`.
+- [x] Настроить явный Mockito javaagent для Surefire и Failsafe.
 - [x] Запустить `mvn test`.
 - [x] Добиться успешного `mvn verify -Pintegration-tests` в текущем окружении.
 
@@ -91,7 +96,8 @@
 | CR001-T014: OpenAPI и error contract | Выполнена | Добавлен `ExternalGatewayOpenApiContractTest`, который сверяет generated `/v3/api-docs` с `docs/openapi` по gateway paths, operationId, параметрам, status codes, response schema refs, публичным schema fields и наличию dashboard API paths; callback YAML сверяется с сериализуемым `CallbackPayload`. |
 | CR001-T015: functional-тесты scheduler-слоя | Выполнена | Schedulers обновлены записью dashboard-метрик для положительных результатов. Добавлен `GatewaySchedulerTest`, который напрямую вызывает tick-методы async dispatcher, callback dispatcher/recovery и slot lease reaper, а также проверяет conditional creation async/callback scheduler beans по enabled/disabled flags. |
 | CR001-T016: concurrency correctness | Выполнена | Добавлен `PostgresConcurrencyIT`, который проверяет корректность параллельной обработки на PostgreSQL без performance-метрик: два async dispatcher instance не обрабатывают одну задачу дважды, две callback worker группы не доставляют один callback дважды, конкурентный async submit с одним idempotency key создает одну строку, а ожидающий sync acquire не теряет reserve из-за конкурентных async lease attempts. |
-| CR001-T017 - CR001-T018 | Не начаты | Следующие задачи остаются в очереди из `work-items.md`. |
+| CR001-T017: configuration binding и test output hygiene | Выполнена | Добавлен `ExternalGatewayConfigurationTest`, проверены defaults/parsing `ExternalGateway*Properties`, conditional beans memory/postgres и отсутствие PostgreSQL инфраструктуры в memory mode. `PostgresSlotNotificationConfigurationTest` больше не пишет ожидаемый WARN из фонового потока, а Surefire/Failsafe запускаются с явным Mockito javaagent. |
+| CR001-T018: static UI и browser smoke | Не начата | Следующая задача остается в очереди из `work-items.md`. |
 
 ## История выполнения
 
@@ -314,12 +320,24 @@
     - Результат: полный `mvn verify -Pintegration-tests` завершился успешно за 02:19 min; Surefire-набор выполнил 110 тестов без failures/errors/skipped, Failsafe-набор выполнил 48 integration-тестов без failures/errors/skipped.
     - Наблюдение: в тестовом выводе по-прежнему присутствует предупреждение Mockito о dynamic agent loading; это остается в очереди CR001-T017. Ожидаемый шум из `PostgresSlotNotificationConfigurationTest` также остается предметом CR001-T017.
 
+55. Добавлен configuration binding и test output hygiene для CR001-T017.
+    - Результат: добавлен быстрый `ExternalGatewayConfigurationTest` на 5 сценариев: defaults `ExternalGateway*Properties`, parsing duration/enum/client values, fail-fast при ошибочном binding, conditional beans для memory/postgres repository mode и отсутствие `DataSource`/Liquibase/PostgreSQL notification beans в memory mode.
+    - Результат: проверка отсутствия PostgreSQL infrastructure в memory mode перенесена из общего `TestQwenCliApplicationTests` в отдельный configuration test.
+    - Результат: `PostgresSlotNotificationConfigurationTest` больше не использует недоступный `DataSource`; тестовый `DataSource` отдает silent JDBC/PGConnection proxy, listener стартует без reconnect WARN и не маскирует реальные ошибки.
+    - Результат: тестовые Mockito `mock()` заменены на явные fake/stub реализации в быстрых тестах, а `test-qwen-cli-app/pom.xml` настраивает Surefire и Failsafe с явным Mockito javaagent и `-Xshare:off`, чтобы убрать dynamic agent loading и сопутствующий VM warning.
+
+56. Запущены проверки после CR001-T017.
+    - Результат: точечный `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayConfigurationTest,PostgresSlotNotificationConfigurationTest,GatewayDashboardClientAdapterTest,TestQwenCliApplicationTests" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнил 18 тестов без failures/errors/skipped.
+    - Результат: `mvn test` успешно выполнил 114 тестов без failures/errors/skipped.
+    - Результат: `mvn verify -Pintegration-tests` завершился успешно за 02:20 min; Surefire-набор выполнил 114 тестов без failures/errors/skipped, Failsafe-набор выполнил 48 integration-тестов без failures/errors/skipped.
+    - Результат: проверка Surefire/Failsafe reports не нашла `Mockito`, `dynamic agent`, `Java agent has been loaded dynamically`, `OpenJDK 64-Bit Server VM warning`, `PostgreSQL LISTEN/NOTIFY.*недоступ` и `external-gateway-slot-release-listener.*WARN`.
+
 ## Текущий результат
 
-- Быстрый тестовый контур `mvn test` сохранен и проходит: 110 тестов без failures/errors/skipped.
-- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 110 Surefire-тестов и 48 Failsafe integration-тестов без failures/errors/skipped.
+- Быстрый тестовый контур `mvn test` сохранен и проходит: 114 тестов без failures/errors/skipped.
+- Docker-зависимый контур выделен в отдельную команду `mvn verify -Pintegration-tests` и проходит: 114 Surefire-тестов и 48 Failsafe integration-тестов без failures/errors/skipped.
 - PostgreSQL smoke-тест для Liquibase добавлен, компилируется, запускается Failsafe и проходит на реальном `postgres:16-alpine`.
-- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014, CR001-T015 и CR001-T016 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
+- CR001-T001, CR001-T002, CR001-T003, CR001-T004, CR001-T005, CR001-T006, CR001-T007, CR001-T008, CR001-T009, CR001-T010, CR001-T011, CR001-T012, CR001-T014, CR001-T015, CR001-T016 и CR001-T017 закрыты по приемке; CR001-T013 исключена из работ по решению от 2026-06-12.
 - PostgreSQL/e2e support готов для следующих contract/e2e тестов: есть очистка БД, фабрики тестовых запросов, mutable clock и bounded async waits с диагностикой timeout.
 - `SlotRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая конкурентный sync acquire.
 - `AsyncTaskRepository` закреплен общим контрактом для memory и PostgreSQL реализаций, включая idempotency, retry/cancel, JSON payload claim, SYNC trace и stats.
@@ -333,13 +351,12 @@
 - OpenAPI и error contract закреплены быстрым MockMvc-тестом: generated `/v3/api-docs` сверяется с `docs/openapi` по стабильным частям gateway API, а callback YAML сверяется с сериализуемым `CallbackPayload`.
 - Scheduler-слой закреплен быстрыми functional-тестами без ожидания реального расписания: проверены batch size, enabled/disabled flags, startup/scheduled callback recovery и запись dashboard-метрик только при положительных результатах.
 - PostgreSQL concurrency correctness закреплен отдельным Failsafe-тестом: проверены конкурентные async dispatchers, callback workers, idempotent submit и sync reserve при конкурентных async lease attempts.
+- Configuration binding закреплен быстрым `ExternalGatewayConfigurationTest`: проверены defaults/parsing properties, fail-fast при ошибке binding, memory/postgres conditional beans и отсутствие PostgreSQL infrastructure в memory mode.
+- Тестовый вывод очищен от CR001-T017 шумов: `PostgresSlotNotificationConfigurationTest` не пишет ожидаемый WARN из фонового listener, Mockito запускается через явный javaagent в Surefire/Failsafe.
 - PostgreSQL integration-контексты не переиспользуют `DataSource` к остановленному Testcontainers PostgreSQL между IT-классами.
-- В тестовом выводе остаются отдельные технические долги вне текущего фикса: ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и предупреждение Mockito о dynamic agent loading.
 
 ## Следующие шаги
 
 - CR001-T013 пропустить по решению от 2026-06-12.
-- Перейти к CR001-T017: configuration binding и test output hygiene.
-- Затем расширять покрытие по CR001-T018 и следующим задачам из `work-items.md`.
+- Перейти к CR001-T018: static UI и browser smoke.
 - Пробел `MT-P0-001` по PostgreSQL `SlotManager` sync wait на занятых слотах закрыт в рамках CR001-T010.
-- В рамках CR001-T017 убрать ожидаемый WARN из `PostgresSlotNotificationConfigurationTest` и отдельно решить предупреждение Mockito agent.

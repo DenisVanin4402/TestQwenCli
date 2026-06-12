@@ -26,7 +26,7 @@
 | 14 | CR001-T014: OpenAPI и error contract | P1 | Документированный контракт сверяется с фактическим API. |
 | 15 | CR001-T015: functional-тесты scheduler-слоя | P2 | Scheduler logic проверяется без ожидания реального времени. |
 | 16 | CR001-T016: concurrency correctness | P2 | `PostgresConcurrencyIT` закрепляет отсутствие дублей обработки и сохранение sync reserve. |
-| 17 | CR001-T017: configuration binding и test output hygiene | P2 | Конфигурация и тестовый вывод становятся устойчивыми к рефакторингу. |
+| 17 | CR001-T017: configuration binding и test output hygiene | P2 | `ExternalGatewayConfigurationTest` закрепляет binding/conditional beans, listener WARN и Mockito dynamic agent warning устранены. |
 | 18 | CR001-T018: static UI и browser smoke | P2 | Dashboard UI проверяется минимальным функциональным smoke-тестом. |
 
 ## Детализация задач
@@ -308,6 +308,8 @@
 
 Цель: закрепить конфигурацию и убрать шум, который мешает видеть реальные падения.
 
+Статус: выполнено в рамках CR001.
+
 Объем работ:
 - Проверить defaults `ExternalGateway*Properties`.
 - Проверить parsing duration values из `.properties`.
@@ -319,8 +321,13 @@
 
 Критерии приемки:
 - `mvn test` не содержит ожидаемых WARN из фоновых потоков.
-- Mockito dynamic agent warning устранен или документирован как отдельный технический долг.
+- Mockito dynamic agent warning устранен явным javaagent для Surefire/Failsafe.
 - Ошибка в property binding ломает быстрый тест.
+
+Результат:
+- Добавлен `ExternalGatewayConfigurationTest` для defaults, parsing duration/enum/client values, fail-fast binding, memory/postgres conditional beans и отсутствия PostgreSQL infrastructure в memory mode.
+- `PostgresSlotNotificationConfigurationTest` использует silent test `DataSource` и больше не пишет ожидаемый reconnect WARN из фонового listener.
+- Тестовые Mockito mocks заменены fakes там, где они были не нужны; Surefire/Failsafe запускаются с явным Mockito javaagent.
 
 ### CR001-T018: static UI и browser smoke
 

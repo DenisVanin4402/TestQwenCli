@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -303,24 +304,29 @@ class ExternalAsyncControllerTest {
 	}
 
 	private void completeOnlyPendingTask(long taskId, Map<String, String> result) {
-		Instant startedAt = Instant.parse("2026-06-12T00:00:00Z");
-		AsyncTaskClaim claim = claimNextPending(startedAt);
+		AsyncTaskClaim claim = claimSubmittedTask(taskId);
 		assertThat(claim.task().taskId()).isEqualTo(taskId);
-		taskRepository.complete(taskId, result, startedAt.plusMillis(1)).orElseThrow();
+		taskRepository.complete(taskId, result, claim.task().startedAt().plusMillis(1)).orElseThrow();
 	}
 
 	private void moveOnlyPendingTaskToDead(long taskId) {
-		Instant now = Instant.parse("2026-06-12T00:00:00Z");
 		AsyncTask task = null;
 		for (int attempt = 0; attempt < 5 && (task == null || task.status() != AsyncTaskStatus.DEAD); attempt++) {
-			AsyncTaskClaim claim = claimNextPending(now.plusMillis(attempt * 2L));
+			AsyncTaskClaim claim = claimSubmittedTask(taskId);
 			assertThat(claim.task().taskId()).isEqualTo(taskId);
 			task = taskRepository.failTransient(taskId, "Временная ошибка upstream", Duration.ZERO,
-					now.plusMillis(attempt * 2L + 1)).orElseThrow();
+					claim.task().startedAt().plusMillis(1)).orElseThrow();
 		}
 		assertThat(task).isNotNull();
 		assertThat(task.status()).isEqualTo(AsyncTaskStatus.DEAD);
 		assertThat(task.retryable()).isTrue();
+	}
+
+	private AsyncTaskClaim claimSubmittedTask(long taskId) {
+		Instant availableAt = taskRepository.findByTaskId(taskId, Optional.empty())
+				.orElseThrow()
+				.availableAt();
+		return claimNextPending(availableAt);
 	}
 
 	private AsyncTaskClaim claimNextPending(Instant now) {

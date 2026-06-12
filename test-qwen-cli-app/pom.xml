@@ -11,6 +11,9 @@
 	<artifactId>test-qwen-cli</artifactId>
 	<name>TestQwenCli</name>
 	<description>Test Qwen CLI Spring Boot project</description>
+	<properties>
+		<openapi-generator.version>7.22.0</openapi-generator.version>
+	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>com.example</groupId>
@@ -94,6 +97,115 @@
 					<!-- Дублирует настройку Surefire для Docker-зависимого Failsafe-контура. -->
 					<argLine>-Xshare:off -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.openapitools</groupId>
+				<artifactId>openapi-generator-maven-plugin</artifactId>
+				<version>${openapi-generator.version}</version>
+				<executions>
+					<execution>
+						<id>generate-openapi-sync-contract</id>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/resources/openapi/external-gateway-sync.yaml</inputSpec>
+							<generatorName>spring</generatorName>
+							<library>spring-boot</library>
+							<output>${project.build.directory}/generated-sources/openapi/sync</output>
+							<apiPackage>com.example.testqwencli.generated.openapi.sync.api</apiPackage>
+							<modelPackage>com.example.testqwencli.generated.openapi.sync.model</modelPackage>
+							<invokerPackage>com.example.testqwencli.generated.openapi.sync</invokerPackage>
+							<generateApiDocumentation>false</generateApiDocumentation>
+							<generateApiTests>false</generateApiTests>
+							<generateModelDocumentation>false</generateModelDocumentation>
+							<generateModelTests>false</generateModelTests>
+							<generateSupportingFiles>false</generateSupportingFiles>
+							<configOptions>
+								<annotationLibrary>none</annotationLibrary>
+								<configPackage>com.example.testqwencli.generated.openapi.sync.config</configPackage>
+								<dateLibrary>java8</dateLibrary>
+								<documentationProvider>none</documentationProvider>
+								<hideGenerationTimestamp>true</hideGenerationTimestamp>
+								<interfaceOnly>true</interfaceOnly>
+								<openApiNullable>false</openApiNullable>
+								<requestMappingMode>api_interface</requestMappingMode>
+								<skipDefaultInterface>true</skipDefaultInterface>
+								<sourceFolder>src/main/java</sourceFolder>
+								<useBeanValidation>true</useBeanValidation>
+								<useSpringBoot3>true</useSpringBoot3>
+							</configOptions>
+						</configuration>
+					</execution>
+					<execution>
+						<id>generate-openapi-async-contract</id>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/resources/openapi/external-gateway-async.yaml</inputSpec>
+							<generatorName>spring</generatorName>
+							<library>spring-boot</library>
+							<output>${project.build.directory}/generated-sources/openapi/async</output>
+							<apiPackage>com.example.testqwencli.generated.openapi.asyncapi.api</apiPackage>
+							<modelPackage>com.example.testqwencli.generated.openapi.asyncapi.model</modelPackage>
+							<invokerPackage>com.example.testqwencli.generated.openapi.asyncapi</invokerPackage>
+							<generateApiDocumentation>false</generateApiDocumentation>
+							<generateApiTests>false</generateApiTests>
+							<generateModelDocumentation>false</generateModelDocumentation>
+							<generateModelTests>false</generateModelTests>
+							<generateSupportingFiles>false</generateSupportingFiles>
+							<configOptions>
+								<annotationLibrary>none</annotationLibrary>
+								<configPackage>com.example.testqwencli.generated.openapi.asyncapi.config</configPackage>
+								<dateLibrary>java8</dateLibrary>
+								<documentationProvider>none</documentationProvider>
+								<hideGenerationTimestamp>true</hideGenerationTimestamp>
+								<interfaceOnly>true</interfaceOnly>
+								<openApiNullable>false</openApiNullable>
+								<requestMappingMode>api_interface</requestMappingMode>
+								<skipDefaultInterface>true</skipDefaultInterface>
+								<sourceFolder>src/main/java</sourceFolder>
+								<useBeanValidation>true</useBeanValidation>
+								<useSpringBoot3>true</useSpringBoot3>
+							</configOptions>
+						</configuration>
+					</execution>
+					<execution>
+						<id>generate-openapi-callback-contract</id>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<inputSpec>${project.basedir}/src/main/resources/openapi/external-gateway-callback.yaml</inputSpec>
+							<generatorName>spring</generatorName>
+							<library>spring-boot</library>
+							<output>${project.build.directory}/generated-sources/openapi/callback</output>
+							<apiPackage>com.example.testqwencli.generated.openapi.callback.api</apiPackage>
+							<modelPackage>com.example.testqwencli.generated.openapi.callback.model</modelPackage>
+							<invokerPackage>com.example.testqwencli.generated.openapi.callback</invokerPackage>
+							<generateApiDocumentation>false</generateApiDocumentation>
+							<generateApiTests>false</generateApiTests>
+							<generateModelDocumentation>false</generateModelDocumentation>
+							<generateModelTests>false</generateModelTests>
+							<generateSupportingFiles>false</generateSupportingFiles>
+							<configOptions>
+								<annotationLibrary>none</annotationLibrary>
+								<configPackage>com.example.testqwencli.generated.openapi.callback.config</configPackage>
+								<dateLibrary>java8</dateLibrary>
+								<documentationProvider>none</documentationProvider>
+								<hideGenerationTimestamp>true</hideGenerationTimestamp>
+								<interfaceOnly>true</interfaceOnly>
+								<openApiNullable>false</openApiNullable>
+								<requestMappingMode>api_interface</requestMappingMode>
+								<skipDefaultInterface>true</skipDefaultInterface>
+								<sourceFolder>src/main/java</sourceFolder>
+								<useBeanValidation>true</useBeanValidation>
+								<useSpringBoot3>true</useSpringBoot3>
+							</configOptions>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

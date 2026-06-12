@@ -36,11 +36,19 @@
 
 ## Источники истины
 
-Контракты API:
+Контракты API, рабочий вход Maven-сборки и будущей OpenAPI-генерации:
+
+- [external-gateway-sync.yaml](../../../test-qwen-cli-app/src/main/resources/openapi/external-gateway-sync.yaml)
+- [external-gateway-async.yaml](../../../test-qwen-cli-app/src/main/resources/openapi/external-gateway-async.yaml)
+- [external-gateway-callback.yaml](../../../test-qwen-cli-app/src/main/resources/openapi/external-gateway-callback.yaml)
+
+Документационное зеркало тех же контрактов:
 
 - [external-gateway-sync.yaml](../openapi/external-gateway-sync.yaml)
 - [external-gateway-async.yaml](../openapi/external-gateway-async.yaml)
 - [external-gateway-callback.yaml](../openapi/external-gateway-callback.yaml)
+
+Синхронность рабочего входа и документационного зеркала проверяет `ExternalGatewayOpenApiContractTest`.
 
 Ключевые реализации:
 

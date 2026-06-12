@@ -32,6 +32,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class ExternalGatewayOpenApiContractTest {
 
+	private static final List<String> OPENAPI_FILE_NAMES = List.of(
+			"external-gateway-sync.yaml",
+			"external-gateway-async.yaml",
+			"external-gateway-callback.yaml"
+	);
+
 	private static final List<String> DASHBOARD_API_PATHS = List.of(
 			"/dashboard/api/snapshot",
 			"/dashboard/api/health",
@@ -85,6 +91,23 @@ class ExternalGatewayOpenApiContractTest {
 				.containsAll(documentedRequiredFields(callbackDocument, "ExternalGatewayCallback"));
 		assertThat(fieldNames(callbackPayload))
 				.containsAll(documentedSchemaProperties(callbackDocument, "ExternalGatewayCallback"));
+	}
+
+	@Test
+	void resourceOpenApiDocumentsMatchDocumentationMirror() throws Exception {
+		Path resourcesDirectory = resourcesOpenApiDirectory();
+		Path documentationDirectory = documentationOpenApiDirectory();
+
+		for (String fileName : OPENAPI_FILE_NAMES) {
+			Path resourcePath = resourcesDirectory.resolve(fileName);
+			Path documentationPath = documentationDirectory.resolve(fileName);
+
+			assertThat(resourcePath).isRegularFile();
+			assertThat(documentationPath).isRegularFile();
+			assertThat(Files.readString(documentationPath, StandardCharsets.UTF_8))
+					.as("%s в docs совпадает с рабочей копией в resources", fileName)
+					.isEqualTo(Files.readString(resourcePath, StandardCharsets.UTF_8));
+		}
 	}
 
 	private JsonNode generatedOpenApi() throws Exception {
@@ -257,18 +280,32 @@ class ExternalGatewayOpenApiContractTest {
 	}
 
 	private static Map<String, Object> loadOpenApiDocument(String fileName) {
-		Path path = openApiDirectory().resolve(fileName);
+		Path path = resourcesOpenApiDirectory().resolve(fileName);
 		Yaml yaml = new Yaml();
 		try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
 			Object value = yaml.load(reader);
 			return asMap(value);
 		}
 		catch (Exception ex) {
-			throw new IllegalStateException("Не удалось прочитать OpenAPI-документ " + path, ex);
+			throw new IllegalStateException("Не удалось прочитать рабочий OpenAPI-документ " + path, ex);
 		}
 	}
 
-	private static Path openApiDirectory() {
+	private static Path resourcesOpenApiDirectory() {
+		Path cwd = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+		List<Path> candidates = List.of(
+				cwd.resolve("test-qwen-cli-app/src/main/resources/openapi"),
+				cwd.resolve("src/main/resources/openapi")
+		);
+		for (Path candidate : candidates) {
+			if (Files.isDirectory(candidate)) {
+				return candidate;
+			}
+		}
+		throw new IllegalStateException("Каталог test-qwen-cli-app/src/main/resources/openapi не найден из " + cwd);
+	}
+
+	private static Path documentationOpenApiDirectory() {
 		Path cwd = Path.of(System.getProperty("user.dir")).toAbsolutePath();
 		List<Path> candidates = List.of(
 				cwd.resolve("docs/external-service-gateway/openapi"),
@@ -279,7 +316,7 @@ class ExternalGatewayOpenApiContractTest {
 				return candidate;
 			}
 		}
-		throw new IllegalStateException("Каталог docs/external-service-gateway/openapi не найден из " + cwd);
+		throw new IllegalStateException("Зеркальный каталог docs/external-service-gateway/openapi не найден из " + cwd);
 	}
 
 	private static Map<String, Object> mapAt(Object root, String... keys) {

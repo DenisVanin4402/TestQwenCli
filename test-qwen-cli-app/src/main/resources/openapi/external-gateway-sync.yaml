@@ -1,0 +1,192 @@
+openapi: 3.1.0
+info:
+  title: External Service Gateway Sync API
+  version: 0.1.0
+  description: |
+    Синхронный API внутреннего gateway-сервиса для вызова внешнего сервиса
+    с глобальным ограничением 5 concurrent calls.
+servers:
+  - url: http://external-service-gateway.internal
+    description: Internal service DNS
+tags:
+  - name: Sync
+    description: Синхронные вызовы внешнего сервиса
+paths:
+  /v1/external/sync:
+    post:
+      tags:
+        - Sync
+      operationId: callExternalSync
+      summary: Выполнить синхронный вызов внешнего сервиса
+      description: |
+        Gateway пытается получить sync-slot, выполняет upstream HTTP-вызов
+        и возвращает результат в рамках исходного HTTP-запроса.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalSyncRequest'
+            examples:
+              investPay:
+                summary: Запрос от invest-pay
+                value:
+                  externalId: 4c48a4dc-3226-4e63-8597-4ee793fc3c3c
+                  clientService: invest-pay
+                  payload:
+                    operation: calculate
+                    amount: 1000.50
+                    currency: RUB
+      responses:
+        '200':
+          description: Внешний сервис успешно обработал запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalSyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '504':
+          description: Истекло время ожидания ответа внешнего сервиса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Gateway не смог получить слот в рамках sync SLA
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+                minimum: 1
+              description: Рекомендованная задержка перед повтором, секунды
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Внешний сервис или gateway временно недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation id от вызывающего сервиса
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      description: |
+        Ключ идемпотентности для upstream adapter'а. Текущая реализация
+        принимает заголовок и передает его дальше, но не хранит sync-результат
+        по этому ключу.
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ExternalSyncRequest:
+      type: object
+      required:
+        - externalId
+        - clientService
+        - payload
+      properties:
+        externalId:
+          type: string
+          format: uuid
+          description: Идентификатор запроса на стороне вызывающего сервиса
+        clientService:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: |
+            Имя сервиса-клиента. Текущая реализация берет значение из тела
+            запроса; сверка с service-to-service identity еще не внедрена.
+          examples:
+            - invest-pay
+            - user-expertise
+        payload:
+          type: object
+          additionalProperties: true
+          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
+    ExternalSyncResponse:
+      type: object
+      required:
+        - externalId
+        - status
+        - result
+        - upstreamStatus
+        - durationMs
+      properties:
+        externalId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - SUCCEEDED
+        result:
+          $ref: '#/components/schemas/ResultMap'
+        upstreamStatus:
+          type: integer
+          format: int32
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        upstreamTraceId:
+          type:
+            - string
+            - 'null'
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          examples:
+            - NO_SLOT_AVAILABLE
+            - UPSTREAM_TIMEOUT
+        message:
+          type: string
+        retryable:
+          type: boolean
+        requestId:
+          type:
+            - string
+            - 'null'
+        details:
+          type:
+            - object
+            - 'null'
+    ResultMap:
+      type: object
+      additionalProperties:
+        type: string
+      description: Результат выполнения upstream-запроса в формате Map<String, String>
+      examples:
+        - decision: APPROVED
+          score: '82'
+          reasonCode: OK

@@ -26,7 +26,7 @@
 - [x] Синхронизировать `external-gateway-sync.yaml`.
 - [x] Синхронизировать `external-gateway-async.yaml`.
 - [x] Синхронизировать `external-gateway-callback.yaml`.
-- [ ] Перенести синхронизированные спецификации в `test-qwen-cli-app/src/main/resources/openapi`.
+- [x] Перенести синхронизированные спецификации в `test-qwen-cli-app/src/main/resources/openapi`.
 - [ ] Подключить `openapi-generator-maven-plugin` к Maven-сборке `test-qwen-cli-app`.
 - [ ] Выполнить рефакторинг на использование generated OpenAPI-кода в выбранной роли.
 - [ ] Усилить OpenAPI contract checks по стабильным частям контракта.
@@ -187,6 +187,31 @@
    - Рекомендация review: закрыть CR002-T005 после human approval без production-правок, а note-level замечание перенести в CR002-T009 или явно отложить отдельным решением человека.
    - По правилу остановки после этапа переход к CR002-T006 не выполняется до явной команды пользователя.
 
+23. 2026-06-12: стартован CR002-T006.
+   - Получена явная команда пользователя начать CR002-T006.
+   - Создан `plan_T006.md` до реализации этапа.
+   - Выбран подход: `test-qwen-cli-app/src/main/resources/openapi` становится рабочим входом Maven-сборки и будущего генератора, а `docs/external-service-gateway/openapi` остается документационным зеркалом с тестовой проверкой синхронности.
+   - Note-level замечание из `review_T005.md` по усилению callback contract checks остается в статусе `pending` и не входит в scope T006.
+
+24. 2026-06-12: реализован CR002-T006.
+   - Создан каталог `test-qwen-cli-app/src/main/resources/openapi`.
+   - В resources перенесены синхронизированные спецификации `external-gateway-sync.yaml`, `external-gateway-async.yaml`, `external-gateway-callback.yaml`.
+   - Обновлен `ExternalGatewayOpenApiContractTest`: primary-каталог OpenAPI теперь `test-qwen-cli-app/src/main/resources/openapi`, fallback на `docs/openapi` не добавлялся.
+   - В `ExternalGatewayOpenApiContractTest` добавлена проверка, что YAML из `docs/external-service-gateway/openapi` byte-for-byte совпадают с рабочими YAML из resources.
+   - Обновлен `docs/external-service-gateway/architecture/README.md`: явно указаны рабочий OpenAPI-вход сборки и документационное зеркало.
+   - Production-код, `pom.xml`, Maven lifecycle и публичное HTTP-поведение не изменялись.
+   - Проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 3 теста без failures/errors/skipped.
+   - Проверка: `mvn test` успешно выполнила 116 тестов без failures/errors/skipped.
+   - До закрытия этапа требуется `review_T006.md`.
+
+25. 2026-06-12: выполнен senior architect review для CR002-T006.
+   - Создан `review_T006.md`.
+   - Итог review: блокирующих и note-level замечаний нет, этап соответствует `work-items.md`, `plan_T006.md` и ADR-012.
+   - Независимый senior architect review-agent подтвердил полноту `review_T006.md`; дополнительные правки не требуются.
+   - Review подтвердил выбранный подход: `resources` является рабочим входом сборки и будущей генерации, `docs` остается документационным зеркалом под byte-for-byte проверкой.
+   - Рекомендация review: закрыть CR002-T006 после human approval без дополнительных production-правок.
+   - По правилу остановки после этапа переход к CR002-T007 не выполняется до явной команды пользователя.
+
 ## Текущий результат
 
 - CR002-T001 реализована как документационная инвентаризация, прошла senior architect review и принята человеком.
@@ -199,12 +224,12 @@
 - В `review_T004.md` замечание 2 по `AsyncDeliveryMode.SYNC` принято человеком и отработано; замечание 1 по ADR-008 остается в статусе `pending`.
 - CR002-T005 реализована и прошла senior architect review без блокеров: `external-gateway-callback.yaml` синхронизирован с `CallbackPayload`, `HttpCallbackClient` и callback delivery retry/backoff flow.
 - В `review_T005.md` есть note-level замечание по усилению callback contract checks; статус `pending`, требуется human approval.
+- CR002-T006 реализована и прошла senior architect review без замечаний: OpenAPI YAML перенесены в `test-qwen-cli-app/src/main/resources/openapi`, contract test читает resources как primary и проверяет byte-for-byte синхронность с `docs/external-service-gateway/openapi`.
 - Подключение OpenAPI code generation и связанный рефакторинг только запланированы.
-- Stage-level senior architect review создан для T001, T002, T003, T004 и T005.
+- Stage-level senior architect review создан для T001, T002, T003, T004, T005 и T006.
 - Финальная проверка необходимости дополнительных архитектурных правок после реализации CR002 только запланирована.
-- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`.
+- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`; после T006 запускались точечный `ExternalGatewayOpenApiContractTest` и полный `mvn test`.
 
 ## Следующие шаги
 
-- Получить human approval по CR002-T005: закрыть этап без production-правок и принять, отклонить или отложить note-level замечание из `review_T005.md`.
-- После human approval дождаться явной команды пользователя на продолжение к CR002-T006.
+- Получить human approval по CR002-T006 перед переходом к CR002-T007.

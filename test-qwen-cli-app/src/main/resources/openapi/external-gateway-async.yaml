@@ -1,0 +1,455 @@
+openapi: 3.1.0
+info:
+  title: External Service Gateway Async API
+  version: 0.1.0
+  description: |
+    Асинхронный API внутреннего gateway-сервиса для постановки задач,
+    чтения результата, отмены и ручного retry.
+servers:
+  - url: http://external-service-gateway.internal
+    description: Internal service DNS
+tags:
+  - name: Async
+    description: Асинхронные задачи внешнего сервиса
+paths:
+  /v1/external/async:
+    post:
+      tags:
+        - Async
+      operationId: submitExternalAsync
+      summary: Поставить async-задачу на обработку
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExternalAsyncRequest'
+            examples:
+              lowPriority:
+                summary: Низкоприоритетная async-задача
+                value:
+                  externalId: 4c48a4dc-3226-4e63-8597-4ee793fc3c3c
+                  clientService: user-expertise
+                  priority: LOW
+                  deliveryMode: CALLBACK
+                  payload:
+                    operation: enrich-profile
+                    userId: 100500
+      responses:
+        '202':
+          description: Задача принята или уже существовала по idempotency key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncSubmitResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Конфликт idempotency key с другим payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/external/async/{taskId}:
+    get:
+      tags:
+        - Async
+      operationId: getExternalAsyncTask
+      summary: Получить состояние async-задачи
+      description: |
+        Текущая реализация принимает необязательный X-Client-Service как
+        временный scope доступа. Если заголовок не передан, lookup не
+        ограничивается сервисом-клиентом.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XClientService'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Текущее состояние задачи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Async
+      operationId: cancelExternalAsyncTask
+      summary: Отменить async-задачу, если она еще не выполняется
+      description: |
+        Текущая реализация принимает необязательный X-Client-Service как
+        временный scope доступа. Если заголовок не передан, lookup не
+        ограничивается сервисом-клиентом.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XClientService'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '200':
+          description: Задача отменена или уже была в финальном статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Задачу нельзя отменить в текущем статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/external/async/by-external-id/{externalId}:
+    get:
+      tags:
+        - Async
+      operationId: getExternalAsyncTaskByExternalId
+      summary: Получить async-задачу по externalId
+      description: |
+        Текущая реализация принимает необязательный X-Client-Service как
+        временный scope доступа. Если заголовок не передан, gateway ищет
+        первую задачу с указанным externalId.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XClientService'
+        - name: externalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Текущее состояние задачи
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /v1/external/async/{taskId}/retry:
+    post:
+      tags:
+        - Async
+      operationId: retryExternalAsyncTask
+      summary: Вернуть задачу в обработку вручную
+      description: |
+        Текущая реализация принимает необязательный X-Client-Service как
+        временный scope доступа. Ручной retry разрешен только для FAILED/DEAD
+        задач с retryable=true.
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XClientService'
+        - $ref: '#/components/parameters/TaskId'
+      responses:
+        '202':
+          description: Задача возвращена в очередь
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Задачу нельзя повторить в текущем статусе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 128
+      description: Correlation id от вызывающего сервиса
+    XClientService:
+      name: X-Client-Service
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 2
+        maxLength: 80
+      description: |
+        Временный scope доступа для read/cancel/retry операций до внедрения
+        service-to-service identity. Если не передан, текущая реализация не
+        ограничивает lookup сервисом-клиентом.
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Задача не найдена
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ExternalAsyncRequest:
+      type: object
+      required:
+        - externalId
+        - clientService
+        - priority
+        - payload
+      properties:
+        externalId:
+          type: string
+          format: uuid
+          description: Идемпотентный идентификатор задачи на стороне вызывающего сервиса
+        clientService:
+          type: string
+          minLength: 2
+          maxLength: 80
+          description: |
+            Имя сервиса-клиента. Текущая реализация берет значение из тела
+            запроса; сверка с service-to-service identity еще не внедрена.
+            Async идемпотентность строится по паре clientService + externalId.
+          examples:
+            - invest-pay
+            - user-expertise
+        priority:
+          $ref: '#/components/schemas/AsyncPriority'
+        deliveryMode:
+          $ref: '#/components/schemas/ExternalAsyncDeliveryMode'
+        payload:
+          type: object
+          additionalProperties: true
+          description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
+    AsyncSubmitResponse:
+      type: object
+      required:
+        - taskId
+        - externalId
+        - status
+        - statusUrl
+        - deliveryMode
+        - alreadyExisted
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        externalId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/AsyncTaskStatus'
+        deliveryMode:
+          $ref: '#/components/schemas/ExternalAsyncResponseDeliveryMode'
+        statusUrl:
+          type: string
+          minLength: 1
+          example: /v1/external/async/12345
+        alreadyExisted:
+          type: boolean
+          default: false
+    AsyncTask:
+      type: object
+      required:
+        - taskId
+        - externalId
+        - clientService
+        - priority
+        - deliveryMode
+        - status
+        - callbackDeliveryStatus
+        - result
+        - error
+        - attempts
+        - maxAttempts
+        - createdAt
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        externalId:
+          type: string
+          format: uuid
+        clientService:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/AsyncPriority'
+        deliveryMode:
+          $ref: '#/components/schemas/ExternalAsyncResponseDeliveryMode'
+        status:
+          $ref: '#/components/schemas/AsyncTaskStatus'
+        callbackDeliveryStatus:
+          $ref: '#/components/schemas/CallbackDeliveryStatus'
+          description: |
+            Статус доставки callback. Для deliveryMode=POLLING значение
+            равно NOT_REQUIRED.
+        attempts:
+          type: integer
+          minimum: 0
+        maxAttempts:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+        availableAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        startedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        finishedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/ResultMap'
+            - type: 'null'
+          description: |
+            Ответ внешнего сервиса для статуса DONE. Для FAILED, DEAD и
+            CANCELLED значение равно null, а причина передается в error.
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/TaskError'
+            - type: 'null'
+          description: |
+            Для DONE равно null. Для FAILED, DEAD и CANCELLED содержит
+            структурированную причину финального статуса.
+        lastError:
+          type:
+            - string
+            - 'null'
+          description: Диагностическое краткое описание последней ошибки; структурированный контракт находится в поле error.
+        retryable:
+          type: boolean
+          default: false
+          description: Возможность ручного retry; автоматические retry уже завершены для финального статуса.
+    AsyncPriority:
+      type: string
+      enum:
+        - HIGH
+        - LOW
+      description: |
+        Приоритет async-задачи. SYNC не принимается через async API,
+        так как sync имеет отдельный endpoint.
+        Внутренняя очередь использует числовой вес: HIGH = 100, LOW = 10,
+        и сортирует задачи по priority_weight DESC, available_at ASC, id ASC.
+    ExternalAsyncDeliveryMode:
+      type: string
+      enum:
+        - CALLBACK
+        - POLLING
+      default: CALLBACK
+      description: |
+        Публичный способ доставки async-результата для submit API.
+        CALLBACK означает, что gateway отправит результат в заранее настроенный
+        endpoint сервиса-клиента. POLLING означает, что сервис-клиент заберет
+        результат через GET. Если поле не передано, текущий constructor
+        использует CALLBACK. Внутреннее значение SYNC не принимается внешним
+        async request.
+    ExternalAsyncResponseDeliveryMode:
+      type: string
+      enum:
+        - CALLBACK
+        - POLLING
+      description: |
+        Публичный способ доставки async-результата во внешних async response.
+        Внешние async endpoints возвращают только CALLBACK или POLLING; внутреннее
+        значение SYNC относится к sync trace-строкам общей Java-модели и не
+        публикуется в этом OpenAPI-контракте.
+    AsyncTaskStatus:
+      type: string
+      enum:
+        - PENDING
+        - IN_PROGRESS
+        - DONE
+        - FAILED
+        - DEAD
+        - CANCELLED
+      description: |
+        FAILED означает финальную неретраибельную ошибку.
+        DEAD означает, что retry upstream исчерпаны.
+        CANCELLED означает отмену до старта upstream-вызова.
+    CallbackDeliveryStatus:
+      type: string
+      enum:
+        - NOT_REQUIRED
+        - PENDING
+        - DELIVERING
+        - DELIVERED
+        - RETRY
+        - DEAD
+    TaskError:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          minLength: 1
+          examples:
+            - UPSTREAM_TIMEOUT
+            - VALIDATION_FAILED
+        message:
+          type: string
+          minLength: 1
+        retryable:
+          type: boolean
+          description: Возможность ручного retry; автоматические retry upstream уже завершены для финального статуса.
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          examples:
+            - TASK_NOT_FOUND
+            - IDEMPOTENCY_CONFLICT
+        message:
+          type: string
+        retryable:
+          type: boolean
+        requestId:
+          type:
+            - string
+            - 'null'
+        details:
+          type:
+            - object
+            - 'null'
+    ResultMap:
+      type: object
+      additionalProperties: true
+      description: Результат выполнения upstream-запроса в формате Map<String, Object>
+      examples:
+        - decision: APPROVED
+          score: '82'
+          reasonCode: OK

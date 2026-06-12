@@ -105,7 +105,6 @@ components:
   schemas:
     ExternalSyncRequest:
       type: object
-      additionalProperties: false
       required:
         - externalId
         - clientService
@@ -127,10 +126,10 @@ components:
             - user-expertise
         payload:
           type: object
+          additionalProperties: true
           description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
     ExternalSyncResponse:
       type: object
-      additionalProperties: false
       required:
         - externalId
         - status
@@ -149,8 +148,7 @@ components:
           $ref: '#/components/schemas/ResultMap'
         upstreamStatus:
           type: integer
-          minimum: 100
-          maximum: 599
+          format: int32
         durationMs:
           type: integer
           format: int64
@@ -161,7 +159,6 @@ components:
             - 'null'
     ErrorResponse:
       type: object
-      additionalProperties: false
       required:
         - code
         - message

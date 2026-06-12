@@ -42,7 +42,7 @@
    source: `docs/external-service-gateway/chrequests/CR002/inventory_T001.md`, разделы `Gateway endpoints` и `Спорные места`; `docs/external-service-gateway/chrequests/CR002/work-items.md`, задача `CR002-T001`
    risk: path variables указаны через шаблоны URL (`{taskId}`, `{externalId}`), но их типы и ограничения не вынесены отдельной таблицей параметров. Для T001 это не блокер, однако на T004/T009 есть риск пропустить `taskId` как `int64` с `minimum=1`, `externalId` как `UUID` и нестабильность `ErrorResponse` для ошибок конвертации path variables.
    action: перед синхронизацией async YAML либо добавить в inventory отдельный краткий блок по path variables, либо явно принять текущее описание как достаточное и перенести детализацию в `plan_T004.md`/T004 implementation.
-   status: `pending`
+   status: `deferred-to-T004-T009`
 
 ## Рекомендация
 
@@ -50,6 +50,6 @@
 
 ## Human approval
 
-Ожидается решение человека по замечанию:
+Получено решение человека 2026-06-12: CR002-T001 принят.
 
-- `pending`: принять замечание в документационную доработку T001, отклонить как несущественное для inventory или отложить детализацию до T004/T009 с явной записью в `execution-progress.md` или этом review.
+Замечание по path variables не блокирует закрытие T001. Дополнительная детализация типов и ограничений path variables переносится в контекст T004/T009 и зафиксирована в `execution-progress.md`.

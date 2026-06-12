@@ -270,16 +270,16 @@ class ExternalGatewayOpenApiContractTest {
 
 	private static Path openApiDirectory() {
 		Path cwd = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-		Path direct = cwd.resolve("docs/openapi");
-		if (Files.isDirectory(direct)) {
-			return direct;
+		List<Path> candidates = List.of(
+				cwd.resolve("docs/external-service-gateway/openapi"),
+				cwd.resolve("../docs/external-service-gateway/openapi").normalize()
+		);
+		for (Path candidate : candidates) {
+			if (Files.isDirectory(candidate)) {
+				return candidate;
+			}
 		}
-		Path parent = cwd.getParent() == null ? cwd : cwd.getParent();
-		Path fromModule = parent.resolve("docs/openapi");
-		if (Files.isDirectory(fromModule)) {
-			return fromModule;
-		}
-		throw new IllegalStateException("Каталог docs/openapi не найден из " + cwd);
+		throw new IllegalStateException("Каталог docs/external-service-gateway/openapi не найден из " + cwd);
 	}
 
 	private static Map<String, Object> mapAt(Object root, String... keys) {

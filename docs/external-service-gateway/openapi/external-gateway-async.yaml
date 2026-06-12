@@ -206,7 +206,6 @@ components:
   schemas:
     ExternalAsyncRequest:
       type: object
-      additionalProperties: false
       required:
         - externalId
         - clientService
@@ -231,13 +230,13 @@ components:
         priority:
           $ref: '#/components/schemas/AsyncPriority'
         deliveryMode:
-          $ref: '#/components/schemas/AsyncDeliveryMode'
+          $ref: '#/components/schemas/ExternalAsyncDeliveryMode'
         payload:
           type: object
+          additionalProperties: true
           description: Данные, которые gateway передаст во внешний сервис после валидации маршрута
     AsyncSubmitResponse:
       type: object
-      additionalProperties: false
       required:
         - taskId
         - externalId
@@ -256,16 +255,16 @@ components:
         status:
           $ref: '#/components/schemas/AsyncTaskStatus'
         deliveryMode:
-          $ref: '#/components/schemas/AsyncDeliveryMode'
+          $ref: '#/components/schemas/ExternalAsyncDeliveryMode'
         statusUrl:
           type: string
+          minLength: 1
           example: /v1/external/async/12345
         alreadyExisted:
           type: boolean
           default: false
     AsyncTask:
       type: object
-      additionalProperties: false
       required:
         - taskId
         - externalId
@@ -289,6 +288,7 @@ components:
           format: uuid
         clientService:
           type: string
+          minLength: 1
         priority:
           $ref: '#/components/schemas/AsyncPriority'
         deliveryMode:
@@ -296,9 +296,7 @@ components:
         status:
           $ref: '#/components/schemas/AsyncTaskStatus'
         callbackDeliveryStatus:
-          oneOf:
-            - $ref: '#/components/schemas/CallbackDeliveryStatus'
-            - type: 'null'
+          $ref: '#/components/schemas/CallbackDeliveryStatus'
           description: |
             Статус доставки callback. Для deliveryMode=POLLING значение
             равно NOT_REQUIRED.
@@ -359,19 +357,29 @@ components:
         так как sync имеет отдельный endpoint.
         Внутренняя очередь использует числовой вес: HIGH = 100, LOW = 10,
         и сортирует задачи по priority_weight DESC, available_at ASC, id ASC.
-    AsyncDeliveryMode:
+    ExternalAsyncDeliveryMode:
       type: string
       enum:
         - CALLBACK
         - POLLING
       default: CALLBACK
       description: |
-        Способ доставки async-результата. CALLBACK означает, что gateway
-        отправит результат в заранее настроенный endpoint сервиса-клиента.
-        POLLING означает, что сервис-клиент заберет результат через GET.
-        Для POLLING callback-доставка не создается, а callbackDeliveryStatus
-        равен NOT_REQUIRED. Callback URL не передается в запросе и выбирается
-        gateway по clientService для режима CALLBACK.
+        Публичный способ доставки async-результата для submit API.
+        CALLBACK означает, что gateway отправит результат в заранее настроенный
+        endpoint сервиса-клиента. POLLING означает, что сервис-клиент заберет
+        результат через GET. Если поле не передано, текущий constructor
+        использует CALLBACK. Внутреннее значение SYNC не принимается внешним
+        async request.
+    AsyncDeliveryMode:
+      type: string
+      enum:
+        - CALLBACK
+        - POLLING
+        - SYNC
+      description: |
+        Способ доставки в read-модели задачи. CALLBACK и POLLING соответствуют
+        внешнему async API. SYNC используется только для внутренних sync
+        trace-строк, которые хранятся в общей модели AsyncTask.
     AsyncTaskStatus:
       type: string
       enum:
@@ -396,7 +404,6 @@ components:
         - DEAD
     TaskError:
       type: object
-      additionalProperties: false
       required:
         - code
         - message
@@ -404,17 +411,18 @@ components:
       properties:
         code:
           type: string
+          minLength: 1
           examples:
             - UPSTREAM_TIMEOUT
             - VALIDATION_FAILED
         message:
           type: string
+          minLength: 1
         retryable:
           type: boolean
           description: Возможность ручного retry; автоматические retry upstream уже завершены для финального статуса.
     ErrorResponse:
       type: object
-      additionalProperties: false
       required:
         - code
         - message
@@ -439,9 +447,8 @@ components:
             - 'null'
     ResultMap:
       type: object
-      additionalProperties:
-        type: string
-      description: Результат выполнения upstream-запроса в формате Map<String, String>
+      additionalProperties: true
+      description: Результат выполнения upstream-запроса в формате Map<String, Object>
       examples:
         - decision: APPROVED
           score: '82'

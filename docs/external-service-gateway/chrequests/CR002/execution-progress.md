@@ -25,7 +25,7 @@
 - [x] Исправить путь чтения OpenAPI в contract test.
 - [x] Синхронизировать `external-gateway-sync.yaml`.
 - [x] Синхронизировать `external-gateway-async.yaml`.
-- [ ] Синхронизировать `external-gateway-callback.yaml`.
+- [x] Синхронизировать `external-gateway-callback.yaml`.
 - [ ] Перенести синхронизированные спецификации в `test-qwen-cli-app/src/main/resources/openapi`.
 - [ ] Подключить `openapi-generator-maven-plugin` к Maven-сборке `test-qwen-cli-app`.
 - [ ] Выполнить рефакторинг на использование generated OpenAPI-кода в выбранной роли.
@@ -162,6 +162,31 @@
    - Проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 2 теста без failures/errors/skipped.
    - Замечание 1 из `review_T004.md` по ADR-008 остается в статусе `pending`.
 
+20. 2026-06-12: стартован CR002-T005.
+   - Создан `plan_T005.md` до реализации этапа.
+   - Выбран подход: синхронизировать только `docs/external-service-gateway/openapi/external-gateway-callback.yaml` с `CallbackPayload`, `HttpCallbackClient` и callback delivery retry/backoff flow; production-код не менять.
+   - Явная команда пользователя разрешила начать T005; замечание 1 из `review_T004.md` по ADR-008 остается в статусе `pending` и не закрывается автоматически в рамках T005.
+
+21. 2026-06-12: реализован CR002-T005.
+   - Обновлен `docs/external-service-gateway/openapi/external-gateway-callback.yaml`.
+   - Response contract callback endpoint заменен на `2XX`/`default`: gateway считает успешным любой HTTP 2xx, игнорирует body и headers ответа, а любой non-2xx/transport/runtime error обрабатывает через внутренние `retryBackoffMs` и `maxAttempts`.
+   - Удалены callback response schemas `CallbackAck` и `ErrorResponse`, потому что `HttpCallbackClient` не читает response body сервиса-клиента.
+   - Удалено обещание `Retry-After`, потому что callback dispatcher его не использует.
+   - `finishedAt` изменен со `string/date-time` на `number/double` epoch seconds, что соответствует фактической JSON-сериализации `Instant` в `HttpCallbackClientTest`.
+   - `ResultMap` теперь допускает string/null значения, потому что `CallbackPayload.fromTask` преобразует значения через `Objects.toString(value, null)`.
+   - Для `clientService`, `CallbackError.code` и `CallbackError.message` добавлены `minLength: 1`, что соответствует constructor checks.
+   - Production-код, тесты, `pom.xml`, sync/async YAML и архитектурные документы не изменялись.
+   - Проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest,HttpCallbackClientTest,CallbackDeliveryFlowTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 17 тестов без failures/errors/skipped.
+   - Проверка: `mvn test` успешно выполнила 115 тестов без failures/errors/skipped.
+   - До закрытия этапа требуется `review_T005.md`.
+
+22. 2026-06-12: выполнен senior architect review для CR002-T005.
+   - Создан `review_T005.md`.
+   - Итог review: блокирующих замечаний нет, этап соответствует `work-items.md`, `plan_T005.md` и ADR-012.
+   - Зафиксировано одно note-level замечание со статусом `pending`: текущий callback OpenAPI contract test проверяет наличие полей, но не проверяет тип `finishedAt`, nested constraints и response keys `2XX`/`default`.
+   - Рекомендация review: закрыть CR002-T005 после human approval без production-правок, а note-level замечание перенести в CR002-T009 или явно отложить отдельным решением человека.
+   - По правилу остановки после этапа переход к CR002-T006 не выполняется до явной команды пользователя.
+
 ## Текущий результат
 
 - CR002-T001 реализована как документационная инвентаризация, прошла senior architect review и принята человеком.
@@ -172,13 +197,14 @@
 - CR002-T003 реализована и прошла senior architect review без замечаний: `external-gateway-sync.yaml` синхронизирован с фактическими sync DTO по ограничениям схем.
 - CR002-T004 реализована и прошла senior architect review без блокеров: `external-gateway-async.yaml` синхронизирован с фактическими async DTO по ограничениям схем и enum-значениям.
 - В `review_T004.md` замечание 2 по `AsyncDeliveryMode.SYNC` принято человеком и отработано; замечание 1 по ADR-008 остается в статусе `pending`.
-- Синхронизация callback YAML еще не выполнялась.
+- CR002-T005 реализована и прошла senior architect review без блокеров: `external-gateway-callback.yaml` синхронизирован с `CallbackPayload`, `HttpCallbackClient` и callback delivery retry/backoff flow.
+- В `review_T005.md` есть note-level замечание по усилению callback contract checks; статус `pending`, требуется human approval.
 - Подключение OpenAPI code generation и связанный рефакторинг только запланированы.
-- Stage-level senior architect review создан для T001, T002, T003 и T004.
+- Stage-level senior architect review создан для T001, T002, T003, T004 и T005.
 - Финальная проверка необходимости дополнительных архитектурных правок после реализации CR002 только запланирована.
-- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; полный `mvn test` еще не запускался.
+- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`.
 
 ## Следующие шаги
 
-- Получить human approval по оставшемуся замечанию CR002-T004: принять, отклонить или отложить конфликт ADR-008 `Map<String, String>` vs фактический `Map<String, Object>`.
-- После human approval дождаться явной команды пользователя на продолжение к CR002-T005.
+- Получить human approval по CR002-T005: закрыть этап без production-правок и принять, отклонить или отложить note-level замечание из `review_T005.md`.
+- После human approval дождаться явной команды пользователя на продолжение к CR002-T006.

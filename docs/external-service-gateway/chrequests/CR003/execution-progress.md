@@ -14,7 +14,7 @@
 - [ ] CR003-T006: JPA-дизайн для не критичных DB-операций.
 - [ ] CR003-T007: экспериментальный JPA read/non-critical adapter.
 - [ ] CR003-T008: spike критичных JPA/native операций.
-- [ ] CR003-T009: parity и concurrency проверки.
+- [ ] CR003-T009: parity, contract guardrails и concurrency проверки.
 - [ ] CR003-T010: проверка архитектурной документации и ADR.
 - [ ] CR003-T011: финальная проверка.
 
@@ -30,7 +30,7 @@
 | CR003-T006: JPA-дизайн для не критичных DB-операций | Не начата | Требуется `plan_T006.md` перед выполнением. |
 | CR003-T007: экспериментальный JPA read/non-critical adapter | Не начата | Выполняется только после принятого результата CR003-T006. |
 | CR003-T008: spike критичных JPA/native операций | Не начата | Выполняется только как доказательство или отказ, не как production-переключение. |
-| CR003-T009: parity и concurrency проверки | Не начата | Выполняется после затрагивающих ядро изменений. |
+| CR003-T009: parity, contract guardrails и concurrency проверки | Не начата | Выполняется после затрагивающих ядро изменений; включает решение по contract/code guardrail tests после generated OpenAPI client/server. |
 | CR003-T010: проверка архитектурной документации и ADR | Не начата | Требуется после определения итогового scope CR003. |
 | CR003-T011: финальная проверка | Не начата | Требуется перед закрытием CR003. |
 
@@ -51,6 +51,12 @@
 3. Проверки не запускались.
    - Причина: на этом шаге изменялась только проектная документация CR003, production-код и тесты не менялись.
 
+4. В CR003-T009 добавлена работа по contract/code guardrail tests после generated OpenAPI client/server.
+   - Решение: после CR002 с генерацией клиента и сервера не сохранять широкое ручное сравнение YAML с `/v3/api-docs`, если его заменяет compile-time contract generated interfaces/DTO.
+   - Решение: оставить или добавить только узкие guardrails на source/generation freshness, runtime server conformance и callback client wire-format там, где генерация не гарантирует production-семантику.
+   - Production-код, тесты и OpenAPI YAML на этом шаге не менялись.
+   - Проверки не запускались, потому что изменялась только постановка CR003.
+
 ## Текущий результат
 
 - CR003 создан как новая очередь работ по внутреннему упрощению ядра gateway.
@@ -58,6 +64,7 @@
 - Перед началом любого этапа требуется stage-level `plan_TXXX.md`.
 - После реализации этапа требуется senior architect review в `review_TXXX.md`.
 - JPA-перенос ограничен исследованием и proof-by-tests; текущий JDBC PostgreSQL-режим остается базовым rollback path.
+- В CR003-T009 явно добавлена проверка, какие contract/code sync tests нужны после generated OpenAPI client/server, а какие должны быть удалены как дублирующие compile-time генерацию.
 
 ## Следующие шаги
 

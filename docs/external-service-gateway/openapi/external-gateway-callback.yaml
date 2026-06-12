@@ -20,8 +20,15 @@ paths:
       summary: Принять результат async-задачи
       description: |
         Gateway вызывает этот endpoint после финального статуса async-задачи.
-        Endpoint должен быть идемпотентным: повторная доставка того же taskId/status
-        должна возвращать успешный ответ и не создавать дублей.
+        Endpoint должен быть идемпотентным для at-least-once доставки:
+        повторная или эквивалентная доставка того же taskId/status должна
+        возвращать успешный 2xx и не создавать дублей бизнес-эффекта.
+        eventId идентифицирует конкретную попытку доставки.
+
+        Gateway считает успешным любой HTTP 2xx. Body и headers ответа не
+        используются. Любой non-2xx, transport error или runtime error
+        считается ошибкой доставки и обрабатывается внутренними
+        retryBackoffMs/maxAttempts настройками gateway.
       parameters:
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/XCallbackAttempt'
@@ -45,7 +52,7 @@ paths:
                     score: '82'
                     reasonCode: OK
                   error: null
-                  finishedAt: '2026-05-21T20:30:00Z'
+                  finishedAt: 1779395400
               failed:
                 summary: Retry upstream исчерпаны
                 value:
@@ -59,53 +66,17 @@ paths:
                     code: UPSTREAM_TRANSIENT_FAILURE
                     message: External service timeout
                     retryable: true
-                  finishedAt: '2026-05-21T20:31:00Z'
+                  finishedAt: 1779395460
       responses:
-        '200':
-          description: Callback принят
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CallbackAck'
-        '204':
-          description: Callback принят, тело ответа не требуется
-        '400':
-          description: Некорректный callback payload. Gateway зафиксирует ошибку доставки и применит retry/backoff.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Не пройдена аутентификация gateway. Gateway зафиксирует ошибку доставки и применит retry/backoff.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Конфликт состояния. Использовать только для настоящего конфликта; повтор уже обработанного callback должен возвращать 200/204.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '429':
-          description: Сервис-клиент временно перегружен. Gateway повторит callback позже.
-          headers:
-            Retry-After:
-              schema:
-                type: integer
-                minimum: 1
-        '500':
-          description: Временная ошибка сервиса-клиента. Gateway повторит callback позже.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '503':
-          description: Сервис-клиент временно недоступен. Gateway повторит callback позже.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+        '2XX':
+          description: |
+            Callback принят. Gateway игнорирует body и headers ответа.
+        default:
+          description: |
+            Любой non-2xx HTTP response или ошибка выполнения считается
+            неуспешной попыткой доставки. Gateway планирует retry по
+            собственным retryBackoffMs/maxAttempts и не использует body,
+            headers ответа или Retry-After.
 components:
   parameters:
     XRequestId:
@@ -114,8 +85,10 @@ components:
       required: false
       schema:
         type: string
-        maxLength: 128
-      description: Correlation id callback-доставки
+      description: |
+        Correlation id callback-доставки. Dispatcher передает eventId
+        текущей попытки; низкоуровневый HTTP-клиент не отправляет header,
+        если requestId равен null или blank.
     XCallbackAttempt:
       name: X-Callback-Attempt
       in: header
@@ -152,6 +125,7 @@ components:
           description: Идентификатор задачи на стороне сервиса-клиента
         clientService:
           type: string
+          minLength: 1
           examples:
             - user-expertise
             - invest-pay
@@ -162,8 +136,10 @@ components:
             - $ref: '#/components/schemas/ResultMap'
             - type: 'null'
           description: |
-            Для DONE содержит Map<String, String>. Для FAILED, DEAD и
-            CANCELLED равно null, а причина передается в error.
+            Для DONE содержит Map<String, String>. Если исходное значение
+            результата было null, значение в map тоже сериализуется как null.
+            Для FAILED, DEAD и CANCELLED равно null, а причина передается
+            в error.
         error:
           oneOf:
             - $ref: '#/components/schemas/CallbackError'
@@ -172,12 +148,18 @@ components:
             Для DONE равно null. Для FAILED, DEAD и CANCELLED содержит
             структурированную причину финального статуса.
         finishedAt:
-          type: string
-          format: date-time
+          type: number
+          format: double
+          description: |
+            Момент финального завершения async-задачи в фактической JSON-
+            сериализации HTTP callback client: Unix epoch seconds, возможно
+            с дробной частью для nanoseconds.
     ResultMap:
       type: object
       additionalProperties:
-        type: string
+        type:
+          - string
+          - 'null'
       description: Результат выполнения запроса во внешний сервис в формате Map<String, String>
       examples:
         - decision: APPROVED
@@ -204,36 +186,10 @@ components:
       properties:
         code:
           type: string
+          minLength: 1
         message:
           type: string
+          minLength: 1
         retryable:
           type: boolean
           description: Возможность ручного retry; автоматические retry upstream уже завершены до финального callback.
-    CallbackAck:
-      type: object
-      additionalProperties: false
-      required:
-        - accepted
-      properties:
-        accepted:
-          type: boolean
-          examples:
-            - true
-        message:
-          type:
-            - string
-            - 'null'
-    ErrorResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - code
-        - message
-        - retryable
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        retryable:
-          type: boolean

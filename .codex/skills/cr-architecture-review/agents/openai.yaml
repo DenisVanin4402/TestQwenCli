@@ -1,0 +1,4 @@
+interface:
+  display_name: "CR Architecture Review"
+  short_description: "Review CR architecture before closure"
+  default_prompt: "Use $cr-architecture-review to review this CR stage against plan_TXXX.md, ADRs, performance, security, and architecture before closure."

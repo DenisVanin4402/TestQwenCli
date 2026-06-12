@@ -12,11 +12,17 @@
 
 Архитектурная документация `external-service-gateway` ведется в `docs/external-service-gateway/architecture`. Карта документов находится в `docs/external-service-gateway/architecture/README.md`, а принятые архитектурные решения ведутся в `docs/external-service-gateway/architecture/decisions.md`.
 
-Файлы доработок ведутся в `docs/external-service-gateway/chrequests/<CR-ID>`. Для каждого CR используйте `work-items.md` как постановку и очередь задач, `execution-progress.md` как журнал выполнения, а дополнительные планы добавляйте рядом только при необходимости. Каталог `docs/external-service-gateway/chrequests/PRE-WORK` хранит подготовительные материалы и не является местом для новых ADR.
+Файлы доработок ведутся в `docs/external-service-gateway/chrequests/<CR-ID>`. Для каждого CR используйте `work-items.md` как постановку и очередь задач, `execution-progress.md` как журнал выполнения, а stage-level планы и review храните рядом в формате `plan_TXXX.md` и `review_TXXX.md`. Каталог `docs/external-service-gateway/chrequests/PRE-WORK` хранит подготовительные материалы и не является местом для новых ADR.
+
+Когда очередной этап `CRXXX-TYYY` берется в работу, до реализации создайте или обновите `docs/external-service-gateway/chrequests/CRXXX/plan_TYYY.md`. План должен фиксировать целевой архитектурный подход для этого этапа, затронутые модули и границы компонентов, изменения публичных контрактов или их отсутствие, влияние на data/state/deployment/operations, тестовую стратегию, риски и критерии отката. Если этап чисто документационный или проверочный, это тоже нужно явно указать в `plan_TYYY.md`. Реализацию этапа не начинайте, пока в `plan_TYYY.md` не понятно, какой вариант выбран и почему он согласован с ADR и архитектурной документацией.
+
+Для каждого этапа `CRXXX-TYYY` после реализации и до закрытия этапа выполняйте senior architect review. Review выполняет отдельный агент с ролью senior architect: он сверяет реализацию с `work-items.md`, `plan_TYYY.md` и ADR, проверяет риски производительности, безопасности, удачные и неудачные архитектурные приемы, а результат сохраняет в `docs/external-service-gateway/chrequests/CRXXX/review_TYYY.md`. Для такого review используйте skill `.codex/skills/cr-architecture-review/SKILL.md` и профиль субагента `.codex/agents/senior-architect-reviewer.md`. Замечания из `review_TYYY.md` не расширяют scope автоматически: после human approval они либо принимаются в доработки, либо отклоняются, либо откладываются с явной причиной в `execution-progress.md` или самом `review_TYYY.md`.
 
 ADR в `decisions.md` заполняйте только для принятых архитектурных решений. Каждый ADR должен иметь заголовок `ADR-NNN`, статус, дату, ссылку на связанный CR или документ, блоки `Решение`, `Причины` и `Последствия`. В ADR фиксируйте устойчивую архитектурную договоренность: границы компонентов, протоколы, состояние, deployment/operations, security или заменяемость слоев. Не переносите в ADR низкоуровневые детали реализации, если они не меняют архитектурный договор.
 
 После каждого CR проверяйте, нужна ли правка архитектурной документации. Если CR меняет публичный контракт, C4-границы, sequence flow, модель данных/состояний, deployment/operations или production-инварианты, обновите затронутые файлы в `docs/external-service-gateway/architecture` и при необходимости добавьте ADR. Если архитектура не меняется, явно зафиксируйте это в `execution-progress.md` соответствующего CR.
+
+Проектные Codex-материалы храните в `.codex`: skills в `.codex/skills/<skill-name>/SKILL.md`, описания субагентов в `.codex/agents/<agent-name>.md`. Эти файлы тоже пишутся на русском языке, кроме технических имен и YAML frontmatter.
 
 ## Команды сборки, тестов и запуска
 

@@ -123,6 +123,38 @@ class ExternalAsyncControllerTest {
 	}
 
 	@Test
+	void postAsyncReturnsBadRequestWhenPayloadIsMissing() throws Exception {
+		UUID externalId = UUID.fromString("44d6f07b-89d6-45fa-818d-458b652d9d99");
+		Map<String, Object> request = Map.of(
+				"externalId", externalId,
+				"clientService", CLIENT_SERVICE,
+				"priority", "HIGH",
+				"deliveryMode", "CALLBACK"
+		);
+
+		mockMvc.perform(post("/v1/external/async")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", "req-async-validation-payload")
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.message").value("Запрос не прошел валидацию"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value("req-async-validation-payload"))
+				.andExpect(jsonPath("$.details.fields.payload").value("payload обязателен"));
+
+		assertThat(taskRepository.findByExternalId(externalId, Optional.empty())).isEmpty();
+	}
+
+	@Test
+	void postAsyncReturnsBadRequestWhenClientServiceIsBlank() throws Exception {
+		assertBlankClientServiceRejected("", UUID.fromString("a5453b87-58f4-4623-ae17-797c194d47b1"),
+				"req-async-validation-empty-client");
+		assertBlankClientServiceRejected("  ", UUID.fromString("122e2953-246c-4b53-8f85-5e3e51c7524e"),
+				"req-async-validation-blank-client");
+	}
+
+	@Test
 	void getByTaskIdAndExternalIdReturnTask() throws Exception {
 		UUID externalId = UUID.fromString("b508d915-7c35-49c3-8c01-9022c1886f6b");
 		long taskId = taskId(submit(defaultRequest(externalId), "req-async-get-create"));
@@ -301,6 +333,30 @@ class ExternalAsyncControllerTest {
 	private long taskId(MvcResult result) throws Exception {
 		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
 		return response.path("taskId").asLong();
+	}
+
+	private void assertBlankClientServiceRejected(String clientService, UUID externalId, String requestId)
+			throws Exception {
+		Map<String, Object> request = Map.of(
+				"externalId", externalId,
+				"clientService", clientService,
+				"priority", "HIGH",
+				"deliveryMode", "CALLBACK",
+				"payload", Map.of("operation", "calculate", "amount", 100)
+		);
+
+		mockMvc.perform(post("/v1/external/async")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", requestId)
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.message").value("Запрос не прошел валидацию"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value(requestId))
+				.andExpect(jsonPath("$.details.fields.clientService").value("clientService обязателен"));
+
+		assertThat(taskRepository.findByExternalId(externalId, Optional.empty())).isEmpty();
 	}
 
 	private void completeOnlyPendingTask(long taskId, Map<String, String> result) {

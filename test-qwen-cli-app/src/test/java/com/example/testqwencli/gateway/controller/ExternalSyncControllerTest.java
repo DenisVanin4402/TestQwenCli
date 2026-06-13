@@ -245,11 +245,63 @@ class ExternalSyncControllerTest {
 				.andExpect(jsonPath("$.details.fields.externalId").value("externalId обязателен"));
 	}
 
+	@Test
+	void syncReturnsBadRequestWhenPayloadIsMissing() throws Exception {
+		UUID externalId = UUID.fromString("8b21c8af-8708-4c19-9019-e84e2d74dcd1");
+		Map<String, Object> request = Map.of(
+				"externalId", externalId,
+				"clientService", "invest-pay"
+		);
+
+		mockMvc.perform(post("/v1/external/sync")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", "req-validation-payload")
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.message").value("Запрос не прошел валидацию"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value("req-validation-payload"))
+				.andExpect(jsonPath("$.details.fields.payload").value("payload обязателен"));
+
+		assertThat(taskRepository.findRequestTracesByExternalId(externalId, Optional.empty())).isEmpty();
+	}
+
+	@Test
+	void syncReturnsBadRequestWhenClientServiceIsBlank() throws Exception {
+		assertBlankClientServiceRejected("", UUID.fromString("9e721cd0-f915-4e1d-8c3f-62cf334a6d64"),
+				"req-validation-empty-client");
+		assertBlankClientServiceRejected("  ", UUID.fromString("e79d91c8-1f8f-4029-83ef-64af8a555368"),
+				"req-validation-blank-client");
+	}
+
 	private List<SlotLease> acquireAllSyncSlots() {
 		return IntStream.range(0, 5)
 				.mapToObj(index -> slotManager.acquireSyncSlot("preoccupied-sync-" + index, Duration.ZERO)
 						.orElseThrow())
 				.toList();
+	}
+
+	private void assertBlankClientServiceRejected(String clientService, UUID externalId, String requestId)
+			throws Exception {
+		Map<String, Object> request = Map.of(
+				"externalId", externalId,
+				"clientService", clientService,
+				"payload", Map.of("operation", "calculate")
+		);
+
+		mockMvc.perform(post("/v1/external/sync")
+						.contentType(MediaType.APPLICATION_JSON)
+						.header("X-Request-Id", requestId)
+						.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+				.andExpect(jsonPath("$.message").value("Запрос не прошел валидацию"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value(requestId))
+				.andExpect(jsonPath("$.details.fields.clientService").value("clientService обязателен"));
+
+		assertThat(taskRepository.findRequestTracesByExternalId(externalId, Optional.empty())).isEmpty();
 	}
 
 	private AsyncTask onlyTrace(UUID externalId, String clientService) {

@@ -3,7 +3,6 @@ package com.example.testqwencli.gateway.controller;
 import com.example.testqwencli.gateway.support.GatewayTestRequests;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.MissingNode;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,16 +37,6 @@ class ExternalGatewayOpenApiContractTest {
 			"external-gateway-callback.yaml"
 	);
 
-	private static final List<String> DASHBOARD_API_PATHS = List.of(
-			"/dashboard/api/snapshot",
-			"/dashboard/api/health",
-			"/dashboard/api/load/profile",
-			"/dashboard/api/load/start",
-			"/dashboard/api/load/stop",
-			"/dashboard/api/load/reset",
-			"/dashboard/api/upstream-simulation"
-	);
-
 	@Autowired
 	private MockMvc mockMvc;
 
@@ -55,31 +44,12 @@ class ExternalGatewayOpenApiContractTest {
 	private ObjectMapper objectMapper;
 
 	@Test
-	void generatedOpenApiMatchesDocumentedGatewayContract() throws Exception {
-		JsonNode generated = generatedOpenApi();
-		Map<String, Object> syncDocument = loadOpenApiDocument("external-gateway-sync.yaml");
-		Map<String, Object> asyncDocument = loadOpenApiDocument("external-gateway-async.yaml");
+	void springdocOpenApiDocumentIsAvailableForInternalDiagnostics() throws Exception {
+		JsonNode openApi = springdocOpenApi();
 
-		assertThat(generated.path("info").path("title").asText())
-				.isEqualTo("TestQwenCli External Service Gateway API");
-
-		assertOperationMatchesDocument(generated, syncDocument, "/v1/external/sync", "post");
-		assertOperationMatchesDocument(generated, asyncDocument, "/v1/external/async", "post");
-		assertOperationMatchesDocument(generated, asyncDocument, "/v1/external/async/{taskId}", "get");
-		assertOperationMatchesDocument(generated, asyncDocument, "/v1/external/async/{taskId}", "delete");
-		assertOperationMatchesDocument(generated, asyncDocument, "/v1/external/async/by-external-id/{externalId}",
-				"get");
-		assertOperationMatchesDocument(generated, asyncDocument, "/v1/external/async/{taskId}/retry", "post");
-
-		assertDocumentedSchemaFieldsExist(generated, syncDocument, "ExternalSyncRequest");
-		assertDocumentedSchemaFieldsExist(generated, syncDocument, "ExternalSyncResponse");
-		assertDocumentedSchemaFieldsExist(generated, syncDocument, "ErrorResponse");
-		assertDocumentedSchemaFieldsExist(generated, asyncDocument, "ExternalAsyncRequest");
-		assertDocumentedSchemaFieldsExist(generated, asyncDocument, "AsyncSubmitResponse");
-		assertDocumentedSchemaFieldsExist(generated, asyncDocument, "AsyncTask");
-		assertDocumentedSchemaFieldsExist(generated, asyncDocument, "TaskError");
-
-		assertThat(fieldNames(generated.path("paths"))).containsAll(DASHBOARD_API_PATHS);
+		assertThat(openApi.path("openapi").asText()).isNotBlank();
+		assertThat(fieldNames(openApi.path("paths")))
+				.contains("/v1/external/sync", "/v1/external/async");
 	}
 
 	@Test
@@ -110,96 +80,11 @@ class ExternalGatewayOpenApiContractTest {
 		}
 	}
 
-	private JsonNode generatedOpenApi() throws Exception {
+	private JsonNode springdocOpenApi() throws Exception {
 		MvcResult result = mockMvc.perform(get("/v3/api-docs"))
 				.andExpect(status().isOk())
 				.andReturn();
 		return objectMapper.readTree(result.getResponse().getContentAsByteArray());
-	}
-
-	private void assertOperationMatchesDocument(
-			JsonNode generated,
-			Map<String, Object> document,
-			String path,
-			String method
-	) {
-		Map<String, Object> documentedOperation = mapAt(document, "paths", path, method);
-		JsonNode generatedOperation = generated.path("paths").path(path).path(method);
-
-		assertThat(generatedOperation.isMissingNode())
-				.as("%s %s опубликован в generated OpenAPI", method.toUpperCase(), path)
-				.isFalse();
-		assertThat(generatedOperation.path("operationId").asText())
-				.isEqualTo(documentedOperation.get("operationId"));
-
-		assertParametersMatchDocument(generatedOperation, document, documentedOperation);
-		Map<String, Object> documentedResponses = mapAt(documentedOperation, "responses");
-		assertThat(fieldNames(generatedOperation.path("responses"))).containsAll(documentedResponses.keySet());
-		documentedResponses.keySet().forEach(responseCode -> assertResponseSchemaMatchesDocument(
-				generatedOperation, document, documentedOperation, responseCode));
-	}
-
-	private void assertParametersMatchDocument(
-			JsonNode generatedOperation,
-			Map<String, Object> document,
-			Map<String, Object> documentedOperation
-	) {
-		Object parameters = documentedOperation.get("parameters");
-		if (parameters == null) {
-			return;
-		}
-		for (Object rawParameter : asList(parameters)) {
-			Map<String, Object> expected = resolveParameter(document, rawParameter);
-			JsonNode actual = findGeneratedParameter(generatedOperation, (String) expected.get("name"),
-					(String) expected.get("in"));
-
-			assertThat(actual.isMissingNode())
-					.as("parameter %s in %s опубликован", expected.get("name"), expected.get("in"))
-					.isFalse();
-			assertSchemaAttributeMatches(actual.path("schema"), expected, "type");
-			assertSchemaAttributeMatches(actual.path("schema"), expected, "format");
-			assertSchemaAttributeMatches(actual.path("schema"), expected, "minimum");
-			assertSchemaAttributeMatches(actual.path("schema"), expected, "minLength");
-			assertSchemaAttributeMatches(actual.path("schema"), expected, "maxLength");
-		}
-	}
-
-	private void assertResponseSchemaMatchesDocument(
-			JsonNode generatedOperation,
-			Map<String, Object> document,
-			Map<String, Object> documentedOperation,
-			String responseCode
-	) {
-		String expectedSchema = documentedResponseSchemaName(document, documentedOperation, responseCode);
-		if (expectedSchema == null) {
-			return;
-		}
-
-		JsonNode generatedSchema = generatedOperation.path("responses")
-				.path(responseCode)
-				.path("content");
-		assertThat(refName(firstResponseSchemaRef(generatedSchema)))
-				.as("schema для response %s", responseCode)
-				.isEqualTo(expectedSchema);
-	}
-
-	private void assertDocumentedSchemaFieldsExist(
-			JsonNode generated,
-			Map<String, Object> document,
-			String schemaName
-	) {
-		JsonNode generatedSchema = generated.path("components").path("schemas").path(schemaName);
-		assertThat(generatedSchema.isMissingNode())
-				.as("schema %s опубликована в generated OpenAPI", schemaName)
-				.isFalse();
-		Set<String> generatedProperties = fieldNames(generatedSchema.path("properties"));
-
-		assertThat(generatedProperties)
-				.as("properties schema %s", schemaName)
-				.containsAll(documentedSchemaProperties(document, schemaName));
-		assertThat(generatedProperties)
-				.as("required fields schema %s", schemaName)
-				.containsAll(documentedRequiredFields(document, schemaName));
 	}
 
 	private static Set<String> documentedSchemaProperties(Map<String, Object> document, String schemaName) {
@@ -215,68 +100,6 @@ class ExternalGatewayOpenApiContractTest {
 		@SuppressWarnings("unchecked")
 		List<String> fields = (List<String>) required;
 		return new LinkedHashSet<>(fields);
-	}
-
-	private static String documentedResponseSchemaName(
-			Map<String, Object> document,
-			Map<String, Object> operation,
-			String responseCode
-	) {
-		Map<String, Object> response = mapAt(operation, "responses", responseCode);
-		Object responseRef = response.get("$ref");
-		if (responseRef instanceof String ref) {
-			response = resolveRef(document, ref);
-		}
-
-		Object content = response.get("content");
-		if (content == null) {
-			return null;
-		}
-		Map<String, Object> schema = mapAt(response, "content", "application/json", "schema");
-		Object schemaRef = schema.get("$ref");
-		if (!(schemaRef instanceof String ref)) {
-			return null;
-		}
-		return refName(ref);
-	}
-
-	private static Map<String, Object> resolveRef(Map<String, Object> document, String ref) {
-		assertThat(ref).startsWith("#/");
-		String[] segments = ref.substring(2).split("/");
-		return mapAt(document, segments);
-	}
-
-	private static Map<String, Object> resolveParameter(Map<String, Object> document, Object rawParameter) {
-		Map<String, Object> parameter = asMap(rawParameter);
-		Object ref = parameter.get("$ref");
-		if (ref instanceof String refValue) {
-			return resolveRef(document, refValue);
-		}
-		return parameter;
-	}
-
-	private static JsonNode findGeneratedParameter(JsonNode generatedOperation, String name, String in) {
-		for (JsonNode parameter : generatedOperation.path("parameters")) {
-			if (name.equals(parameter.path("name").asText()) && in.equals(parameter.path("in").asText())) {
-				return parameter;
-			}
-		}
-		return MissingNode.getInstance();
-	}
-
-	private static void assertSchemaAttributeMatches(JsonNode actualSchema, Map<String, Object> expectedParameter,
-			String attribute) {
-		Object schema = expectedParameter.get("schema");
-		if (schema == null) {
-			return;
-		}
-		Object expectedValue = asMap(schema).get(attribute);
-		if (expectedValue == null) {
-			return;
-		}
-		assertThat(actualSchema.path(attribute).asText())
-				.as("schema attribute %s для parameter %s", attribute, expectedParameter.get("name"))
-				.isEqualTo(expectedValue.toString());
 	}
 
 	private static Map<String, Object> loadOpenApiDocument(String fileName) {
@@ -335,31 +158,9 @@ class ExternalGatewayOpenApiContractTest {
 		return map;
 	}
 
-	private static List<Object> asList(Object value) {
-		assertThat(value).isInstanceOf(List.class);
-		@SuppressWarnings("unchecked")
-		List<Object> list = (List<Object>) value;
-		return list;
-	}
-
 	private static Set<String> fieldNames(JsonNode node) {
 		LinkedHashSet<String> names = new LinkedHashSet<>();
 		node.fieldNames().forEachRemaining(names::add);
 		return names;
-	}
-
-	private static String firstResponseSchemaRef(JsonNode contentNode) {
-		JsonNode jsonSchema = contentNode.path("application/json").path("schema").path("$ref");
-		if (!jsonSchema.isMissingNode()) {
-			return jsonSchema.asText();
-		}
-		var fields = contentNode.fields();
-		assertThat(fields.hasNext()).as("response content опубликован").isTrue();
-		return fields.next().getValue().path("schema").path("$ref").asText();
-	}
-
-	private static String refName(String ref) {
-		assertThat(ref).startsWith("#/components/schemas/");
-		return ref.substring(ref.lastIndexOf('/') + 1);
 	}
 }

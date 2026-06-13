@@ -28,7 +28,7 @@
 - [x] Синхронизировать `external-gateway-callback.yaml`.
 - [x] Перенести синхронизированные спецификации в `test-qwen-cli-app/src/main/resources/openapi`.
 - [x] Подключить `openapi-generator-maven-plugin` к Maven-сборке `test-qwen-cli-app`.
-- [ ] Выполнить рефакторинг на использование generated OpenAPI-кода в выбранной роли.
+- [x] Выполнить рефакторинг на использование generated OpenAPI-кода в выбранной роли.
 - [ ] Усилить OpenAPI contract checks по стабильным частям контракта.
 - [ ] Перед закрытием каждого этапа создавать `review_TXXX.md`.
 - [ ] Обрабатывать замечания из `review_TXXX.md` после human approval.
@@ -252,6 +252,118 @@
    - CR002-T007 закрыт.
    - По правилу остановки после этапа переход к CR002-T008 не выполняется до явной команды пользователя.
 
+30. 2026-06-13: стартован CR002-T008.
+   - Получена явная команда пользователя продолжить CR002-T008.
+   - Создан и актуализирован `plan_T008.md` до реализации этапа.
+   - Выбран подход: sync/async production-контроллеры реализуют generated API interfaces, generated DTO используются только на HTTP-boundary, а доменные модели `gateway.model.*` остаются контрактом service/repository/persistence-слоев.
+   - Для mapping generated DTO <-> domain выбран MapStruct.
+   - Callback generated API не подключается как Spring controller bean, потому что callback OpenAPI описывает endpoint сервиса-клиента, вызываемый gateway.
+
+31. 2026-06-13: реализован CR002-T008.
+   - Обновлен `test-qwen-cli-app/pom.xml`: добавлен MapStruct runtime dependency и annotation processor, а для generated OpenAPI-кода включен `annotationLibrary=swagger2`, чтобы OpenAPI-аннотации находились в generated interfaces.
+   - `ExternalSyncController` теперь реализует `com.example.testqwencli.generated.openapi.sync.api.V1Api`, принимает generated `ExternalSyncRequest`, возвращает generated `ExternalSyncResponse` и больше не содержит ручных Spring MVC/OpenAPI mapping-аннотаций endpoint.
+   - `ExternalAsyncController` теперь реализует `com.example.testqwencli.generated.openapi.asyncapi.api.V1Api`, принимает/возвращает generated async DTO и больше не содержит ручных Spring MVC/OpenAPI mapping-аннотаций endpoint.
+   - Добавлены MapStruct-мапперы `ExternalSyncOpenApiMapper` и `ExternalAsyncOpenApiMapper` для преобразования generated DTO на границе контроллера в доменные модели и обратно.
+   - Для async response mapping явно запрещена публикация внутреннего `AsyncDeliveryMode.SYNC` во внешнем async API.
+   - Добавлен `GeneratedOpenApiOperationCustomizer`: springdoc output получает `operationId`, summary, description, tags и responses из `@Operation`/`@ApiResponse` generated API interfaces, а не из ручных аннотаций controllers.
+   - Обновлен `ExternalGatewayExceptionHandler`, чтобы validation errors от generated request DTO сохраняли прежние русскоязычные клиентские сообщения.
+   - Публичные paths, HTTP methods, status codes, response body и persistence/runtime state не менялись.
+   - Первичная проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalSyncControllerTest,ExternalAsyncControllerTest,ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 22 теста без failures/errors/skipped.
+   - Первичная финальная проверка этапа: `mvn test` успешно выполнила 116 тестов без failures/errors/skipped.
+   - До закрытия этапа требуется `review_T008.md`.
+
+32. 2026-06-13: по результатам `review_T008.md` устранены validation gaps в boundary generated DTO.
+   - Senior architect review для CR002-T008 выявил риск изменения публичного validation behavior: missing `payload` мог стать пустой map из-за default generated DTO, а whitespace-only `clientService` мог пройти generated `@Size`.
+   - Обновлен `test-qwen-cli-app/pom.xml`: для OpenAPI Generator добавлен `containerDefaultToNull=true`, чтобы required map-поля без JSON-свойства оставались `null` до Bean Validation.
+   - Обновлены рабочие OpenAPI YAML в `test-qwen-cli-app/src/main/resources/openapi` и документационное зеркало в `docs/external-service-gateway/openapi`: для request field `clientService` добавлен `pattern: '.*\S.*'`.
+   - Обновлен `ExternalGatewayExceptionHandler`: generated `Pattern` violation и blank `Size` violation для `clientService` возвращают прежнее русскоязычное сообщение `clientService обязателен`.
+   - Добавлены быстрые MockMvc checks в `ExternalSyncControllerTest` и `ExternalAsyncControllerTest`: missing `payload`, empty `clientService` и whitespace-only `clientService` дают `400 VALIDATION_ERROR` и не создают sync trace / async task.
+   - Проверка generated sources: sync/async generated `External*Request.payload` больше не инициализируется через `new HashMap<>()`, а `clientService` содержит `@Pattern(regexp = ".*\\S.*")`.
+   - Проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalSyncControllerTest,ExternalAsyncControllerTest,ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 26 тестов без failures/errors/skipped.
+   - Финальная проверка этапа после устранения замечаний: `mvn test` успешно выполнила 120 тестов без failures/errors/skipped.
+
+33. 2026-06-13: выполнена повторная senior architect проверка CR002-T008 после validation fix.
+   - Обновлен `review_T008.md`.
+   - Итог review: активных `critical`, `high` или `medium` замечаний после post-review validation fix нет.
+   - Review подтвердил, что missing `payload` снова отклоняется как `400 VALIDATION_ERROR`, а empty/whitespace-only `clientService` отклоняется на HTTP-boundary до вызова service/repository слоя.
+   - Review подтвердил, что production-код в ходе повторной проверки не менялся.
+   - Рекомендация review: закрыть CR002-T008 после human approval без дополнительных production-правок.
+   - По правилу остановки после этапа переход к CR002-T009 не выполняется до явной команды пользователя.
+
+34. 2026-06-13: по уточнению пользователя generated model-классы T008 переведены на Java-постфикс `DTO`.
+   - Обновлен `test-qwen-cli-app/pom.xml`: для sync, async и callback OpenAPI Generator executions добавлен `modelNameSuffix=DTO`.
+   - `ExternalSyncController` и `ExternalAsyncController` обновлены на generated классы `ExternalSyncRequestDTO`, `ExternalSyncResponseDTO`, `ExternalAsyncRequestDTO`, `AsyncSubmitResponseDTO`, `AsyncTaskDTO`.
+   - `ExternalSyncOpenApiMapper` и `ExternalAsyncOpenApiMapper` обновлены так, чтобы маппить generated `*DTO` на доменные record-модели и обратно без fully qualified names в сигнатурах мапперов.
+   - `GeneratedOpenApiOperationCustomizer` расширен: response schemas из generated DTO добавляются в OpenAPI components, а Java-постфикс `DTO` убирается из публичных schema names и `$ref`, чтобы `/v3/api-docs` продолжал публиковать прежние contract names без DTO.
+   - Обновлен `plan_T008.md`: зафиксирована роль `modelNameSuffix=DTO` и правило сохранения прежних OpenAPI schema names.
+   - Чистая targeted-проверка: `mvn -pl test-qwen-cli-app -am clean test "-Dtest=ExternalSyncControllerTest,ExternalAsyncControllerTest,ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false"` успешно выполнила 26 тестов без failures/errors/skipped и подтвердила генерацию только `*DTO` model-классов после `clean`.
+   - Финальная проверка после DTO suffix: `mvn test` успешно выполнила 120 тестов без failures/errors/skipped.
+   - Из-за production-изменения после предыдущего review требуется обновить `review_T008.md` перед human approval.
+
+35. 2026-06-13: выполнена повторная senior architect проверка CR002-T008 после DTO suffix.
+   - Обновлен `review_T008.md`.
+   - Итог review: `passed`, активных блокирующих архитектурных замечаний после `modelNameSuffix=DTO` нет.
+   - Review подтвердил, что generated `*DTO` остаются только на HTTP/controller boundary, доменные `gateway.model.*` модели остаются контрактом service/repository/persistence-слоев, а MapStruct явно связывает эти слои.
+   - Review подтвердил, что `GeneratedOpenApiOperationCustomizer` сохраняет публичные OpenAPI schema names без `DTO`, поэтому Java naming convention не утекает во внешний контракт.
+   - Зафиксирован note-level остаточный риск: при CR002-T009 желательно добавить negative check на отсутствие `DTO` в public schema refs после будущих обновлений springdoc/OpenAPI Generator.
+   - Production-код, тесты, `pom.xml` и другие документы в ходе review не менялись.
+   - Рекомендация review: закрыть CR002-T008 после human approval без дополнительных production-правок.
+   - По правилу остановки после этапа переход к CR002-T009 не выполняется до явной команды пользователя.
+
+36. 2026-06-13: по решению пользователя T008 переведен с springdoc customizer на contract-first публикацию `/v3/api-docs`.
+   - Выбран второй вариант: публичный `/v3/api-docs` строится из рабочих OpenAPI YAML в `test-qwen-cli-app/src/main/resources/openapi`, а не из springdoc scanning и не через `GeneratedOpenApiOperationCustomizer`.
+   - Удален `GeneratedOpenApiOperationCustomizer`.
+   - Добавлен `ExternalGatewayOpenApiController`: он читает `external-gateway-sync.yaml` и `external-gateway-async.yaml`, объединяет `paths`, `components`, `tags` и `servers`, нормализует split-document schema names `ResultMap` в `ExternalSyncResultMap`/`ExternalAsyncResultMap` и fail-fast падает на конфликтующих components.
+   - Callback OpenAPI не включается в `/v3/api-docs`, потому что описывает endpoint внешнего сервиса-клиента; dashboard endpoints также не включаются в external-service-gateway contract.
+   - `springdoc.api-docs.path` перенесен на `/internal/springdoc-api-docs`, а Swagger UI направлен на contract-first `/v3/api-docs`.
+   - В `test-qwen-cli-app/pom.xml` добавлена runtime dependency `jackson-dataformat-yaml`, нужная production publisher для чтения YAML из classpath resources.
+   - `ExternalGatewayOpenApiContractTest` обновлен: `/v3/api-docs` сверяется с contract-first sync/async YAML, проверяется отсутствие публичных schema names с Java-постфиксом `DTO` и отсутствие dashboard path.
+   - Generated interfaces и generated `*DTO` остаются runtime source для Spring MVC/validation на controller boundary; доменные модели по-прежнему связываются через MapStruct.
+   - Targeted-проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest,TestQwenCliApplicationTests,ExternalSyncControllerTest,ExternalAsyncControllerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 36 тестов без failures/errors/skipped.
+   - Финальная проверка после contract-first switch: `mvn test` успешно выполнила 120 тестов без failures/errors/skipped.
+   - Из-за production-изменения после предыдущего review требуется обновить `review_T008.md` перед human approval.
+
+37. 2026-06-13: выполнена повторная senior architect проверка CR002-T008 после contract-first switch.
+   - Обновлен `review_T008.md`.
+   - Итог review: `passed`, активных `critical`, `high` или `medium` замечаний нет.
+   - Review подтвердил соответствие `plan_T008.md`, ADR-009 и ADR-012: generated interfaces/DTO остаются controller boundary, доменный слой отделен через MapStruct, а публичный `/v3/api-docs` публикуется из contract-first sync/async YAML.
+   - Review подтвердил, что callback YAML и dashboard endpoints обоснованно не входят в external-service-gateway `/v3/api-docs`.
+   - Review подтвердил, что `ExternalGatewayOpenApiController` строит документ один раз на startup, fail-fast падает при конфликтующих components и не добавляет overhead в sync/async business path.
+   - Зафиксировано low-level замечание: `/internal/springdoc-api-docs` является перенесенным springdoc scanning endpoint, но не access-control механизмом; решение принять, отклонить или перенести в follow-up/T010 требует human approval.
+   - Зафиксировано note-level замечание: в CR002-T009 стоит усилить negative checks на callback path, полный набор dashboard paths и `DTO` в public `$ref`.
+   - Production-код, `pom.xml`, тесты и другие документы в ходе review не менялись.
+   - Рекомендация review: закрыть CR002-T008 после human approval без дополнительных production-правок.
+   - По правилу остановки после этапа переход к CR002-T009 не выполняется до явной команды пользователя.
+
+38. 2026-06-13: зафиксировано human decision по замечанию 1 из `review_T008.md`.
+   - Замечание 1 по `/internal/springdoc-api-docs` отклонено человеком: ничего не делаем в рамках T008.
+   - `review_T008.md` обновлен: статус замечания 1 переведен в `rejected`.
+   - Замечание 2 по усилению negative checks остается в статусе `pending`: требуется пояснение и отдельное решение человека.
+   - Production-код, `pom.xml` и тесты не менялись.
+
+39. 2026-06-13: по решению пользователя T008 возвращен на стандартную springdoc публикацию `/v3/api-docs`.
+   - Человек принял риск несовершенного `/v3/api-docs`, потому что текущие внешние потребители gateway являются внутренними сервисами.
+   - Удален `ExternalGatewayOpenApiController`; runtime merge sync/async YAML и переопределение `/v3/api-docs` больше не используются.
+   - Удалена dependency `jackson-dataformat-yaml`, так как production-код больше не читает OpenAPI YAML.
+   - `springdoc.api-docs.path` возвращен на `/v3/api-docs`; отдельный `/internal/springdoc-api-docs` больше не используется.
+   - `ExternalGatewayOpenApiContractTest` ослаблен: он проверяет доступность стандартного springdoc `/v3/api-docs` и наличие основных gateway paths, но больше не требует полного совпадения `/v3/api-docs` с рабочими YAML.
+   - Строгими проверками остаются синхронность OpenAPI YAML в resources/docs mirror и соответствие callback YAML сериализуемому `CallbackPayload`.
+   - Generated interfaces, generated `*DTO`, MapStruct-мапперы и validation fixes остаются без изменений.
+   - Targeted-проверка: `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalGatewayOpenApiContractTest,TestQwenCliApplicationTests,ExternalSyncControllerTest,ExternalAsyncControllerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` успешно выполнила 36 тестов без failures/errors/skipped.
+   - Финальная проверка после возврата к стандартному springdoc: `mvn test` успешно выполнила 120 тестов без failures/errors/skipped.
+   - Из-за production-изменения после предыдущего review требуется обновить `review_T008.md` перед human approval.
+
+40. 2026-06-13: выполнена повторная senior architect проверка CR002-T008 после возврата к стандартному springdoc `/v3/api-docs`.
+   - Обновлен `review_T008.md`.
+   - Итог review: `passed`, активных `critical`, `high`, `medium` или `pending` замечаний нет.
+   - Review подтвердил, что generated interfaces/DTO остаются только на controller boundary, доменные модели отделены через MapStruct, а canonical OpenAPI contract остается в YAML resources/docs mirror.
+   - Review подтвердил, что `ExternalGatewayOpenApiController`, runtime YAML merge, `GeneratedOpenApiOperationCustomizer`, `jackson-dataformat-yaml`, `/internal/springdoc-api-docs` и `springdoc.swagger-ui.url` отсутствуют в актуальном коде.
+   - Прежние замечания про YAML merge/custom publisher сняты как неактуальные, потому что соответствующий production-код удален.
+   - Единственное note-level замечание имеет статус `accepted`: риск несовершенного стандартного `/v3/api-docs` принят человеком без production-доработок в T008.
+   - Production-код, `pom.xml`, тесты и другие документы в ходе review не менялись.
+   - Рекомендация review: закрыть CR002-T008 после human approval без дополнительных production-правок.
+   - По правилу остановки после этапа переход к CR002-T009 не выполняется до явной команды пользователя.
+
 ## Текущий результат
 
 - CR002-T001 реализована как документационная инвентаризация, прошла senior architect review и принята человеком.
@@ -267,11 +379,15 @@
 - CR002-T006 реализована, прошла senior architect review без замечаний и получила human approval: OpenAPI YAML перенесены в `test-qwen-cli-app/src/main/resources/openapi`, contract test читает resources как primary и проверяет byte-for-byte синхронность с `docs/external-service-gateway/openapi`.
 - CR002-T007 реализована, прошла senior architect review без блокеров и получила human approval: `openapi-generator-maven-plugin` подключен к Maven lifecycle `test-qwen-cli-app`, generated sources из трех OpenAPI YAML создаются в `target/generated-sources/openapi` и компилируются.
 - Два note-level замечания из `review_T007.md` не блокируют T007 и переведены в статус `deferred`: ограничения генератора должны быть учтены в T008/T009, риск duplicate mappings должен быть учтен в T008.
-- Связанный рефакторинг на generated OpenAPI-код остается запланированным для CR002-T008.
-- Stage-level senior architect review создан для T001, T002, T003, T004, T005, T006 и T007.
+- CR002-T008 реализована: sync/async контроллеры используют generated API interfaces, generated model-классы имеют Java-постфикс `DTO`, generated DTO маппятся в доменные модели через MapStruct, а публичный `/v3/api-docs` оставлен стандартным springdoc diagnostic output с принятым риском неполного соответствия YAML.
+- Замечания `review_T008.md` по missing `payload` и blank `clientService` технически устранены до закрытия этапа; повторная senior architect проверка подтвердила отсутствие активных блокеров.
+- После уточнения пользователя про `DTO` suffix выполнена дополнительная production-правка T008; после обсуждения `GeneratedOpenApiOperationCustomizer` не используется, contract-first publisher также удален по решению пользователя.
+- Повторный senior architect review после возврата к стандартному springdoc имеет статус `passed`; активных pending-замечаний нет.
+- Stage-level senior architect review создан для T001, T002, T003, T004, T005, T006, T007 и T008.
+- Для CR002-T008 создан и обновлен `review_T008.md`; после возврата к стандартному springdoc review имеет статус `passed`, требуется human approval на закрытие этапа.
 - Финальная проверка необходимости дополнительных архитектурных правок после реализации CR002 только запланирована.
-- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`; после T006 запускались точечный `ExternalGatewayOpenApiContractTest` и полный `mvn test`.
+- После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`; после T006 запускались точечный `ExternalGatewayOpenApiContractTest` и полный `mvn test`; после T008 запускались точечные controller/OpenAPI tests и полный `mvn test`, итоговый полный набор после возврата к стандартному springdoc - 120 тестов.
 
 ## Следующие шаги
 
-- Ожидать явную команду пользователя на старт CR002-T008.
+- Ожидать human approval по CR002-T008. CR002-T009 не начинать без явной команды пользователя.

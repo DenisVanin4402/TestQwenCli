@@ -42,6 +42,12 @@ public class ExternalAsyncServiceImpl implements ExternalAsyncService {
 
 	/**
 	 * Ставит async-задачу в очередь или возвращает существующую задачу по idempotency key.
+	 *
+	 * <p>CR003-T001: после подключения внутренней библиотеки идемпотентности здесь
+	 * должна стоять {@code @Idempotent}. Ключ: {@code request.clientService + request.externalId}.
+	 * Hash fields: {@code request.payload}, {@code request.priority}, {@code request.deliveryMode}.
+	 * {@code requestId} не входит в hash. Уникальный индекс в {@code ext_request_queue}
+	 * остается нижним DB-level предохранителем от дублей.</p>
 	 */
 	public AsyncSubmitResponse submit(ExternalAsyncRequest request, String requestId) {
 		Objects.requireNonNull(request, "request must not be null");

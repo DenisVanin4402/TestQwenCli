@@ -58,7 +58,35 @@ public class ExternalGatewayExceptionHandler {
 	}
 
 	private String fieldMessage(FieldError error) {
+		String generatedMessage = generatedRequestFieldMessage(error);
+		if (generatedMessage != null) {
+			return generatedMessage;
+		}
 		String message = error.getDefaultMessage();
 		return message == null ? "Некорректное значение поля" : message;
+	}
+
+	private String generatedRequestFieldMessage(FieldError error) {
+		String field = error.getField();
+		String code = error.getCode();
+		if ("NotNull".equals(code)) {
+			return switch (field) {
+				case "externalId" -> "externalId обязателен";
+				case "payload" -> "payload обязателен";
+				case "priority" -> "priority обязателен";
+				case "clientService" -> "clientService обязателен";
+				default -> null;
+			};
+		}
+		if ("Size".equals(code) && "clientService".equals(field)) {
+			if (error.getRejectedValue() instanceof String value && value.isBlank()) {
+				return "clientService обязателен";
+			}
+			return "clientService должен содержать от 2 до 80 символов";
+		}
+		if ("Pattern".equals(code) && "clientService".equals(field)) {
+			return "clientService обязателен";
+		}
+		return null;
 	}
 }

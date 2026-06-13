@@ -220,6 +220,7 @@ components:
           type: string
           minLength: 2
           maxLength: 80
+          pattern: '.*\S.*'
           description: |
             Имя сервиса-клиента. Текущая реализация берет значение из тела
             запроса; сверка с service-to-service identity еще не внедрена.

@@ -52,6 +52,16 @@ public class ExternalSyncServiceImpl implements ExternalSyncService {
 		this.clock = Objects.requireNonNull(clock, "clock must not be null");
 	}
 
+	/**
+	 * Выполняет sync-вызов внешнего сервиса под общим лимитом слотов.
+	 *
+	 * <p>CR003-T001/CR004: после подключения внутренней библиотеки идемпотентности здесь
+	 * должна стоять {@code @Idempotent}. Ключ: {@code request.clientService + headers.idempotencyKey}.
+	 * Hash fields: {@code request.externalId}, {@code request.payload}. {@code headers.requestId}
+	 * не входит в hash. Повторный sync-запрос с тем же ключом должен отсекаться через
+	 * lifecycle-запись {@code SYNC_REQUEST} в {@code ext_request_queue}, чтобы повтор не занимал
+	 * второй слот и не вызывал upstream повторно.</p>
+	 */
 	public ExternalSyncResponse sync(ExternalSyncRequest request, ExternalSyncHeaders headers) {
 		Objects.requireNonNull(request, "request must not be null");
 		Objects.requireNonNull(headers, "headers must not be null");

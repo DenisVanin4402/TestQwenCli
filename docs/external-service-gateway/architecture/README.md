@@ -36,7 +36,7 @@
 
 ## Источники истины
 
-Контракты API, рабочий вход Maven-сборки и будущей OpenAPI-генерации:
+Контракты API, рабочий вход Maven-сборки и OpenAPI-генерации:
 
 - [external-gateway-sync.yaml](../../../test-qwen-cli-app/src/main/resources/openapi/external-gateway-sync.yaml)
 - [external-gateway-async.yaml](../../../test-qwen-cli-app/src/main/resources/openapi/external-gateway-async.yaml)

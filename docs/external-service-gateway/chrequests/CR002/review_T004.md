@@ -4,7 +4,7 @@
 
 Этап CR002-T004 в целом соответствует `work-items.md`, `plan_T004.md` и ADR-012. Изменение ограничено синхронизацией `docs/external-service-gateway/openapi/external-gateway-async.yaml` с `ExternalAsyncController` и async DTO без production-кода.
 
-Блокирующих замечаний нет. Из двух note-level замечаний одно принято человеком и отработано в T004, одно остается в статусе `pending`.
+Блокирующих замечаний нет. Из двух note-level замечаний одно принято человеком и отработано в T004, одно отложено за пределы текущего CR002 после финального решения 2026-06-13.
 
 ## Соответствие плану
 
@@ -70,7 +70,7 @@ SSRF-защита через отсутствие произвольного `ca
    ссылка: `docs/external-service-gateway/architecture/decisions.md`, ADR-008; `docs/external-service-gateway/openapi/external-gateway-async.yaml`, schema `ResultMap`; `AsyncTask.result`
    риск: архитектурная документация ADR-008 по-прежнему говорит о `Map<String, String>` для async fallback GET, а T004 фиксирует фактический `Map<String, Object>`. Для потребителей это может выглядеть как конфликт между ADR и OpenAPI.
    предлагаемое действие: после human approval решить на CR002-T010, нужно ли обновить ADR/architecture docs под фактическую модель или запланировать отдельное изменение production-кода для нормализации async result к `Map<String, String>`.
-   статус human approval: `pending`
+   статус human approval: `deferred` с 2026-06-13. Причина: CR002-T009 пропущен по решению пользователя, а T010 подтвердил, что в рамках CR002 новый ADR или production-нормализация результата не выполняются; вопрос должен решаться отдельным follow-up, если потребуется.
 
 2. severity: `note`
    ссылка: `docs/external-service-gateway/openapi/external-gateway-async.yaml`, schema `AsyncDeliveryMode`; `PostgresAsyncTaskRepository.findStoredByTaskId`; `MemoryAsyncTaskRepository.findStoredByTaskId`
@@ -82,14 +82,16 @@ SSRF-защита через отсутствие произвольного `ca
 
 ## Рекомендация
 
-Рекомендую закрыть CR002-T004 после human approval по оставшемуся note-level замечанию ADR-008. Замечание по `AsyncDeliveryMode.SYNC` принято человеком и отработано без production-правок.
+CR002-T004 закрыт без дополнительных production-правок. Замечание по `AsyncDeliveryMode.SYNC` принято человеком и отработано, а note-level замечание ADR-008 по `Map<String, String>` vs `Map<String, Object>` отложено за пределы текущего CR002.
 
 После закрытия T004 остановиться и не начинать CR002-T005 до явной команды пользователя.
 
 ## Human approval
 
-Ожидается решение человека:
+Статус review: approved.
 
-- закрыть CR002-T004 с оставшимся note-level замечанием по ADR-008;
-- принять, отклонить или отложить замечание по `Map<String, String>` vs `Map<String, Object>`;
-- отдельно подтвердить, когда можно переходить к CR002-T005.
+Решение человека:
+
+- CR002-T004 закрыт без дополнительных production-правок;
+- замечание по `Map<String, String>` vs `Map<String, Object>` отложено за пределы текущего CR002 с 2026-06-13;
+- переход к следующим этапам CR002 выполнен по отдельным командам пользователя.

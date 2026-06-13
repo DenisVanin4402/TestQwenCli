@@ -29,12 +29,13 @@
 - [x] Перенести синхронизированные спецификации в `test-qwen-cli-app/src/main/resources/openapi`.
 - [x] Подключить `openapi-generator-maven-plugin` к Maven-сборке `test-qwen-cli-app`.
 - [x] Выполнить рефакторинг на использование generated OpenAPI-кода в выбранной роли.
-- [ ] Усилить OpenAPI contract checks по стабильным частям контракта.
-- [ ] Перед закрытием каждого этапа создавать `review_TXXX.md`.
-- [ ] Обрабатывать замечания из `review_TXXX.md` после human approval.
-- [ ] Проверить, требуется ли обновление архитектурной документации, и при необходимости внести точечные правки.
-- [ ] Запустить `mvn test`.
-- [ ] Зафиксировать финальный результат CR002.
+- [x] Пропустить CR002-T009 по решению пользователя; усиление OpenAPI contract checks не выполнялось.
+- [x] Перед закрытием каждого этапа создавать `review_TXXX.md`.
+- [x] Обрабатывать замечания из `review_TXXX.md` после human approval.
+- [x] Проверить, требуется ли обновление архитектурной документации, и при необходимости внести точечные правки.
+- [x] Запустить `mvn test`.
+- [x] Запустить интеграционный контур `mvn verify -Pintegration-tests`.
+- [x] Зафиксировать финальный результат CR002.
 
 ## Журнал
 
@@ -364,30 +365,88 @@
    - Рекомендация review: закрыть CR002-T008 после human approval без дополнительных production-правок.
    - По правилу остановки после этапа переход к CR002-T009 не выполняется до явной команды пользователя.
 
+41. 2026-06-13: получена явная команда пользователя пропустить CR002-T009 и продолжить остальные этапы CR002 без промежуточных подтверждений.
+   - Команда пользователя считается human approval на закрытие CR002-T008 после `review_T008.md`, потому что активных pending-замечаний в review нет.
+   - CR002-T009 не выполняется: усиление `ExternalGatewayOpenApiContractTest` по стабильным частям контракта исключено из текущего прохода.
+   - Ранее подготовленный `plan_T009.md` удален как неиспользуемый план отмененного этапа.
+   - Разрешено продолжать CR002-T010 и CR002-T011 без остановки после каждого этапа; stage-level plan и senior architect review сохраняются обязательными.
+   - Production-код, OpenAPI YAML, `pom.xml` и тесты на этом шаге не изменялись.
+
+42. 2026-06-13: реализован CR002-T010.
+   - Создан `plan_T010.md` до реализации этапа.
+   - Проверены `architecture/README.md`, `architecture/decisions.md`, C4 component view и deployment/operations view.
+   - ADR-012 уже фиксирует архитектурное решение CR002: контроллеры и DTO остаются источником истины, YAML resources являются рабочим входом Maven-сборки, OpenAPI Generator подключен к build lifecycle, generated sources используются в явно выбранной роли без изменения публичного поведения API.
+   - C4 boundaries, sync/async/callback sequence flow, data/state, deployment model, operations и production-инварианты не изменились после T008.
+   - Точечно обновлен `docs/external-service-gateway/architecture/README.md`: формулировка "будущей OpenAPI-генерации" заменена на актуальную "OpenAPI-генерации".
+   - Новые ADR не требуются, потому что устойчивое архитектурное решение уже покрыто ADR-012, а T010 не вводит новую договоренность.
+   - Maven-тесты на T010 отдельно не запускались, потому что этап документационно-проверочный; финальный `mvn test` запланирован на T011.
+   - До закрытия этапа требуется `review_T010.md`.
+
+43. 2026-06-13: реализован CR002-T011.
+   - Создан `plan_T011.md` до реализации этапа.
+   - Выполнена финальная проверка из корня репозитория: `mvn test`.
+   - Результат: `BUILD SUCCESS`; Surefire выполнил 120 тестов, failures/errors/skipped 0.
+   - Maven reactor: `test-qwen-cli-parent`, `dashboard-backend`, `dashboard-ui`, `test-qwen-cli` завершились со статусом `SUCCESS`.
+   - OpenAPI Generator выполнил генерацию sync, async и callback contract sources в ходе Maven lifecycle.
+   - Production-код, OpenAPI YAML, `pom.xml`, тесты и архитектурные документы на T011 не изменялись.
+   - До закрытия этапа требуется `review_T011.md`.
+
+44. 2026-06-13: выполнен senior architect review для CR002-T010.
+   - Создан `review_T010.md`.
+   - Итог review: `passed`, активных замечаний нет.
+   - Review подтвердил, что дополнительных C4, sequence, data/state, deployment/operations или ADR-правок не требуется.
+   - Review подтвердил корректность единственной архитектурной правки: `architecture/README.md` больше не называет OpenAPI-генерацию будущей.
+   - Статус review переведен в `approved` по решению пользователя закрывать оставшиеся этапы CR002 без промежуточных подтверждений.
+
+45. 2026-06-13: выполнен senior architect review для CR002-T011 и закрыт CR002.
+   - Создан `review_T011.md`.
+   - Итог review: `passed`, активных замечаний по T011 нет.
+   - Review подтвердил результат финальной проверки: `mvn test` завершился `BUILD SUCCESS`, 120 тестов, failures/errors/skipped 0.
+   - Review подтвердил, что OpenAPI Generator выполнялся в Maven lifecycle для sync, async и callback, а production-код, OpenAPI YAML, Maven-настройки, тесты и архитектурные документы на T011 не менялись.
+   - Статус review переведен в `approved` по решению пользователя закрывать оставшиеся этапы CR002 без промежуточных подтверждений.
+   - Остаточные note-level вопросы из ранних review, привязанные к пропущенному T009 или follow-up-решениям, отложены за пределы текущего CR002:
+     - замечание `review_T004.md` по конфликту ADR-008 `Map<String, String>` с фактической async read-моделью `Map<String, Object>`;
+     - замечание `review_T005.md` по усилению callback wire-format checks;
+     - deferred-замечание `review_T007.md` по generator warnings, уже частично учтенное в T008 и не дорабатываемое в T009 из-за пропуска этапа.
+   - CR002 считается завершенной в текущем объеме: CR002-T009 не выполнялась по решению пользователя, CR002-T010 и CR002-T011 выполнены и прошли senior architect review.
+
+46. 2026-06-13: по уточнению пользователя выполнена интеграционная проверка.
+   - Перед запуском проверена доступность Docker: `docker ps` успешно вернул работающий локальный контейнер.
+   - Выполнена команда из корня репозитория: `mvn verify -Pintegration-tests`.
+   - Результат: `BUILD SUCCESS`; Failsafe выполнил 48 интеграционных тестов, failures/errors/skipped 0.
+   - Maven reactor: `test-qwen-cli-parent`, `dashboard-backend`, `dashboard-ui`, `test-qwen-cli` завершились со статусом `SUCCESS`.
+   - Интеграционный контур покрыл 9 `*IT` классов: `PostgresConcurrencyIT`, `PostgresExternalGatewayCallbackIT`, `PostgresExternalGatewayHappyPathIT`, `PostgresExternalGatewayNegativeApiIT`, `PostgresLiquibaseSmokeIT`, `PostgresSlotListenNotifyIT`, `PostgresAsyncTaskRepositoryIT`, `PostgresCallbackDeliveryRepositoryIT`, `PostgresSlotRepositoryIT`.
+   - Production-код, OpenAPI YAML, `pom.xml`, тесты и архитектурные документы на этом шаге не менялись.
+
 ## Текущий результат
 
 - CR002-T001 реализована как документационная инвентаризация, прошла senior architect review и принята человеком.
-- Note-level замечание CR002-T001 по path variables перенесено в контекст T004/T009.
+- Note-level замечание CR002-T001 по path variables учтено при синхронизации async YAML; дополнительное усиление checks в T009 не выполнялось по решению пользователя.
 - Принятое архитектурное решение по CR002 зафиксировано в `docs/external-service-gateway/architecture/decisions.md`.
 - Для этапов CR002 требуется stage-level `plan_TXXX.md` перед стартом и `review_TXXX.md` перед закрытием.
 - CR002-T002 реализована и прошла senior architect review без замечаний: OpenAPI contract test читает актуальный каталог `docs/external-service-gateway/openapi`.
 - CR002-T003 реализована и прошла senior architect review без замечаний: `external-gateway-sync.yaml` синхронизирован с фактическими sync DTO по ограничениям схем.
 - CR002-T004 реализована и прошла senior architect review без блокеров: `external-gateway-async.yaml` синхронизирован с фактическими async DTO по ограничениям схем и enum-значениям.
-- В `review_T004.md` замечание 2 по `AsyncDeliveryMode.SYNC` принято человеком и отработано; замечание 1 по ADR-008 остается в статусе `pending`.
+- В `review_T004.md` замечание 2 по `AsyncDeliveryMode.SYNC` принято человеком и отработано; замечание 1 по ADR-008 отложено за пределы текущего CR002.
 - CR002-T005 реализована и прошла senior architect review без блокеров: `external-gateway-callback.yaml` синхронизирован с `CallbackPayload`, `HttpCallbackClient` и callback delivery retry/backoff flow.
-- В `review_T005.md` есть note-level замечание по усилению callback contract checks; статус `pending`, требуется human approval.
+- В `review_T005.md` note-level замечание по усилению callback contract checks отложено за пределы текущего CR002.
 - CR002-T006 реализована, прошла senior architect review без замечаний и получила human approval: OpenAPI YAML перенесены в `test-qwen-cli-app/src/main/resources/openapi`, contract test читает resources как primary и проверяет byte-for-byte синхронность с `docs/external-service-gateway/openapi`.
 - CR002-T007 реализована, прошла senior architect review без блокеров и получила human approval: `openapi-generator-maven-plugin` подключен к Maven lifecycle `test-qwen-cli-app`, generated sources из трех OpenAPI YAML создаются в `target/generated-sources/openapi` и компилируются.
-- Два note-level замечания из `review_T007.md` не блокируют T007 и переведены в статус `deferred`: ограничения генератора должны быть учтены в T008/T009, риск duplicate mappings должен быть учтен в T008.
+- Два note-level замечания из `review_T007.md` не блокируют T007 и переведены в статус `deferred`: риск duplicate mappings учтен в T008, ограничения генератора не дорабатываются в T009 из-за пропуска этапа.
 - CR002-T008 реализована: sync/async контроллеры используют generated API interfaces, generated model-классы имеют Java-постфикс `DTO`, generated DTO маппятся в доменные модели через MapStruct, а публичный `/v3/api-docs` оставлен стандартным springdoc diagnostic output с принятым риском неполного соответствия YAML.
 - Замечания `review_T008.md` по missing `payload` и blank `clientService` технически устранены до закрытия этапа; повторная senior architect проверка подтвердила отсутствие активных блокеров.
 - После уточнения пользователя про `DTO` suffix выполнена дополнительная production-правка T008; после обсуждения `GeneratedOpenApiOperationCustomizer` не используется, contract-first publisher также удален по решению пользователя.
 - Повторный senior architect review после возврата к стандартному springdoc имеет статус `passed`; активных pending-замечаний нет.
-- Stage-level senior architect review создан для T001, T002, T003, T004, T005, T006, T007 и T008.
-- Для CR002-T008 создан и обновлен `review_T008.md`; после возврата к стандартному springdoc review имеет статус `passed`, требуется human approval на закрытие этапа.
-- Финальная проверка необходимости дополнительных архитектурных правок после реализации CR002 только запланирована.
+- Stage-level senior architect review создан для T001, T002, T003, T004, T005, T006, T007, T008, T010 и T011.
+- Для CR002-T008 создан и обновлен `review_T008.md`; после возврата к стандартному springdoc review имеет статус `passed`, этап закрыт по явной команде пользователя продолжать CR002 без промежуточных подтверждений.
+- CR002-T009 пропущена по решению пользователя от 2026-06-13; `plan_T009.md` удален, production-код и тесты в рамках T009 не менялись.
+- CR002-T010 реализована и прошла senior architect review: архитектурная документация проверена, новых ADR не требуется, точечно обновлен `architecture/README.md`.
+- CR002-T011 реализована и прошла senior architect review: `mvn test` прошел успешно, 120 тестов без failures/errors/skipped.
+- После уточнения пользователя выполнен интеграционный контур `mvn verify -Pintegration-tests`: 48 Failsafe-тестов без failures/errors/skipped.
+- Остаточные note-level вопросы из `review_T004.md`, `review_T005.md` и `review_T007.md` отложены за пределы текущего CR002.
 - После T002, T003 и T004 запускался точечный `ExternalGatewayOpenApiContractTest`; после T005 запускались точечные callback/OpenAPI tests и полный `mvn test`; после T006 запускались точечный `ExternalGatewayOpenApiContractTest` и полный `mvn test`; после T008 запускались точечные controller/OpenAPI tests и полный `mvn test`, итоговый полный набор после возврата к стандартному springdoc - 120 тестов.
+- Финальный результат CR002: текущий объем выполнен, CR002-T009 намеренно пропущена, финальный `mvn test` и интеграционный `mvn verify -Pintegration-tests` успешны.
 
 ## Следующие шаги
 
-- Ожидать human approval по CR002-T008. CR002-T009 не начинать без явной команды пользователя.
+- Активных шагов в CR002 не осталось.

@@ -6,7 +6,7 @@
 
 Блокирующих замечаний нет. Production-код, Maven-настройки, sync/async YAML и архитектурные документы на этапе не менялись.
 
-Есть одно note-level замечание по проверяемости wire-format callback payload; оно не блокирует закрытие T005 и должно обрабатываться только после human approval.
+Есть одно note-level замечание по проверяемости wire-format callback payload; оно не блокирует закрытие T005 и отложено за пределы текущего CR002 после решения пользователя пропустить CR002-T009.
 
 ## Соответствие плану
 
@@ -70,7 +70,7 @@ Callback flow согласован с ADR-005 и `07-sequence-callback.md`: gate
 Остаточные архитектурные риски:
 
 - `ExternalGatewayOpenApiContractTest` для callback пока проверяет наличие required/properties у `ExternalGatewayCallback`, но не проверяет тип `finishedAt`, `ResultMap.additionalProperties`, response wildcard `2XX`/`default` и header constraints. Это ожидаемо для текущего этапа и должно закрываться в CR002-T009.
-- В `review_T004.md` уже есть pending note по ADR-008 о `Map<String, String>` vs фактической async read-модели. T005 не закрывает это замечание автоматически; для callback YAML `string|null` values отражают текущий `CallbackPayload.fromTask`.
+- В `review_T004.md` есть note по ADR-008 о `Map<String, String>` vs фактической async read-модели. На финальном закрытии CR002 он отложен за пределы текущего CR002; для callback YAML `string|null` values отражают текущий `CallbackPayload.fromTask`.
 
 ## Замечания
 
@@ -78,18 +78,20 @@ Callback flow согласован с ADR-005 и `07-sequence-callback.md`: gate
    ссылка: `test-qwen-cli-app/src/test/java/com/example/testqwencli/gateway/controller/ExternalGatewayOpenApiContractTest.java`, тест `callbackOpenApiDocumentMatchesSerializedCallbackPayload`; `test-qwen-cli-app/src/test/java/com/example/testqwencli/gateway/client/HttpCallbackClientTest.java`; `docs/external-service-gateway/openapi/external-gateway-callback.yaml`, schema `ExternalGatewayCallback.finishedAt`
    риск: YAML теперь фиксирует `finishedAt` как `number/double` epoch seconds, но текущий OpenAPI contract test для callback проверяет только наличие полей, а не JSON-типы и nested constraints. Если сериализация `Instant` в Spring-context callback path изменится, drift может не быть пойман быстрым contract test.
    предлагаемое действие: после human approval учесть в CR002-T009: расширить callback contract checks на тип `finishedAt`, `ResultMap` values, headers `X-Callback-Attempt`/`X-Request-Id` и response keys `2XX`/`default`; production-код в рамках T005 не менять.
-   статус human approval: `pending`
+   статус human approval: `deferred` с 2026-06-13. Причина: CR002-T009 пропущен по решению пользователя, а усиление callback contract checks не выполняется в текущем CR002-проходе.
 
 ## Рекомендация
 
-Рекомендую закрыть CR002-T005 после human approval без production-правок. Note-level замечание по проверяемости перенести в CR002-T009 или явно отложить отдельным решением человека.
+CR002-T005 закрыт без production-правок. Note-level замечание по проверяемости callback wire-format отложено за пределы текущего CR002, потому что CR002-T009 пропущен по решению пользователя.
 
 После закрытия T005 остановиться и не начинать CR002-T006 до явной команды пользователя.
 
 ## Human approval
 
-Ожидается решение человека:
+Статус review: approved.
 
-- закрыть CR002-T005 без дополнительных правок production-кода;
-- принять, отклонить или отложить note-level замечание по усилению callback contract checks;
-- отдельно подтвердить, когда можно переходить к CR002-T006.
+Решение человека:
+
+- CR002-T005 закрыт без дополнительных правок production-кода;
+- note-level замечание по усилению callback contract checks отложено за пределы текущего CR002 с 2026-06-13;
+- переход к следующим этапам CR002 выполнен по отдельным командам пользователя.

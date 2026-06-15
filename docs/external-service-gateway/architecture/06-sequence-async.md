@@ -30,7 +30,7 @@ sequenceDiagram
         Note over Repo,DB: TX ASYNC SUBMIT commit
     end
     Note over Repo,Client: Клиент получает идентификатор задачи до фактической обработки upstream.
-    Repo-->>Service: AsyncSubmitResult submitted, alreadyExisted=false
+    Repo-->>Service: AsyncSubmitResult submitted
     Service-->>API: AsyncSubmitResponse
     API-->>Client: 202 Accepted, taskId, statusUrl
 ```
@@ -42,7 +42,7 @@ sequenceDiagram
 | 3 | `submit(request, maxAttempts, now)` | Сервис вызывает репозиторий с лимитом upstream-попыток и текущим временем gateway. |
 | 4 | `ext_request_queue: INSERT status=PENDING` | PostgreSQL создает новую durable-задачу в статусе `PENDING`. |
 | 5 | `task row` | База возвращает созданную строку с `taskId` и служебными полями. |
-| 6 | `AsyncSubmitResult submitted, alreadyExisted=false` | Репозиторий сообщает, что создана новая задача, а не найден дубль. |
+| 6 | `AsyncSubmitResult submitted` | Репозиторий сообщает, что создана новая задача. |
 | 7 | `AsyncSubmitResponse` | Сервис формирует ответ submit contract. |
 | 8 | `202 Accepted, taskId, statusUrl` | Клиент получает `202 Accepted`, внутренний id задачи и URL для polling. |
 
@@ -52,57 +52,9 @@ sequenceDiagram
 - ее обработает dispatcher на следующем scheduled tick или раньше, если воркер уже крутит цикл до idle;
 - submit не удерживает слот внешнего сервиса.
 
-## S-ASYNC-02. Idempotent submit той же задачи
+## S-ASYNC-02. Duplicate submit до подключения `@Idempotent`
 
-Диаграмма описывает повторный submit с тем же `clientService + externalId` и теми же параметрами: gateway возвращает существующую задачу без создания дубля.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as Сервис-клиент
-    participant Service as ExternalAsyncService
-    participant Repo as AsyncTaskRepository
-    participant DB as PostgreSQL
-
-    Note over Client,DB: Повторный submit проверяет уникальный ключ async-задачи.
-    Client->>Service: POST /v1/external/async same clientService + externalId
-    Service->>Repo: submit(request, maxAttempts, now)
-    rect rgb(238, 246, 255)
-        Note over Repo,DB: TX ASYNC SUBMIT begin
-        Repo->>DB: ext_request_queue: INSERT ON CONFLICT DO NOTHING
-        DB-->>Repo: no inserted row
-        Repo->>DB: ext_request_queue: SELECT existing by clientService + externalId
-        DB-->>Repo: existing task
-        Note over Repo: Ветка идемпотентности сравнивает поля запроса с сохраненной задачей.
-        Repo->>Repo: compare payload, priority, deliveryMode
-        Note over Repo,DB: TX ASYNC SUBMIT commit
-    end
-    Note over Repo,Client: Совпадающий повтор возвращает тот же taskId.
-    Repo-->>Service: alreadyExisted=true
-    Service-->>Client: 202 Accepted, same taskId
-```
-
-| Шаг | Лейбл на диаграмме | Что делает шаг |
-| --- | --- | --- |
-| 1 | `POST /v1/external/async same clientService + externalId` | Клиент повторяет submit для той же бизнес-операции. |
-| 2 | `submit(request, maxAttempts, now)` | Сервис повторно вызывает submit в репозитории. |
-| 3 | `ext_request_queue: INSERT ON CONFLICT DO NOTHING` | База пытается вставить строку, но уникальный ключ уже занят. |
-| 4 | `no inserted row` | Репозиторий понимает, что нужно читать существующую задачу. |
-| 5 | `ext_request_queue: SELECT existing by clientService + externalId` | Gateway ищет задачу по async-idempotency key. |
-| 6 | `existing task` | База возвращает ранее созданную строку. |
-| 7 | `compare payload, priority, deliveryMode` | Репозиторий проверяет, что повторный запрос семантически совпадает с исходным. |
-| 8 | `alreadyExisted=true` | Submit result помечает ответ как идемпотентный повтор. |
-| 9 | `202 Accepted, same taskId` | Клиент получает тот же `taskId`, без создания новой upstream-работы. |
-
-Особенности:
-
-- идемпотентность async не использует `Idempotency-Key`;
-- ключом является пара `clientService + externalId`;
-- совпадать должны не только ключи, но и `payload`, `priority`, `deliveryMode`.
-
-## S-ASYNC-03. Idempotency conflict
-
-Диаграмма описывает конфликт идемпотентности: ключ тот же, но сохраненная задача отличается от нового запроса.
+Диаграмма описывает временное fail-closed поведение после CR003-T001: повторный submit с тем же `clientService + externalId` не создает дубль, но и не replay-ит существующую задачу. До подключения внутренней библиотеки `@Idempotent` gateway отклоняет повтор через DB-level guard.
 
 ```mermaid
 sequenceDiagram
@@ -114,21 +66,18 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Errors as ExternalGatewayExceptionHandler
 
-    Note over Client,DB: Конфликтная ветка начинается как повторный submit по тому же ключу.
-    Client->>API: POST /v1/external/async with same key and different payload
+    Note over Client,DB: Повторный submit проверяется только нижним DB guard.
+    Client->>API: POST /v1/external/async same clientService + externalId
     API->>Service: submit(request, requestId)
     Service->>Repo: submit(request, maxAttempts, now)
     rect rgb(238, 246, 255)
         Note over Repo,DB: TX ASYNC SUBMIT begin
         Repo->>DB: ext_request_queue: INSERT ON CONFLICT DO NOTHING
         DB-->>Repo: no inserted row
-        Repo->>DB: ext_request_queue: SELECT existing task
-        Note over Repo: Ветка сравнения находит несовместимые поля.
-        Repo->>Repo: detect conflicting fields
         Note over Repo,DB: TX ASYNC SUBMIT commit
     end
-    Note over Repo,Client: Gateway отклоняет запрос, чтобы не скрывать разные операции под одним ключом.
-    Repo-->>Service: IDEMPOTENCY_CONFLICT
+    Note over Repo,Client: До @Idempotent приложение не вычисляет replay/hash conflict.
+    Repo-->>Service: DUPLICATE_REJECTED
     Service--xAPI: AsyncIdempotencyConflictException
     API->>Errors: handleGatewayException
     Errors-->>Client: 409 IDEMPOTENCY_CONFLICT
@@ -136,23 +85,73 @@ sequenceDiagram
 
 | Шаг | Лейбл на диаграмме | Что делает шаг |
 | --- | --- | --- |
-| 1 | `POST /v1/external/async with same key and different payload` | Клиент отправляет запрос с уже занятым `clientService + externalId`, но с другими данными. |
+| 1 | `POST /v1/external/async same clientService + externalId` | Клиент повторяет submit для той же бизнес-операции. |
 | 2 | `submit(request, requestId)` | Controller передает request id для корректного error response. |
-| 3 | `submit(request, maxAttempts, now)` | Сервис запускает стандартный submit. |
-| 4 | `ext_request_queue: INSERT ON CONFLICT DO NOTHING` | База не вставляет дубль из-за уникального ключа. |
-| 5 | `no inserted row` | Репозиторий переходит к чтению существующей задачи. |
-| 6 | `ext_request_queue: SELECT existing task` | Gateway получает сохраненную задачу для сравнения. |
-| 7 | `detect conflicting fields` | Репозиторий определяет, какие поля отличаются от исходного submit. |
-| 8 | `IDEMPOTENCY_CONFLICT` | Репозиторий возвращает результат конфликта вместо задачи. |
-| 9 | `AsyncIdempotencyConflictException` | Сервис преобразует конфликт в доменное исключение. |
-| 10 | `handleGatewayException` | Exception handler строит HTTP-ответ. |
-| 11 | `409 IDEMPOTENCY_CONFLICT` | Клиент получает конфликт идемпотентности. |
+| 3 | `submit(request, maxAttempts, now)` | Сервис повторно вызывает submit в репозитории. |
+| 4 | `ext_request_queue: INSERT ON CONFLICT DO NOTHING` | База пытается вставить строку, но уникальный ключ уже занят. |
+| 5 | `no inserted row` | Репозиторий не читает существующую задачу и не сравнивает payload. |
+| 6 | `DUPLICATE_REJECTED` | Repository boundary сообщает только факт срабатывания duplicate guard. |
+| 7 | `AsyncIdempotencyConflictException` | Сервис преобразует guard rejection в доменное исключение. |
+| 8 | `handleGatewayException` | Exception handler строит HTTP-ответ. |
+| 9 | `409 IDEMPOTENCY_CONFLICT` | Клиент получает конфликт до подключения `@Idempotent`. |
 
 Особенности:
 
-- конфликт возможен при различии `payload`, `priority` или `deliveryMode`;
-- upstream не вызывается;
-- существующая задача не изменяется.
+- текущий код не выполняет replay существующей задачи;
+- текущий код не вычисляет список несовпадающих полей `payload`, `priority`, `deliveryMode`;
+- ключом DB guard остается пара `clientService + externalId`;
+- production readiness требует подключить `@Idempotent`, который вернет cluster-wide replay и hash conflict check поверх DB guard.
+
+## S-ASYNC-03. Целевой replay/hash conflict после подключения `@Idempotent`
+
+Диаграмма фиксирует target state после подключения внутренней библиотеки идемпотентности. В этом состоянии `ExternalAsyncServiceImpl.submit` защищен `@Idempotent`: совпадающий повтор replay-ит согласованный response, а тот же key с другим hash отклоняется до repository submit.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Сервис-клиент
+    participant API as ExternalAsyncController
+    participant Idem as @Idempotent
+    participant Service as ExternalAsyncService
+    participant Repo as AsyncTaskRepository
+    participant Errors as ExternalGatewayExceptionHandler
+
+    Client->>API: POST /v1/external/async
+    API->>Idem: invoke submit with key clientService + externalId
+    alt same key and same hash
+        Idem-->>API: replay stored AsyncSubmitResponse
+        API-->>Client: 202 Accepted, replayed response
+    else same key and different hash
+        Idem--xAPI: hash conflict
+        API->>Errors: handleGatewayException
+        Errors-->>Client: 409 IDEMPOTENCY_CONFLICT
+    else first request for key
+        Idem->>Service: submit(request, requestId)
+        Service->>Repo: submit(request, maxAttempts, now)
+        Repo-->>Service: AsyncSubmitResult submitted
+        Service-->>Idem: AsyncSubmitResponse alreadyExisted=false
+        Idem-->>API: store and return response
+        API-->>Client: 202 Accepted, taskId, statusUrl
+    end
+```
+
+| Шаг | Лейбл на диаграмме | Что делает шаг |
+| --- | --- | --- |
+| 1 | `invoke submit with key clientService + externalId` | Controller вызывает service boundary через idempotency proxy. |
+| 2 | `same key and same hash` | Библиотека находит сохраненный результат с тем же hash fields. |
+| 3 | `replay stored AsyncSubmitResponse` | Клиент получает согласованный replay без второго repository submit. |
+| 4 | `same key and different hash` | Библиотека обнаруживает конфликт hash fields. |
+| 5 | `409 IDEMPOTENCY_CONFLICT` | Клиент получает конфликт идемпотентности. |
+| 6 | `first request for key` | Первый запрос проходит в `ExternalAsyncServiceImpl.submit`. |
+| 7 | `AsyncSubmitResult submitted` | Репозиторий создает новую задачу, DB guard остается последней защитой. |
+| 8 | `store and return response` | Библиотека сохраняет результат для будущих replay. |
+
+Особенности:
+
+- hash fields для async: `payload`, `priority`, `deliveryMode`;
+- `requestId` не входит в hash;
+- idempotency proxy не должен держать долгую БД-транзакцию вокруг ожидания слота или upstream-вызова;
+- DB unique guard в `ext_request_queue` остается нижним предохранителем при обходе proxy.
 
 ## S-ASYNC-04. Dispatch success с callback mode
 

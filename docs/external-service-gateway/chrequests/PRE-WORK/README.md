@@ -421,7 +421,7 @@ Async dispatcher не использует PostgreSQL notification-очеред�
 - Если `X-Client-Service` не передан, lookup не ограничивается сервисом-клиентом.
 - Service-to-service authentication и сверка caller identity еще не реализованы.
 - `Idempotency-Key` для sync принимается и передается upstream adapter'у, но gateway не хранит sync-результаты по этому ключу.
-- Async идемпотентность реализована через уникальную пару `clientService + externalId`; заголовок `Idempotency-Key` для async не используется.
+- После CR003-T001 для async остался только duplicate guard через уникальную пару `clientService + externalId`; заголовок `Idempotency-Key` для async не используется, а полноценный replay/hash conflict должен вернуть будущий `@Idempotent`.
 
 ## Retry И Ошибки
 

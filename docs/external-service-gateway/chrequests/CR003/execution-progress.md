@@ -6,7 +6,7 @@
 
 ## Чеклист этапов
 
-- [ ] CR003-T001: упрощение request-level idempotency через `@Idempotent`.
+- [x] CR003-T001: упрощение request-level idempotency через `@Idempotent`.
 - [ ] CR003-T002: инвентаризация ядра и DB-операций.
 - [ ] CR003-T003: общий dispatch loop.
 - [ ] CR003-T004: управляемые Spring executors.
@@ -23,7 +23,7 @@
 
 | Задача | Статус | Результат |
 | --- | --- | --- |
-| CR003-T001: упрощение request-level idempotency через `@Idempotent` | Частично выполнена | Создан `plan_T001.md`; в service methods добавлены TODO-маркеры будущей `@Idempotent`. Полная реализация отложена до доступности библиотеки или local stub. |
+| CR003-T001: упрощение request-level idempotency через `@Idempotent` | Завершена | Ручная async submit idempotency-обвязка удалена; DB/memory duplicate guard сохранен; duplicate submit до подключения библиотеки fail-closed возвращает `409`; `review_T001.md` обновлен. |
 | CR003-T002: инвентаризация ядра и DB-операций | Не начата | Требуется `plan_T002.md` перед выполнением. |
 | CR003-T003: общий dispatch loop | Не начата | Требуется `plan_T003.md` перед выполнением. |
 | CR003-T004: управляемые Spring executors | Не начата | Требуется `plan_T004.md` перед выполнением. |
@@ -68,16 +68,54 @@
    - Решение: для sync ключ будущей аннотации - `request.clientService + headers.idempotencyKey`, hash fields - `request.externalId`, `request.payload`; `headers.requestId` не входит в hash.
    - Решение: DB unique guard в `ext_request_queue` остается нижним предохранителем от дублей.
    - Решение: повторные sync-запросы должны отсекаться по ключу через `ext_request_queue` и будущую `SYNC_REQUEST` lifecycle-модель CR004.
+   - Решение: целевое поведение для sync без `Idempotency-Key` - отклонять запрос до получения слота и upstream-вызова, но только после отдельного изменения OpenAPI/валидации; fallback key из `requestId` или `externalId` запрещен.
 
 2. Добавлены code-level TODO-маркеры.
    - Результат: у `ExternalAsyncServiceImpl.submit` добавлен комментарий с будущим `@Idempotent` key/hash contract.
-   - Результат: у `ExternalSyncServiceImpl.sync` добавлен комментарий с будущим `@Idempotent` key/hash contract и требованием не занимать второй слот при повторе.
-   - Проверки не запускались, потому что production-поведение не менялось.
+   - Результат: у `ExternalSyncServiceImpl.sync` добавлен комментарий с будущим `@Idempotent` key/hash contract, требованием не занимать второй слот при повторе и целевым reject без `Idempotency-Key` после отдельного контрактного изменения.
+
+3. Выполнен senior architect review CR003-T001.
+   - Результат: создан `review_T001.md`.
+   - Результат: блокирующих замечаний нет.
+   - Результат: замечание уровня `note` про фиксацию решения по отсутствующему sync `Idempotency-Key` принято в рамках закрытия этапа и отражено в этом журнале.
+
+4. Проверки.
+   - `git diff --check` выполнен без whitespace-ошибок; Git показал только предупреждение о будущей нормализации LF/CRLF в рабочем дереве Windows.
+   - `mvn test` не запускался, потому что production-поведение, OpenAPI, схема БД и тесты не менялись.
+
+5. CR003-T001 переоткрыт после уточнения решения.
+   - Причина: ручная async idempotency-обвязка должна быть удалена сейчас, а внутренняя библиотека `@Idempotent` будет подключена позже вне этого репозитория.
+   - Решение: production-запуск без библиотеки идемпотентности запрещен; текущая реализация должна явно показывать gap, а не маскировать его частичной ручной реализацией.
+   - Решение: до подключения библиотеки duplicate async submit по `clientService + externalId` отклоняется `409 IDEMPOTENCY_CONFLICT` через DB/memory guard, без successful replay и без `conflictingFields`.
+   - Решение: `AsyncSubmitResponse.alreadyExisted` сохраняется в OpenAPI/DTO для будущего replay, но успешный submit в текущем fail-closed режиме возвращает `false`.
+
+6. Удалена ручная async submit idempotency-логика.
+   - Результат: `AsyncSubmitResult` больше не содержит `existingTaskId`, `conflictingFields`, `alreadyExisted`.
+   - Результат: `AsyncSubmitResultType` содержит `SUBMITTED` и `DUPLICATE_REJECTED`.
+   - Результат: `MemoryAsyncTaskRepository.submit` больше не сравнивает `payload`, `priority`, `deliveryMode` и не возвращает существующую задачу.
+   - Результат: `PostgresAsyncTaskRepository.submit` оставляет атомарный `INSERT ... ON CONFLICT DO NOTHING`, но больше не делает `SELECT existing` и hash/diff compare.
+   - Результат: `ExternalAsyncServiceImpl.submit` мапит `DUPLICATE_REJECTED` в `AsyncIdempotencyConflictException`; успешный response возвращает `alreadyExisted=false`.
+
+7. Обновлены контракты, тесты и архитектурная документация.
+   - Результат: `external-gateway-async.yaml` в рабочем входе Maven и документационном зеркале описывает `202` как новую задачу и `409` как duplicate guard до `@Idempotent`.
+   - Результат: repository/controller/PostgreSQL concurrency/integration tests обновлены под fail-closed duplicate behavior.
+   - Результат: обновлены `03-c4-components.md`, `04-data-and-state.md`, `06-sequence-async.md`, `09-production-readiness.md` и `README.md`; async `@Idempotent` добавлен как production readiness gate.
+
+8. Проверки после удаления алгоритма.
+   - `mvn -pl test-qwen-cli-app -am "-Dtest=ExternalAsyncControllerTest,MemoryAsyncTaskRepositoryTest,ExternalGatewayOpenApiContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` - успешно, 29 tests.
+   - `mvn -pl test-qwen-cli-app -am test` - успешно, 120 tests.
+   - `mvn -pl test-qwen-cli-app -am -Pintegration-tests verify` - успешно, 48 integration tests.
+   - `git diff --check` выполнен без whitespace-ошибок; Git показал только предупреждение о будущей нормализации LF/CRLF в рабочем дереве Windows.
+
+9. Обновлен senior architect review CR003-T001 после реализации.
+   - Результат: `review_T001.md` обновлен под реализационный scope.
+   - Результат: замечание `low` по stale async state machine принято и исправлено в `04-data-and-state.md`: duplicate submit больше не является переходом `PENDING -> PENDING`.
+   - Результат: замечание `note` по верхнеуровневому scope CR003 принято и исправлено в `work-items.md`: HTTP/OpenAPI shape сохраняется, а изменение duplicate async submit behavior явно отмечено как dev-phase исключение CR003-T001.
 
 ## Текущий результат
 
 - CR003 создан как новая очередь работ по внутреннему упрощению ядра gateway.
-- CR003-T001 частично выполнен как постановка и code-level markers; полная реализация ждет доступности idempotency library или согласованного local stub.
+- CR003-T001 завершен как реализационный этап: ручная async submit idempotency удалена, DB/memory duplicate guard сохранен, `@Idempotent` зафиксирован как обязательный production gate.
 - Перед началом любого этапа требуется stage-level `plan_TXXX.md`.
 - После реализации этапа требуется senior architect review в `review_TXXX.md`.
 - JPA-перенос ограничен исследованием и proof-by-tests; текущий JDBC PostgreSQL-режим остается базовым rollback path.
@@ -85,5 +123,5 @@
 
 ## Следующие шаги
 
-- Завершить CR003-T001 после появления idempotency library или согласованного local stub: убрать ручную async submit idempotency-обвязку, сохранить DB unique guard и закрепить sync key в `ext_request_queue`.
-- Затем перейти к `CR003-T002`: создать `plan_T002.md` и выполнить инвентаризацию dispatcher/retry/JDBC/JPA-кандидатов.
+- Остановиться после CR003-T001 и ждать явной команды пользователя на продолжение.
+- После команды перейти к `CR003-T002`: создать `plan_T002.md` и выполнить инвентаризацию dispatcher/retry/JDBC/JPA-кандидатов.

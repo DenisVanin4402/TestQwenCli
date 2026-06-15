@@ -209,23 +209,21 @@ class PostgresConcurrencyIT extends PostgresIntegrationTestSupport {
 	}
 
 	@Test
-	void concurrentAsyncSubmitWithSameIdempotencyKeyCreatesSinglePostgresRow() throws Exception {
+	void concurrentAsyncSubmitWithSameClientServiceAndExternalIdCreatesSinglePostgresRow() throws Exception {
 		Instant now = currentInstant();
 		int contenders = 12;
 		UUID externalId = GatewayTestRequests.externalId(1603);
 		ExternalAsyncRequest request = new ExternalAsyncRequest(externalId, GatewayTestRequests.CLIENT_SERVICE,
 				AsyncPriority.HIGH, AsyncDeliveryMode.CALLBACK, GatewayTestRequests.upstreamPayload());
 
-		List<AsyncSubmitResult> results = runConcurrently(contenders, "postgres-idempotent-submit",
+		List<AsyncSubmitResult> results = runConcurrently(contenders, "postgres-duplicate-guard-submit",
 				index -> taskRepository.submit(request, ASYNC_MAX_ATTEMPTS, now.plusMillis(index)));
 
-		assertThat(results).extracting(AsyncSubmitResult::type)
-				.containsOnly(AsyncSubmitResultType.SUBMITTED);
-		assertThat(results).filteredOn(result -> !result.alreadyExisted()).hasSize(1);
-		assertThat(results).filteredOn(AsyncSubmitResult::alreadyExisted).hasSize(contenders - 1);
-		assertThat(results).extracting(result -> result.task().taskId())
-				.containsOnly(results.getFirst().task().taskId());
-		assertThat(countAsyncRowsByIdempotencyKey(externalId)).isEqualTo(1);
+		assertThat(results).filteredOn(result -> result.type() == AsyncSubmitResultType.SUBMITTED).hasSize(1);
+		assertThat(results).filteredOn(result -> result.type() == AsyncSubmitResultType.DUPLICATE_REJECTED)
+				.hasSize(contenders - 1)
+				.allSatisfy(result -> assertThat(result.task()).isNull());
+		assertThat(countAsyncRowsByDuplicateGuardKey(externalId)).isEqualTo(1);
 	}
 
 	@Test
@@ -317,7 +315,7 @@ class PostgresConcurrencyIT extends PostgresIntegrationTestSupport {
 				"SELECT COUNT(*) FROM " + POSTGRES_SCHEMA + ".ext_sync_waiters", Long.class);
 	}
 
-	private long countAsyncRowsByIdempotencyKey(UUID externalId) {
+	private long countAsyncRowsByDuplicateGuardKey(UUID externalId) {
 		return jdbcTemplate().queryForObject("""
 				SELECT COUNT(*)
 				FROM %s.ext_request_queue

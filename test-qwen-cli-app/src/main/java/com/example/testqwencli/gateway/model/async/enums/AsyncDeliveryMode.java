@@ -3,8 +3,9 @@ package com.example.testqwencli.gateway.model.async.enums;
 /**
  * Способ, которым клиент получает результат async-задачи.
  *
- * <p>Значение хранится в {@code ext_request_queue.delivery_mode} и влияет на
- * создание callback-доставки, idempotency-key и выбор задач dispatcher-ом.</p>
+ * <p>Значение хранится в {@code ext_request_queue.delivery_mode}, влияет на
+ * создание callback-доставки, будущий hash contract {@code @Idempotent} и выбор
+ * задач dispatcher-ом.</p>
  */
 public enum AsyncDeliveryMode {
 	/**

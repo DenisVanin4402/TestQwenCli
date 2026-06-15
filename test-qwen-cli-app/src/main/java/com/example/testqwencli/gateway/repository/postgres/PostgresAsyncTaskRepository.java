@@ -22,7 +22,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.function.Supplier;
 import java.util.List;
@@ -68,16 +67,9 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 		return transactionTemplate.execute(status -> {
 			Optional<StoredAsyncTask> inserted = insertTask(request, maxAttempts, now);
 			if (inserted.isPresent()) {
-				return AsyncSubmitResult.submitted(inserted.orElseThrow().task(), false);
+				return AsyncSubmitResult.submitted(inserted.orElseThrow().task());
 			}
-
-			StoredAsyncTask existing = findStoredByIdempotencyKey(request.clientService(), request.externalId())
-					.orElseThrow();
-			List<String> conflictingFields = conflictingFields(existing, request);
-			if (!conflictingFields.isEmpty()) {
-				return AsyncSubmitResult.idempotencyConflict(existing.task().taskId(), conflictingFields);
-			}
-			return AsyncSubmitResult.submitted(existing.task(), true);
+			return AsyncSubmitResult.duplicateRejected();
 		});
 	}
 
@@ -455,19 +447,6 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 		return queryStored(sql, params).stream().findFirst();
 	}
 
-	private Optional<StoredAsyncTask> findStoredByIdempotencyKey(String clientService, UUID externalId) {
-		String sql = baseSelect() + """
-				
-				WHERE client_service = :clientService
-				  AND external_id = :externalId
-				  AND %s
-				""".formatted(ASYNC_DELIVERY_MODE_FILTER);
-		MapSqlParameterSource params = new MapSqlParameterSource()
-				.addValue("clientService", clientService)
-				.addValue("externalId", externalId);
-		return queryStored(sql, params).stream().findFirst();
-	}
-
 	private Optional<StoredAsyncTask> findStoredByTaskId(long taskId, Optional<String> clientService,
 			boolean forUpdate) {
 		MapSqlParameterSource params = new MapSqlParameterSource("taskId", taskId);
@@ -595,20 +574,6 @@ public final class PostgresAsyncTaskRepository implements AsyncTaskRepository {
 				%1$slast_error,
 				%1$sretryable
 				""".formatted(prefix).strip();
-	}
-
-	private static List<String> conflictingFields(StoredAsyncTask existing, ExternalAsyncRequest request) {
-		ArrayList<String> fields = new ArrayList<>();
-		if (!Objects.equals(existing.payload(), request.payload())) {
-			fields.add("payload");
-		}
-		if (existing.task().priority() != request.priority()) {
-			fields.add("priority");
-		}
-		if (existing.task().deliveryMode() != request.deliveryMode()) {
-			fields.add("deliveryMode");
-		}
-		return fields;
 	}
 
 	private static CallbackDeliveryStatus callbackStatus(AsyncDeliveryMode deliveryMode) {

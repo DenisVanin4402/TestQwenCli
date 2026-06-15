@@ -76,4 +76,4 @@
 
 ## Текущая реализация и target state
 
-Текущая реализация уже содержит memory/postgres repository modes, Spring MVC API, PostgreSQL schema, slot lease, async dispatcher, callback dispatcher и dashboard. Для production target требуется закрыть несколько обязательных разрывов: реальный upstream HTTP client, service-to-service identity, полная наблюдаемость, deployment-манифесты, нагрузочные проверки и эксплуатационные runbook-и. Подробная матрица находится в [09-production-readiness.md](09-production-readiness.md).
+Текущая реализация уже содержит memory/postgres repository modes, Spring MVC API, PostgreSQL schema, slot lease, async dispatcher, callback dispatcher и dashboard. Для production target требуется закрыть несколько обязательных разрывов: внутренняя `@Idempotent` библиотека для async submit replay/hash conflict, реальный upstream HTTP client, service-to-service identity, полная наблюдаемость, deployment-манифесты, нагрузочные проверки и эксплуатационные runbook-и. Подробная матрица находится в [09-production-readiness.md](09-production-readiness.md).

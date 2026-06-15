@@ -19,7 +19,7 @@ import java.util.UUID;
  *
  * @param taskId внутренний id задачи/trace в {@code ext_request_queue}
  * @param externalId внешний id операции клиента
- * @param clientService имя сервиса-клиента, участвующее в idempotency-key
+ * @param clientService имя сервиса-клиента, участвующее в будущем idempotency-key и DB duplicate guard
  * @param priority приоритет обработки async-задачи
  * @param deliveryMode способ получения результата или trace-режим
  * @param status состояние обработки upstream

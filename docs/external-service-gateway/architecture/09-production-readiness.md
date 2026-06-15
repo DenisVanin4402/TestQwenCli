@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | REST/OpenAPI sync API | Реализовано | `POST /v1/external/sync`, error contract, `Retry-After` для 429. |
 | REST/OpenAPI async API | Реализовано | Submit, polling, lookup by externalId, cancel, manual retry. |
-| Async idempotency | Реализовано | Ключ `clientService + externalId`, конфликт по payload/priority/deliveryMode. |
+| Async idempotency | Не реализовано после CR003-T001 | Ручной replay/hash conflict удален. До подключения `@Idempotent` работает только DB duplicate guard `clientService + externalId` с fail-closed `409`. |
 | Global slot coordination | Реализовано для PostgreSQL mode | Lease-слоты `ext_slots`, sync reserve, live waiters gate. |
 | LISTEN/NOTIFY wait mode | Реализовано | Есть fallback на polling interval. |
 | Durable async queue | Реализовано | `ext_request_queue`. |
@@ -30,6 +30,15 @@
 - `ext_slots` содержит ровно согласованное количество активных слотов.
 - Нагрузочный тест подтверждает, что сумма `SYNC + ASYNC` busy slots никогда не превышает 5.
 - Reaper освобождает истекшие lease, но не ломает активные корректные lease.
+
+### P0. Async idempotency
+
+- `ExternalAsyncServiceImpl.submit` защищен внутренней библиотекой `@Idempotent`.
+- Ключ async идемпотентности: `request.clientService + request.externalId`.
+- Hash fields: `request.payload`, `request.priority`, `request.deliveryMode`; `requestId` не входит в hash.
+- Повтор с тем же key/hash replay-ит согласованный submit response без второй строки queue.
+- Повтор с тем же key и другим hash возвращает `409 IDEMPOTENCY_CONFLICT`.
+- DB unique guard в `ext_request_queue` остается нижней защитой при обходе idempotency proxy.
 
 ### P0. Service identity
 

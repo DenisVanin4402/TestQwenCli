@@ -11,7 +11,8 @@ import java.util.UUID;
 /**
  * Входной HTTP-запрос на постановку async-задачи.
  *
- * <p>{@code externalId + clientService} образуют idempotency-key для async-режимов.
+ * <p>{@code externalId + clientService} образуют будущий key для {@code @Idempotent}
+ * и текущий DB-level duplicate guard для async-режимов.
  * Если {@code deliveryMode} не указан, используется {@link AsyncDeliveryMode#CALLBACK}.
  * Режим {@link AsyncDeliveryMode#SYNC} запрещен для внешнего API и применяется только
  * для внутренних журнальных trace-записей.</p>

@@ -39,7 +39,7 @@ paths:
                     userId: 100500
       responses:
         '202':
-          description: Задача принята или уже существовала по idempotency key
+          description: Задача принята
           content:
             application/json:
               schema:
@@ -47,7 +47,10 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '409':
-          description: Конфликт idempotency key с другим payload
+          description: |
+            Duplicate key по clientService + externalId. До подключения внутренней
+            библиотеки идемпотентности gateway отклоняет повторный submit вместо
+            replay/hash conflict details.
           content:
             application/json:
               schema:
@@ -215,7 +218,7 @@ components:
         externalId:
           type: string
           format: uuid
-          description: Идемпотентный идентификатор задачи на стороне вызывающего сервиса
+          description: Идентификатор операции на стороне вызывающего сервиса
         clientService:
           type: string
           minLength: 2
@@ -224,7 +227,8 @@ components:
           description: |
             Имя сервиса-клиента. Текущая реализация берет значение из тела
             запроса; сверка с service-to-service identity еще не внедрена.
-            Async идемпотентность строится по паре clientService + externalId.
+            До подключения внутренней библиотеки идемпотентности пара
+            clientService + externalId используется как DB-level duplicate guard.
           examples:
             - invest-pay
             - user-expertise
@@ -264,6 +268,10 @@ components:
         alreadyExisted:
           type: boolean
           default: false
+          description: |
+            Поле сохранено для будущего replay через внутреннюю библиотеку
+            идемпотентности. В текущем fail-closed режиме успешный submit
+            возвращает false, а duplicate key отклоняется 409.
     AsyncTask:
       type: object
       required:

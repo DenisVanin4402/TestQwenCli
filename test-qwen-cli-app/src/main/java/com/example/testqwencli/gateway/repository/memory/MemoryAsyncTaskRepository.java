@@ -16,7 +16,6 @@ import com.example.testqwencli.gateway.model.async.TaskError;
 import com.example.testqwencli.gateway.repository.AsyncTaskRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.function.Supplier;
@@ -48,20 +47,14 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 		}
 
 		AsyncTaskKey key = new AsyncTaskKey(request.clientService(), request.externalId());
-		Long existingTaskId = taskIdsByKey.get(key);
-		if (existingTaskId != null) {
-			StoredAsyncTask existingTask = tasksById.get(existingTaskId);
-			ArrayList<String> conflictingFields = existingTask.conflictingFields(request);
-			if (!conflictingFields.isEmpty()) {
-				return AsyncSubmitResult.idempotencyConflict(existingTask.taskId(), conflictingFields);
-			}
-			return AsyncSubmitResult.submitted(existingTask.toTask(), true);
+		if (taskIdsByKey.containsKey(key)) {
+			return AsyncSubmitResult.duplicateRejected();
 		}
 
 		StoredAsyncTask task = StoredAsyncTask.pending(nextTaskId++, request, maxAttempts, now);
 		tasksById.put(task.taskId(), task);
 		taskIdsByKey.put(key, task.taskId());
-		return AsyncSubmitResult.submitted(task.toTask(), false);
+		return AsyncSubmitResult.submitted(task.toTask());
 	}
 
 	@Override
@@ -327,20 +320,6 @@ public final class MemoryAsyncTaskRepository implements AsyncTaskRepository {
 					CallbackDeliveryStatus.NOT_REQUIRED, trace.payload(), trace.result(), trace.error(),
 					trace.attempts(), 1, trace.startedAt(), trace.startedAt(), trace.startedAt(),
 					trace.finishedAt(), trace.lastError(), false);
-		}
-
-		private ArrayList<String> conflictingFields(ExternalAsyncRequest request) {
-			ArrayList<String> fields = new ArrayList<>();
-			if (!Objects.equals(payload, request.payload())) {
-				fields.add("payload");
-			}
-			if (priority != request.priority()) {
-				fields.add("priority");
-			}
-			if (deliveryMode != request.deliveryMode()) {
-				fields.add("deliveryMode");
-			}
-			return fields;
 		}
 
 		private StoredAsyncTask cancel(Instant now) {

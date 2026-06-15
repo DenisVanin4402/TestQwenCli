@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
-import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -150,7 +149,7 @@ class PostgresExternalGatewayNegativeApiIT extends PostgresIntegrationTestSuppor
 	}
 
 	@Test
-	void asyncIdempotencyConflictReturnsConflictAndKeepsOriginalTask() {
+	void asyncDuplicateGuardConflictReturnsConflictAndKeepsOriginalTask() {
 		UUID externalId = GatewayTestRequests.externalId(304);
 		AsyncSubmitResponse original = submitAsync(GatewayTestRequests.asyncPollingRequest(externalId),
 				"e2e-conflict-original");
@@ -166,9 +165,7 @@ class PostgresExternalGatewayNegativeApiIT extends PostgresIntegrationTestSuppor
 		assertThat(error.path("code").asText()).isEqualTo("IDEMPOTENCY_CONFLICT");
 		assertThat(error.path("retryable").asBoolean()).isFalse();
 		assertThat(error.path("requestId").asText()).isEqualTo("e2e-conflict");
-		assertThat(error.path("details").path("existingTaskId").asLong()).isEqualTo(original.taskId());
-		assertThat(textValues(error.path("details").path("conflictingFields")))
-				.containsExactly("payload", "priority", "deliveryMode");
+		assertThat(error.path("details").isMissingNode() || error.path("details").isNull()).isTrue();
 
 		assertThat(persistedTask(original.taskId())).satisfies(task -> {
 			assertThat(task.externalId()).isEqualTo(externalId);
@@ -299,9 +296,4 @@ class PostgresExternalGatewayNegativeApiIT extends PostgresIntegrationTestSuppor
 		return request;
 	}
 
-	private static List<String> textValues(JsonNode array) {
-		return StreamSupport.stream(array.spliterator(), false)
-				.map(JsonNode::asText)
-				.toList();
-	}
 }

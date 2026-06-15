@@ -2,7 +2,9 @@
 
 ## Назначение
 
-CR003 фиксирует работу по снижению сложности текущего ядра `external-service-gateway` без изменения публичного поведения, архитектурных инвариантов и production-семантики PostgreSQL-координатора.
+CR003 фиксирует работу по снижению сложности текущего ядра `external-service-gateway` без изменения публичного HTTP/OpenAPI shape, архитектурных инвариантов и production-семантики PostgreSQL-координатора.
+
+Исключение CR003-T001: до подключения внутренней библиотеки `@Idempotent` duplicate async submit по `clientService + externalId` осознанно меняет runtime-поведение с успешного ручного replay на fail-closed `409`, чтобы не маскировать отсутствие обязательной production-idempotency.
 
 Цель CR003 - сделать реализацию проще в сопровождении за счет:
 
@@ -75,13 +77,15 @@ CR003 выполняется до production-запуска системы. Prod
 
 ## Предварительная позиция по request-level idempotency
 
-В проекте есть внешняя внутренняя библиотека идемпотентности, но ее нельзя скачать и подключить в этот репозиторий на текущем этапе. Поэтому CR003 фиксирует места будущего применения через комментарии у методов service boundary.
+В проекте есть внешняя внутренняя библиотека идемпотентности, но ее нельзя скачать и подключить в этот репозиторий на текущем этапе. Поэтому CR003 удаляет ручную async submit idempotency-обвязку, фиксирует места будущего применения через комментарии у методов service boundary и оставляет проект в fail-closed dev-phase состоянии до подключения библиотеки.
 
 Целевая роль библиотеки:
 
 - `@Idempotent` выполняет cluster-wide lock/replay результата и hash conflict check;
 - gateway-код больше не реализует вручную `find existing + compare fields + reuse/conflict` для async submit;
 - DB unique constraints в `ext_request_queue` остаются как нижний предохранитель от дублей;
+- до подключения библиотеки duplicate async submit по `clientService + externalId` отклоняется DB/memory guard-ом без replay/hash conflict details;
+- production-запуск без библиотеки идемпотентности запрещен;
 - sync request idempotency должна опираться на ключ, сохраненный в `ext_request_queue`, чтобы повторный sync не занимал второй слот и не вызывал upstream повторно.
 
 Целевые ключи и hash fields:
@@ -110,7 +114,7 @@ Spring Data JPA может упростить часть кода, но не д�
 - sync/async slot acquire с `FOR UPDATE SKIP LOCKED`, sync reserve и live sync waiters;
 - conditional `release`/`heartbeat` по `slotId + leaseId`;
 - `reapExpiredLeases`;
-- async submit с идемпотентностью и `ON CONFLICT`;
+- async submit с DB duplicate guard и будущей `@Idempotent` idempotency поверх него;
 - async claim с `FOR UPDATE SKIP LOCKED`;
 - async complete/fail/cancel/retry с conditional update и `RETURNING`;
 - callback upsert по `taskId`;
@@ -154,16 +158,18 @@ Spring Data JPA может упростить часть кода, но не д�
 
 - Зафиксировать у `ExternalAsyncServiceImpl.submit` комментарий-маркер будущей `@Idempotent`.
 - Зафиксировать у `ExternalSyncServiceImpl.sync` комментарий-маркер будущей `@Idempotent`.
-- Для async сохранить DB unique guard в `ext_request_queue`, но перенести hash conflict/replay на библиотеку после ее подключения.
+- Для async сохранить DB unique guard в `ext_request_queue`, удалить ручную `find existing + compare fields + reuse/conflict` обвязку и перенести hash conflict/replay на библиотеку после ее подключения.
 - Для sync учесть, что повторные запросы должны отсекаться по ключу в `ext_request_queue`; это требует `SYNC_REQUEST` lifecycle из CR004 и отдельного sync unique key.
-- Убрать ручную async idempotency-обвязку только после появления библиотеки в зависимостях или согласованного local stub.
-- Явно решить судьбу публичного поля `alreadyExisted`: сохранить, deprecated или изменить semantics replay.
+- До подключения библиотеки duplicate async submit должен fail-closed возвращать `409`, не создавая вторую задачу и не возвращая успешный replay.
+- Явно решить судьбу публичного поля `alreadyExisted`: сохранить для будущего replay через библиотеку; в текущем fail-closed режиме успешный submit возвращает `alreadyExisted=false`.
 
 Критерии приемки:
 
 - В коде есть понятные TODO/CR-маркеры с ключами и hash fields для будущей `@Idempotent`.
 - В `plan_T001.md` зафиксировано, что библиотека недоступна в репозитории и не подключается в этом этапе.
+- Ручная async repository/service логика `find existing + compare fields + reuse/conflict` удалена.
 - Async DB unique guard не удаляется.
+- Повторный async submit по занятому `clientService + externalId` отклоняется `409` до подключения библиотеки, а не replay-ится приложением.
 - Sync idempotency привязана к будущей `SYNC_REQUEST` записи в `ext_request_queue`, а не только к внешней idempotency table.
 
 ### CR003-T002: инвентаризация ядра и DB-операций

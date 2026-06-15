@@ -41,27 +41,27 @@ public class ExternalAsyncServiceImpl implements ExternalAsyncService {
 	}
 
 	/**
-	 * Ставит async-задачу в очередь или возвращает существующую задачу по idempotency key.
+	 * Ставит async-задачу в очередь.
 	 *
 	 * <p>CR003-T001: после подключения внутренней библиотеки идемпотентности здесь
 	 * должна стоять {@code @Idempotent}. Ключ: {@code request.clientService + request.externalId}.
 	 * Hash fields: {@code request.payload}, {@code request.priority}, {@code request.deliveryMode}.
 	 * {@code requestId} не входит в hash. Уникальный индекс в {@code ext_request_queue}
-	 * остается нижним DB-level предохранителем от дублей.</p>
+	 * остается нижним DB-level предохранителем от дублей. До подключения библиотеки duplicate
+	 * submit отклоняется без service-level replay/hash-conflict сравнения.</p>
 	 */
 	public AsyncSubmitResponse submit(ExternalAsyncRequest request, String requestId) {
 		Objects.requireNonNull(request, "request must not be null");
 
 		AsyncSubmitResult result = repository.submit(request, properties.maxAttempts(), clock.instant());
-		if (result.type() == AsyncSubmitResultType.IDEMPOTENCY_CONFLICT) {
-			throw new AsyncIdempotencyConflictException(requestId, result.existingTaskId(),
-					result.conflictingFields());
+		if (result.type() == AsyncSubmitResultType.DUPLICATE_REJECTED) {
+			throw new AsyncIdempotencyConflictException(requestId);
 		}
 
 		AsyncTask task = result.task();
-		log.info("Async-задача принята: taskId={}, clientService={}, externalId={}, alreadyExisted={}",
-				task.taskId(), task.clientService(), task.externalId(), result.alreadyExisted());
-		return AsyncSubmitResponse.from(task, result.alreadyExisted());
+		log.info("Async-задача принята: taskId={}, clientService={}, externalId={}",
+				task.taskId(), task.clientService(), task.externalId());
+		return AsyncSubmitResponse.from(task, false);
 	}
 
 	/**

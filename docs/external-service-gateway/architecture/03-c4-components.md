@@ -18,7 +18,7 @@ C4Component
         Component(exceptionHandler, "ExternalGatewayExceptionHandler", "Spring MVC Advice", "Единый JSON error contract и Retry-After для 429")
 
         Component(syncService, "ExternalSyncServiceImpl", "Service", "Получает SYNC lease, вызывает upstream, пишет sync trace")
-        Component(asyncService, "ExternalAsyncServiceImpl", "Service", "Submit, idempotency result, read, cancel, manual retry")
+        Component(asyncService, "ExternalAsyncServiceImpl", "Service", "Submit, duplicate guard, read, cancel, manual retry")
         Component(slotManager, "SlotManagerImpl", "Service", "Lease API для SYNC/ASYNC, heartbeat, reaper")
         Component(waitStrategy, "SyncSlotWaitStrategy", "Strategy", "Polling или PostgreSQL LISTEN/NOTIFY с fallback")
 
@@ -83,7 +83,7 @@ C4Component
 | `ExternalSyncController` | Принимает sync request, `X-Request-Id`, `Idempotency-Key`. | `Idempotency-Key` сейчас передается upstream adapter'у, но gateway не хранит sync-результат по этому ключу. |
 | `ExternalSyncServiceImpl` | Получает SYNC lease, вызывает upstream, освобождает слот в `finally`, пишет sync trace. | Ошибка записи sync trace логируется и не меняет клиентский ответ. |
 | `ExternalAsyncController` | Принимает async submit/read/cancel/retry. | `X-Client-Service` временно используется как scope для fallback-операций. |
-| `ExternalAsyncServiceImpl` | Делегирует submit и state changes в repository. | Idempotency задается парой `clientService + externalId` для async-режимов. |
+| `ExternalAsyncServiceImpl` | Делегирует submit и state changes в repository. | До подключения `@Idempotent` duplicate `clientService + externalId` отклоняется DB guard-ом без replay/hash compare. |
 | `SlotManagerImpl` | Единая точка управления lease-слотами. | Не должен иметь локальное состояние, влияющее на global limit в production. |
 | `PostgresSlotRepository` | Захват SYNC/ASYNC слотов, sync waiters, release, heartbeat, reaper. | Для ASYNC перед захватом проверяет live sync waiters и sync reserve. |
 | `ExternalAsyncDispatcherImpl` | Claim PENDING task, ASYNC lease, upstream call, DONE/DEAD/backoff, callback planning. | В PostgreSQL claim и upstream-вызов выполняются в processing transaction, а lease фиксируется отдельной короткой транзакцией. |
@@ -119,7 +119,7 @@ flowchart TB
 | Validation error | `400` | `VALIDATION_ERROR` | `false` |
 | Некорректный JSON | `400` | `INVALID_REQUEST` | `false` |
 | Sync slot не получен | `429` | `NO_SLOT_AVAILABLE` | `true` |
-| Async idempotency conflict | `409` | `IDEMPOTENCY_CONFLICT` | `false` |
+| Async duplicate guard conflict до `@Idempotent` | `409` | `IDEMPOTENCY_CONFLICT` | `false` |
 | Async task not found | `404` | зависит от exception | `false` |
 | Upstream timeout | `504` | `UPSTREAM_TIMEOUT` | `true` |
 | Simulated upstream failure | `503` | `UPSTREAM_SIMULATED_FAILURE` | `true` |

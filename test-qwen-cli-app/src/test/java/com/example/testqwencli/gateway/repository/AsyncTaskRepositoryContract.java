@@ -42,8 +42,6 @@ public interface AsyncTaskRepositoryContract {
 		AsyncSubmitResult result = repository().submit(request, MAX_ATTEMPTS, NOW);
 
 		assertThat(result.type()).isEqualTo(AsyncSubmitResultType.SUBMITTED);
-		assertThat(result.alreadyExisted()).isFalse();
-		assertThat(result.conflictingFields()).isEmpty();
 		assertThat(result.task()).satisfies(task -> {
 			assertThat(task.externalId()).isEqualTo(request.externalId());
 			assertThat(task.clientService()).isEqualTo(CLIENT_SERVICE);
@@ -70,20 +68,20 @@ public interface AsyncTaskRepositoryContract {
 	}
 
 	@Test
-	default void repeatedSubmitWithSameIdempotencyKeyReturnsExistingTask() {
+	default void repeatedSubmitWithSameClientServiceAndExternalIdIsRejectedByGuard() {
 		ExternalAsyncRequest request = request(102, AsyncPriority.HIGH, AsyncDeliveryMode.POLLING);
 		AsyncSubmitResult first = repository().submit(request, MAX_ATTEMPTS, NOW);
 
 		AsyncSubmitResult second = repository().submit(request, MAX_ATTEMPTS, NOW.plusMillis(1));
 
-		assertThat(second.type()).isEqualTo(AsyncSubmitResultType.SUBMITTED);
-		assertThat(second.alreadyExisted()).isTrue();
-		assertThat(second.existingTaskId()).isEqualTo(first.task().taskId());
-		assertThat(second.task()).isEqualTo(first.task());
+		assertThat(second.type()).isEqualTo(AsyncSubmitResultType.DUPLICATE_REJECTED);
+		assertThat(second.task()).isNull();
+		assertThat(repository().findByExternalId(request.externalId(), Optional.of(CLIENT_SERVICE)))
+				.contains(first.task());
 	}
 
 	@Test
-	default void submitWithSameIdempotencyKeyAndDifferentBodyReturnsConflict() {
+	default void submitWithSameClientServiceAndExternalIdButDifferentBodyIsRejectedByGuard() {
 		UUID externalId = externalId(103);
 		ExternalAsyncRequest original = request(externalId, CLIENT_SERVICE, AsyncPriority.HIGH,
 				AsyncDeliveryMode.CALLBACK, payload("calculate"));
@@ -93,11 +91,10 @@ public interface AsyncTaskRepositoryContract {
 
 		AsyncSubmitResult result = repository().submit(conflicting, MAX_ATTEMPTS, NOW.plusMillis(1));
 
-		assertThat(result.type()).isEqualTo(AsyncSubmitResultType.IDEMPOTENCY_CONFLICT);
-		assertThat(result.alreadyExisted()).isTrue();
+		assertThat(result.type()).isEqualTo(AsyncSubmitResultType.DUPLICATE_REJECTED);
 		assertThat(result.task()).isNull();
-		assertThat(result.existingTaskId()).isEqualTo(first.task().taskId());
-		assertThat(result.conflictingFields()).containsExactly("payload", "priority", "deliveryMode");
+		assertThat(repository().findByExternalId(externalId, Optional.of(CLIENT_SERVICE)))
+				.contains(first.task());
 	}
 
 	@Test

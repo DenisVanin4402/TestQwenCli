@@ -21,17 +21,17 @@ import java.util.function.Supplier;
  *
  * <p>Интерфейс скрывает реализацию очереди: in-memory репозиторий нужен для unit-тестов
  * и локального режима, PostgreSQL репозиторий обеспечивает persistent queue, row-lock claim
- * и идемпотентность по {@code clientService + externalId} для async-режимов.</p>
+ * и DB-level duplicate guard по {@code clientService + externalId} для async-режимов.</p>
  */
 public interface AsyncTaskRepository {
 
 	/**
-	 * Создает async-задачу или возвращает ранее созданную задачу по idempotency-key.
+	 * Создает async-задачу или сообщает, что нижний duplicate guard отклонил ключ.
 	 *
 	 * @param request внешний async-запрос
 	 * @param maxAttempts максимальное число попыток upstream
 	 * @param now текущее время gateway
-	 * @return результат submit, включая idempotency conflict при несовпадении payload/режима/приоритета
+	 * @return результат submit без service-level replay/hash-conflict логики
 	 */
 	AsyncSubmitResult submit(ExternalAsyncRequest request, int maxAttempts, Instant now);
 

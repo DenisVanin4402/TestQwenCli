@@ -9,15 +9,16 @@ import java.util.UUID;
  * HTTP-ответ на постановку async-задачи в очередь.
  *
  * <p>Модель возвращает публичный идентификатор задачи, ссылку на polling endpoint
- * и признак idempotent replay, когда запрос с тем же {@code clientService/externalId}
- * уже был принят ранее.</p>
+ * и поле будущего idempotent replay. После CR003-T001 и до подключения {@code @Idempotent}
+ * успешный submit всегда возвращает {@code alreadyExisted=false}; duplicate key отклоняется
+ * нижним guard-ом.</p>
  *
  * @param taskId внутренний id задачи в {@code ext_request_queue}
  * @param externalId внешний id запроса, переданный клиентом
  * @param status текущий статус задачи после submit
  * @param deliveryMode способ получения результата
  * @param statusUrl относительный URL для polling по {@code taskId}
- * @param alreadyExisted {@code true}, если submit вернул уже существующую задачу
+ * @param alreadyExisted {@code true}, если будущая idempotency library вернула replay
  */
 public record AsyncSubmitResponse(
 		long taskId,

@@ -5,11 +5,11 @@ package com.example.testqwencli.gateway.model.async.enums;
  */
 public enum AsyncSubmitResultType {
 	/**
-	 * Задача принята: создана новая запись или возвращена идемпотентно существующая.
+	 * Задача принята: создана новая запись.
 	 */
 	SUBMITTED,
 	/**
-	 * Запрос использует уже занятый idempotency-key с отличающимся содержимым.
+	 * DB/memory guard отклонил duplicate по clientService + externalId до подключения @Idempotent.
 	 */
-	IDEMPOTENCY_CONFLICT
+	DUPLICATE_REJECTED
 }

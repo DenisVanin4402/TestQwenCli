@@ -88,7 +88,7 @@ erDiagram
 - async-задачи с `delivery_mode IN ('CALLBACK', 'POLLING')`;
 - sync trace с `delivery_mode='SYNC'`.
 
-Async idempotency реализована частичным уникальным индексом:
+Async duplicate guard реализован частичным уникальным индексом:
 
 ```text
 UNIQUE (client_service, external_id)
@@ -96,6 +96,8 @@ WHERE delivery_mode IN ('CALLBACK', 'POLLING')
 ```
 
 Это позволяет сохранять несколько sync trace с тем же `external_id`, но не позволяет создать две async-задачи для одной пары `clientService + externalId`.
+
+После CR003-T001 этот индекс не является полной request-level idempotency: gateway больше не читает существующую async-задачу для replay и не сравнивает `payload`, `priority`, `deliveryMode` в repository layer. До подключения внутренней библиотеки `@Idempotent` повторный async submit по занятой паре отклоняется `409`. Production readiness требует вернуть replay/hash conflict semantics через библиотеку поверх этого DB guard.
 
 ### `ext_callback_delivery`
 
@@ -121,7 +123,6 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> PENDING: submit
-    PENDING --> PENDING: idempotent submit same payload
     PENDING --> CANCELLED: cancel
     PENDING --> IN_PROGRESS: claimNextPending
     IN_PROGRESS --> DONE: upstream success
@@ -134,6 +135,8 @@ stateDiagram-v2
     DEAD --> [*]
     FAILED --> [*]
 ```
+
+Повторный async submit по занятой паре `clientService + externalId` после CR003-T001 не является переходом state machine: до подключения `@Idempotent` он отклоняется `409` без изменения существующей задачи. Целевой replay/hash conflict должен выполняться на service boundary будущей библиотекой и не должен запускать второй repository submit.
 
 В PostgreSQL-режиме `IN_PROGRESS` при штатной обработке находится внутри processing transaction. Если JVM падает до финального обновления, row-lock и изменения задачи откатываются, а committed ASYNC lease освобождается по TTL или reaper-ом.
 

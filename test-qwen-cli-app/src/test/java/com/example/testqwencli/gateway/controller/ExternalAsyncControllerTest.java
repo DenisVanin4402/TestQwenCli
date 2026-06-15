@@ -67,18 +67,20 @@ class ExternalAsyncControllerTest {
 	}
 
 	@Test
-	void repeatedPostWithSameClientServiceAndExternalIdReturnsExistingTask() throws Exception {
+	void repeatedPostWithSameClientServiceAndExternalIdReturnsIdempotencyConflict() throws Exception {
 		UUID externalId = UUID.fromString("1cebc6e0-41f4-47cb-88f1-a915f6dc7801");
 		Map<String, Object> request = defaultRequest(externalId);
-		long firstTaskId = taskId(submit(request, "req-async-first"));
+		submit(request, "req-async-first");
 
 		mockMvc.perform(post("/v1/external/async")
 						.contentType(MediaType.APPLICATION_JSON)
 						.header("X-Request-Id", "req-async-second")
 						.content(objectMapper.writeValueAsString(request)))
-				.andExpect(status().isAccepted())
-				.andExpect(jsonPath("$.taskId").value(firstTaskId))
-				.andExpect(jsonPath("$.alreadyExisted").value(true));
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"))
+				.andExpect(jsonPath("$.retryable").value(false))
+				.andExpect(jsonPath("$.requestId").value("req-async-second"))
+				.andExpect(jsonPath("$.details").doesNotExist());
 	}
 
 	@Test
@@ -101,7 +103,7 @@ class ExternalAsyncControllerTest {
 				.andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"))
 				.andExpect(jsonPath("$.retryable").value(false))
 				.andExpect(jsonPath("$.requestId").value("req-async-conflict"))
-				.andExpect(jsonPath("$.details.conflictingFields[0]").value("payload"));
+				.andExpect(jsonPath("$.details").doesNotExist());
 	}
 
 	@Test

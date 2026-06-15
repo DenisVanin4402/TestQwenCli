@@ -72,13 +72,13 @@ POST /v1/external/async
 
 В текущей реализации `clientService` берется из тела запроса. Значение участвует в уникальном ключе `clientService + externalId` и используется для выбора callback URL из allow-list.
 
-Async идемпотентность реализована не через заголовок `Idempotency-Key`, а через пару:
+Async duplicate guard до подключения `@Idempotent` реализован не через заголовок `Idempotency-Key`, а через пару:
 
 ```text
 clientService + externalId
 ```
 
-Повторный submit с тем же payload, priority и deliveryMode возвращает существующий `taskId` и `alreadyExisted=true`. Повтор с отличающимися полями возвращает `409 IDEMPOTENCY_CONFLICT`.
+Обновление CR003-T001: ручная реализация replay/hash conflict удалена из gateway-кода. До подключения внутренней библиотеки `@Idempotent` повторный submit по занятой паре `clientService + externalId` отклоняется `409 IDEMPOTENCY_CONFLICT` без `alreadyExisted=true` и без `conflictingFields`. Возврат существующего `taskId` и hash conflict по `payload`, `priority`, `deliveryMode` остаются целевым поведением будущей библиотеки.
 
 Пример запроса:
 

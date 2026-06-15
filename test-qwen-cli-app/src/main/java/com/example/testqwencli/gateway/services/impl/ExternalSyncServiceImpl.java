@@ -60,7 +60,9 @@ public class ExternalSyncServiceImpl implements ExternalSyncService {
 	 * Hash fields: {@code request.externalId}, {@code request.payload}. {@code headers.requestId}
 	 * не входит в hash. Повторный sync-запрос с тем же ключом должен отсекаться через
 	 * lifecycle-запись {@code SYNC_REQUEST} в {@code ext_request_queue}, чтобы повтор не занимал
-	 * второй слот и не вызывал upstream повторно.</p>
+	 * второй слот и не вызывал upstream повторно. Целевое поведение для отсутствующего
+	 * {@code headers.idempotencyKey} - отклонять запрос до получения слота и upstream-вызова,
+	 * но только после отдельного изменения sync OpenAPI/валидации.</p>
 	 */
 	public ExternalSyncResponse sync(ExternalSyncRequest request, ExternalSyncHeaders headers) {
 		Objects.requireNonNull(request, "request must not be null");

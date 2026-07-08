@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1" name="viewport"/>
+    <title>Гайд SDD/OpenSpec для пилота НСиР</title>
+    <meta content="Современный HTML-гайд SDD/OpenSpec для пилота НСиР на основе Markdown-черновика." name="description"/>
+    <style>
+
+        :root {
+          --bg: #f5f7fa;
+          --paper: #ffffff;
+          --ink: #111827;
+          --ink-2: #1f2937;
+          --muted: #5b6472;
+          --muted-2: #7b8491;
+          --rule: #d9e0ea;
+          --rule-strong: #aeb8c7;
+          --rail: #111827;
+          --rail-2: #182235;
+          --teal: #0f766e;
+          --blue: #1d4ed8;
+          --amber: #b45309;
+          --rose: #be123c;
+          --code: #0c1220;
+          --code-text: #d7e3f4;
+          --shadow: 0 18px 45px rgba(17, 24, 39, .10);
+          --sans: Aptos, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+          --serif: Cambria, Georgia, "Times New Roman", serif;
+          --mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+        }
+
+        [data-theme="dark"] {
+          --bg: #0d1118;
+          --paper: #151b25;
+          --ink: #eef3fb;
+          --ink-2: #d5deeb;
+          --muted: #a6b0bf;
+          --muted-2: #7f8a9b;
+          --rule: #2a3444;
+          --rule-strong: #435167;
+          --rail: #070a10;
+          --rail-2: #101722;
+          --code: #06080d;
+          --code-text: #d7e3f4;
+          --shadow: 0 18px 45px rgba(0, 0, 0, .28);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+          margin: 0;
+          font-family: var(--sans);
+          color: var(--ink);
+          background:
+            linear-gradient(90deg, rgba(17,24,39,.045) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(17,24,39,.035) 1px, transparent 1px),
+            var(--bg);
+          background-size: 72px 72px;
+          line-height: 1.6;
+        }
+
+        a { color: inherit; text-decoration: none; }
+        code { font-family: var(--mono); font-size: .92em; }
+        .progress {
+          position: fixed;
+          inset: 0 0 auto 0;
+          height: 4px;
+          z-index: 80;
+          background: transparent;
+        }
+        .progress span {
+          display: block;
+          height: 100%;
+          width: 0;
+          background: linear-gradient(90deg, var(--teal), var(--blue), var(--amber));
+        }
+
+        .layout {
+          display: grid;
+          grid-template-columns: 300px minmax(0, 1fr);
+          min-height: 100vh;
+        }
+
+        .rail {
+          position: sticky;
+          top: 0;
+          height: 100vh;
+          overflow: auto;
+          color: #e5edf7;
+          background:
+            linear-gradient(180deg, var(--rail), var(--rail-2));
+          border-right: 1px solid rgba(255,255,255,.10);
+          padding: 28px 20px;
+        }
+
+        .brand {
+          display: grid;
+          gap: 12px;
+          margin-bottom: 28px;
+        }
+
+        .brand-mark {
+          width: 48px;
+          height: 48px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255,255,255,.24);
+          background: #f8fafc;
+          color: #111827;
+          font-weight: 900;
+          border-radius: 8px;
+        }
+
+        .brand b { font-size: 18px; line-height: 1.2; }
+        .brand span { color: #aab7c8; font-size: 13px; }
+
+        .rail-actions {
+          display: flex;
+          gap: 8px;
+          margin-bottom: 20px;
+        }
+
+        .theme-toggle {
+          width: 100%;
+          border: 1px solid rgba(255,255,255,.18);
+          background: rgba(255,255,255,.06);
+          color: #e5edf7;
+          border-radius: 8px;
+          padding: 10px 12px;
+          font: 700 13px var(--sans);
+          cursor: pointer;
+        }
+
+        .theme-toggle:hover { background: rgba(255,255,255,.10); }
+
+        .rail-nav {
+          display: grid;
+          gap: 4px;
+          padding-top: 14px;
+          border-top: 1px solid rgba(255,255,255,.12);
+        }
+
+        .rail-nav a {
+          display: grid;
+          grid-template-columns: 34px 1fr;
+          gap: 10px;
+          align-items: start;
+          padding: 8px 10px;
+          color: #b6c1d1;
+          border-radius: 8px;
+          font-size: 13px;
+          line-height: 1.35;
+        }
+
+        .rail-nav a span {
+          color: #6ee7d8;
+          font-family: var(--mono);
+          font-size: 12px;
+        }
+
+        .rail-nav a:hover,
+        .rail-nav a.active {
+          color: #fff;
+          background: rgba(255,255,255,.09);
+        }
+
+        main {
+          min-width: 0;
+          padding: 34px clamp(24px, 5vw, 72px) 64px;
+        }
+
+        .hero {
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr);
+          gap: 28px;
+          align-items: stretch;
+          margin-bottom: 30px;
+        }
+
+        .hero-copy {
+          min-height: 520px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          padding: clamp(28px, 5vw, 58px);
+          background: var(--paper);
+          border: 1px solid var(--rule);
+          border-radius: 8px;
+          box-shadow: var(--shadow);
+        }
+
+        .eyebrow {
+          color: var(--teal);
+          font-weight: 900;
+          text-transform: uppercase;
+          font-size: 12px;
+          margin-bottom: 18px;
+        }
+
+        h1 {
+          margin: 0;
+          max-width: 900px;
+          font-family: var(--serif);
+          font-size: 54px;
+          line-height: 1.02;
+          font-weight: 800;
+          letter-spacing: 0;
+        }
+
+        .lead {
+          max-width: 780px;
+          margin: 24px 0 0;
+          color: var(--muted);
+          font-size: 18px;
+        }
+
+        .hero-facts {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 32px;
+        }
+
+        .fact {
+          border-top: 3px solid var(--teal);
+          background: color-mix(in srgb, var(--bg) 68%, var(--paper));
+          padding: 14px;
+          border-radius: 8px;
+        }
+
+        .fact:nth-child(2) { border-top-color: var(--blue); }
+        .fact:nth-child(3) { border-top-color: var(--amber); }
+        .fact b { display: block; font-size: 22px; line-height: 1.1; }
+        .fact span { color: var(--muted); font-size: 12px; }
+
+        .process-map {
+          display: grid;
+          gap: 12px;
+          padding: 24px;
+          background: var(--ink);
+          color: #f8fafc;
+          border-radius: 8px;
+          box-shadow: var(--shadow);
+        }
+
+        .map-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid rgba(255,255,255,.14);
+          font-weight: 900;
+        }
+
+        .map-title span {
+          color: #aab7c8;
+          font: 700 12px var(--mono);
+        }
+
+        .map-row {
+          display: grid;
+          grid-template-columns: 92px 1fr;
+          gap: 12px;
+          align-items: stretch;
+        }
+
+        .map-row b {
+          display: grid;
+          place-items: center;
+          min-height: 62px;
+          color: #6ee7d8;
+          border: 1px solid rgba(110,231,216,.26);
+          border-radius: 8px;
+          font: 800 12px var(--mono);
+        }
+
+        .map-row p {
+          margin: 0;
+          min-height: 62px;
+          display: flex;
+          align-items: center;
+          padding: 12px 14px;
+          color: #d8e2ef;
+          background: rgba(255,255,255,.055);
+          border: 1px solid rgba(255,255,255,.10);
+          border-radius: 8px;
+          font-size: 14px;
+        }
+
+        .intro-block,
+        .toc-block {
+          margin: 22px 0;
+          padding: 24px;
+          background: var(--paper);
+          border: 1px solid var(--rule);
+          border-radius: 8px;
+        }
+
+        .intro-block h2,
+        .toc-block h2 {
+          margin: 0 0 14px;
+          font: 800 26px/1.15 var(--serif);
+          letter-spacing: 0;
+        }
+
+        .toc-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 10px;
+        }
+
+        .toc-tile {
+          min-height: 96px;
+          display: grid;
+          grid-template-rows: auto 1fr;
+          gap: 8px;
+          padding: 14px;
+          border: 1px solid var(--rule);
+          border-radius: 8px;
+          background: color-mix(in srgb, var(--paper) 82%, var(--bg));
+        }
+
+        .toc-tile:hover {
+          border-color: var(--rule-strong);
+          box-shadow: 0 10px 24px rgba(17,24,39,.08);
+        }
+
+        .toc-tile b {
+          color: var(--teal);
+          font: 800 13px var(--mono);
+        }
+
+        .toc-tile span {
+          color: var(--ink-2);
+          font-size: 14px;
+          line-height: 1.35;
+        }
+
+        .doc-section {
+          display: grid;
+          grid-template-columns: 92px minmax(0, 1fr);
+          gap: 24px;
+          padding: 34px 0;
+          border-top: 1px solid var(--rule);
+          scroll-margin-top: 20px;
+        }
+
+        .section-number {
+          position: sticky;
+          top: 20px;
+          align-self: start;
+          color: var(--teal);
+          font: 900 24px var(--mono);
+        }
+
+        .section-panel {
+          min-width: 0;
+          padding: 28px;
+          background: var(--paper);
+          border: 1px solid var(--rule);
+          border-radius: 8px;
+          box-shadow: 0 10px 26px rgba(17,24,39,.05);
+        }
+
+        .section-kicker {
+          color: var(--muted-2);
+          text-transform: uppercase;
+          font-size: 12px;
+          font-weight: 900;
+          margin-bottom: 8px;
+        }
+
+        .section-panel h2 {
+          margin: 0 0 20px;
+          font-family: var(--serif);
+          font-size: 34px;
+          line-height: 1.12;
+          letter-spacing: 0;
+        }
+
+        .prose {
+          display: grid;
+          gap: 14px;
+          color: var(--muted);
+          font-size: 16px;
+        }
+
+        .prose p { margin: 0; max-width: 980px; }
+        .prose h3 {
+          margin: 16px 0 0;
+          color: var(--ink);
+          font-size: 22px;
+          line-height: 1.25;
+          letter-spacing: 0;
+        }
+        .prose h4 {
+          margin: 12px 0 0;
+          color: var(--ink-2);
+          font-size: 17px;
+          letter-spacing: 0;
+        }
+
+        .prose ul,
+        .prose ol {
+          margin: 0;
+          padding-left: 24px;
+        }
+
+        .prose li { margin: 7px 0; }
+
+        .prose blockquote {
+          margin: 0;
+          padding: 16px 18px;
+          color: var(--ink-2);
+          border: 1px solid var(--rule);
+          border-left: 4px solid var(--blue);
+          background: color-mix(in srgb, var(--blue) 7%, var(--paper));
+          border-radius: 8px;
+        }
+
+        .prose code,
+        .toc-tile code,
+        .footer code {
+          padding: 2px 5px;
+          border: 1px solid var(--rule);
+          border-radius: 6px;
+          color: var(--ink);
+          background: color-mix(in srgb, var(--bg) 82%, var(--paper));
+        }
+
+        pre {
+          margin: 0;
+          overflow-x: auto;
+          padding: 18px;
+          color: var(--code-text);
+          background: var(--code);
+          border-radius: 8px;
+          border: 1px solid #243044;
+          line-height: 1.55;
+        }
+
+        pre code {
+          padding: 0;
+          border: 0;
+          color: inherit;
+          background: transparent;
+        }
+
+        .table-scroll {
+          overflow-x: auto;
+          border: 1px solid var(--rule);
+          border-radius: 8px;
+          background: var(--paper);
+        }
+
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 720px;
+          font-size: 14px;
+        }
+
+        th, td {
+          text-align: left;
+          vertical-align: top;
+          padding: 12px 14px;
+          border-bottom: 1px solid var(--rule);
+        }
+
+        th {
+          color: var(--ink);
+          background: color-mix(in srgb, var(--teal) 9%, var(--paper));
+          font-weight: 900;
+        }
+
+        td { color: var(--muted); }
+        tr:last-child td { border-bottom: 0; }
+
+        .footer {
+          margin-top: 28px;
+          padding: 24px 0 0;
+          color: var(--muted-2);
+          font-size: 13px;
+          border-top: 1px solid var(--rule);
+        }
+
+        @media (max-width: 1180px) {
+          .layout { grid-template-columns: 1fr; }
+          .rail {
+            position: relative;
+            height: auto;
+            max-height: none;
+          }
+          .rail-nav {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .hero { grid-template-columns: 1fr; }
+          .hero-copy { min-height: auto; }
+          .toc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 760px) {
+          main { padding: 18px 14px 40px; }
+          h1 { font-size: 38px; }
+          .lead { font-size: 16px; }
+          .hero-facts { grid-template-columns: 1fr; }
+          .rail-nav { grid-template-columns: 1fr; }
+          .toc-grid { grid-template-columns: 1fr; }
+          .doc-section {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+          .section-number { position: static; }
+          .section-panel { padding: 20px; }
+          .section-panel h2 { font-size: 28px; }
+        }
+
+        @media print {
+          .rail, .progress, .theme-toggle { display: none; }
+          .layout { display: block; }
+          body { background: #fff; }
+          main { padding: 0; }
+          .section-panel, .intro-block, .toc-block, .hero-copy, .process-map { box-shadow: none; break-inside: avoid; }
+        }
+
+        /*
+          Новая визуальная система гайда НСиР.
+          Направление: редакционный операционный центр, а не обычная страница документации.
+        */
+        :root {
+          --bg: #f2f0eb;
+          --paper: #fffdfa;
+          --ink: #17130f;
+          --ink-2: #2b251e;
+          --muted: #655e55;
+          --muted-2: #8a8176;
+          --rule: #d8d0c3;
+          --rule-strong: #a99d8c;
+          --rail: #17130f;
+          --rail-2: #241f18;
+          --teal: #087f83;
+          --blue: #2f5f9f;
+          --amber: #c57912;
+          --rose: #c9342f;
+          --code: #15120f;
+          --code-text: #f3eadc;
+          --shadow: 0 18px 48px rgba(50, 39, 25, .14);
+          --sans: Bahnschrift, "Aptos Narrow", "Segoe UI", sans-serif;
+          --serif: Georgia, Cambria, "Times New Roman", serif;
+          --mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+        }
+
+        [data-theme="dark"] {
+          --bg: #12100d;
+          --paper: #1b1814;
+          --ink: #f5efe6;
+          --ink-2: #e2d7c8;
+          --muted: #c1b6a7;
+          --muted-2: #918678;
+          --rule: #393229;
+          --rule-strong: #625644;
+          --rail: #0c0a08;
+          --rail-2: #17130f;
+          --code: #080706;
+          --code-text: #f4eadb;
+          --shadow: 0 20px 54px rgba(0, 0, 0, .36);
+        }
+
+        body {
+          background:
+            linear-gradient(90deg, rgba(23,19,15,.07) 1px, transparent 1px),
+            linear-gradient(180deg, rgba(23,19,15,.055) 1px, transparent 1px),
+            radial-gradient(circle at 18px 18px, rgba(201,52,47,.12) 1px, transparent 1.5px),
+            var(--bg);
+          background-size: 96px 96px, 96px 96px, 24px 24px, auto;
+          font-feature-settings: "kern";
+        }
+
+        body::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: -1;
+          background:
+            linear-gradient(115deg, transparent 0 52%, rgba(8,127,131,.09) 52% 53%, transparent 53% 100%),
+            linear-gradient(24deg, transparent 0 71%, rgba(197,121,18,.13) 71% 72%, transparent 72% 100%);
+        }
+
+        .progress span {
+          background: linear-gradient(90deg, var(--rose), var(--amber), var(--teal));
+        }
+
+        .layout {
+          grid-template-columns: minmax(260px, 18vw) minmax(0, 1fr);
+        }
+
+        .rail {
+          padding: 24px 16px;
+          background:
+            linear-gradient(180deg, rgba(255,255,255,.04), transparent 28%),
+            repeating-linear-gradient(135deg, transparent 0 10px, rgba(255,255,255,.035) 10px 11px),
+            var(--rail);
+        }
+
+        .brand {
+          margin-bottom: 22px;
+          padding: 14px;
+          border: 1px solid rgba(255,255,255,.16);
+          border-radius: 8px;
+          background: rgba(255,255,255,.045);
+        }
+
+        .brand-mark {
+          width: 58px;
+          height: 58px;
+          border-radius: 2px 14px 2px 14px;
+          border: 0;
+          background:
+            linear-gradient(135deg, #fffdfa 0 48%, #c9342f 48% 52%, #087f83 52% 100%);
+          box-shadow: 7px 7px 0 rgba(197,121,18,.85);
+          color: #17130f;
+          font-family: var(--serif);
+          font-size: 20px;
+        }
+
+        .brand b {
+          font-family: var(--serif);
+          font-size: 21px;
+        }
+
+        .brand span {
+          color: #d8cec0;
+        }
+
+        .theme-toggle {
+          min-height: 42px;
+          border-color: rgba(255,255,255,.25);
+          background: #fffdfa;
+          color: #17130f;
+          border-radius: 4px;
+          box-shadow: 4px 4px 0 rgba(8,127,131,.85);
+        }
+
+        .rail-nav {
+          gap: 6px;
+          border-top-color: rgba(255,255,255,.18);
+        }
+
+        .rail-nav a {
+          position: relative;
+          grid-template-columns: 38px 1fr;
+          border-radius: 4px;
+          color: #d6ccbd;
+        }
+
+        .rail-nav a span {
+          color: #f3b757;
+        }
+
+        .rail-nav a:hover,
+        .rail-nav a.active {
+          color: #fffdfa;
+          background: rgba(255,255,255,.095);
+          box-shadow: inset 4px 0 0 var(--rose);
+        }
+
+        main {
+          padding: 30px clamp(18px, 4vw, 64px) 70px;
+        }
+
+        .hero {
+          min-height: min(760px, calc(100vh - 60px));
+          grid-template-columns: minmax(0, 1.1fr) minmax(360px, .9fr);
+          align-items: stretch;
+          gap: clamp(18px, 3vw, 34px);
+          margin-bottom: 18px;
+        }
+
+        .hero-copy,
+        .process-map,
+        .intro-block,
+        .toc-block,
+        .section-panel {
+          border-radius: 0;
+          background: var(--paper);
+          border: 1px solid var(--ink);
+          box-shadow: 10px 10px 0 rgba(23,19,15,.16);
+        }
+
+        .hero-copy {
+          position: relative;
+          overflow: hidden;
+          min-height: 560px;
+          padding: clamp(30px, 6vw, 76px);
+        }
+
+        .hero-copy::before {
+          content: "";
+          position: absolute;
+          inset: 0 0 auto auto;
+          width: min(46%, 360px);
+          height: 44%;
+          background:
+            linear-gradient(90deg, transparent 0 46%, rgba(23,19,15,.16) 46% 48%, transparent 48%),
+            linear-gradient(0deg, transparent 0 46%, rgba(23,19,15,.16) 46% 48%, transparent 48%);
+          background-size: 28px 28px;
+          opacity: .9;
+        }
+
+        .eyebrow {
+          width: max-content;
+          max-width: 100%;
+          padding: 6px 10px;
+          color: #fffdfa;
+          background: var(--rose);
+          font-family: var(--mono);
+          font-size: 12px;
+        }
+
+        h1 {
+          max-width: 980px;
+          font-size: clamp(42px, 7vw, 92px);
+          line-height: .94;
+          text-wrap: balance;
+        }
+
+        .lead {
+          max-width: 760px;
+          color: var(--ink-2);
+          font-size: clamp(17px, 1.7vw, 22px);
+          line-height: 1.45;
+        }
+
+        .hero-facts {
+          grid-template-columns: repeat(3, minmax(120px, 1fr));
+          gap: 0;
+          border: 1px solid var(--ink);
+          background: var(--ink);
+        }
+
+        .fact {
+          border: 0;
+          border-right: 1px solid var(--ink);
+          border-radius: 0;
+          background: var(--paper);
+        }
+
+        .fact:last-child { border-right: 0; }
+        .fact b { font-family: var(--serif); font-size: 34px; }
+        .fact span { color: var(--muted); font-size: 13px; }
+
+        .process-map {
+          align-content: center;
+          padding: clamp(20px, 3vw, 34px);
+          background:
+            linear-gradient(180deg, rgba(255,255,255,.055), transparent),
+            var(--ink);
+          color: #fffdfa;
+        }
+
+        .map-title {
+          font-family: var(--serif);
+          font-size: 25px;
+          border-bottom-color: rgba(255,255,255,.22);
+        }
+
+        .map-title span {
+          color: #f3b757;
+        }
+
+        .map-row {
+          grid-template-columns: 76px minmax(0, 1fr);
+          gap: 0;
+          border: 1px solid rgba(255,255,255,.18);
+        }
+
+        .map-row b,
+        .map-row p {
+          min-height: 76px;
+          border: 0;
+          border-radius: 0;
+        }
+
+        .map-row b {
+          color: #17130f;
+          background: #f3b757;
+        }
+
+        .map-row p {
+          background: rgba(255,255,255,.06);
+        }
+
+        .intro-block,
+        .toc-block {
+          padding: clamp(20px, 3vw, 32px);
+          margin: 24px 0;
+        }
+
+        .intro-block h2,
+        .toc-block h2 {
+          font-size: clamp(26px, 3vw, 40px);
+        }
+
+        .toc-grid {
+          grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+          gap: 0;
+          border: 1px solid var(--rule);
+        }
+
+        .toc-tile {
+          min-height: 116px;
+          border: 0;
+          border-right: 1px solid var(--rule);
+          border-bottom: 1px solid var(--rule);
+          border-radius: 0;
+          background: var(--paper);
+        }
+
+        .toc-tile:hover {
+          border-color: var(--rule);
+          background: color-mix(in srgb, var(--amber) 12%, var(--paper));
+          box-shadow: inset 0 -5px 0 var(--teal);
+        }
+
+        .toc-tile b {
+          color: var(--rose);
+        }
+
+        .doc-section {
+          grid-template-columns: minmax(66px, 8vw) minmax(0, 1fr);
+          gap: clamp(12px, 2.5vw, 28px);
+          padding: clamp(24px, 4vw, 54px) 0;
+          border-top: 2px solid var(--ink);
+        }
+
+        .section-number {
+          top: 26px;
+          width: 64px;
+          height: 64px;
+          display: grid;
+          place-items: center;
+          color: #fffdfa;
+          background: var(--ink);
+          font-size: 26px;
+          box-shadow: 6px 6px 0 var(--teal);
+        }
+
+        .section-panel {
+          padding: clamp(22px, 4vw, 44px);
+        }
+
+        .section-kicker {
+          display: inline-block;
+          margin-bottom: 12px;
+          padding: 4px 8px;
+          color: #fffdfa;
+          background: var(--teal);
+          font-family: var(--mono);
+        }
+
+        .section-panel h2 {
+          max-width: 920px;
+          font-size: clamp(30px, 4vw, 52px);
+          line-height: 1;
+          text-wrap: balance;
+        }
+
+        .prose {
+          max-width: 1080px;
+          gap: 16px;
+          color: var(--muted);
+          font-size: 17px;
+          line-height: 1.62;
+        }
+
+        .prose p,
+        .prose ul,
+        .prose ol {
+          max-width: 960px;
+        }
+
+        .prose h3 {
+          width: fit-content;
+          max-width: 100%;
+          margin-top: 22px;
+          padding-bottom: 7px;
+          border-bottom: 4px solid var(--amber);
+          font-family: var(--serif);
+          font-size: 28px;
+        }
+
+        .prose h4 {
+          color: var(--ink);
+          font-size: 19px;
+        }
+
+        .prose li::marker {
+          color: var(--rose);
+          font-weight: 900;
+        }
+
+        .prose blockquote {
+          max-width: 980px;
+          border: 1px solid var(--ink);
+          border-left: 10px solid var(--rose);
+          border-radius: 0;
+          background: color-mix(in srgb, var(--amber) 10%, var(--paper));
+          color: var(--ink-2);
+        }
+
+        .prose code,
+        .toc-tile code,
+        .footer code {
+          border-radius: 0;
+          border-color: var(--rule-strong);
+          background: color-mix(in srgb, var(--teal) 9%, var(--paper));
+        }
+
+        pre {
+          border-radius: 0;
+          border: 1px solid var(--ink);
+          box-shadow: inset 6px 0 0 var(--amber);
+        }
+
+        .table-scroll {
+          border-radius: 0;
+          border-color: var(--ink);
+        }
+
+        table {
+          min-width: 760px;
+        }
+
+        th {
+          color: #fffdfa;
+          background: var(--ink);
+        }
+
+        th, td {
+          padding: 14px 16px;
+        }
+
+        tr:nth-child(even) td {
+          background: color-mix(in srgb, var(--amber) 6%, transparent);
+        }
+
+        .footer {
+          color: var(--muted);
+          border-top: 2px solid var(--ink);
+        }
+
+        @media (max-width: 1180px) {
+          .rail {
+            padding: 18px;
+          }
+
+          .brand {
+            grid-template-columns: 64px 1fr;
+            align-items: center;
+          }
+
+          .brand span {
+            grid-column: 1 / -1;
+          }
+
+          .hero {
+            min-height: 0;
+          }
+        }
+
+        @media (max-width: 760px) {
+          main { padding: 14px 12px 38px; }
+          .hero-copy { min-height: 0; }
+          .hero-facts { grid-template-columns: 1fr; }
+          .fact,
+          .fact:last-child {
+            border-right: 0;
+            border-bottom: 1px solid var(--ink);
+          }
+          .fact:last-child { border-bottom: 0; }
+          .map-row { grid-template-columns: 58px minmax(0, 1fr); }
+          .map-row b,
+          .map-row p { min-height: 66px; }
+          .doc-section { grid-template-columns: 1fr; }
+          .section-number {
+            position: static;
+            width: 54px;
+            height: 54px;
+            font-size: 21px;
+          }
+          .section-panel h2 { font-size: 30px; }
+          .prose { font-size: 16px; }
+        }
+
+    </style>
+</head>
+<body>
+<div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+<div class="layout">
+    <aside class="rail">
+        <div class="brand">
+            <div class="brand-mark">NS</div>
+            <b>НСиР OpenSpec</b>
+            <span>Folder-based master specification, docs-hub и change-first разработка.</span>
+        </div>
+        <div class="rail-actions">
+            <button class="theme-toggle" id="themeToggle" type="button" aria-label="Переключить тему">◐ Тема</button>
+        </div>
+        <nav class="rail-nav" aria-label="Разделы гайда">
+<a href="#section-1" data-target="section-1"><span>01</span>Зачем НСиР запускает пилот</a>
+<a href="#section-2" data-target="section-2"><span>02</span>Фокус гайда</a>
+<a href="#section-3" data-target="section-3"><span>03</span>Словарь пилота</a>
+<a href="#section-4" data-target="section-4"><span>04</span>Рекомендуемый layout для <code>docs-hub</code></a>
+<a href="#section-5" data-target="section-5"><span>05</span>Источник истины</a>
+<a href="#section-6" data-target="section-6"><span>06</span>Инициализация master spec для сервиса</a>
+<a href="#section-7" data-target="section-7"><span>07</span>Роли в процессе</a>
+<a href="#section-8" data-target="section-8"><span>08</span>Схема режимов OpenSpec</a>
+<a href="#section-9" data-target="section-9"><span>09</span>Flow A. Инициализация и refresh master spec</a>
+<a href="#section-10" data-target="section-10"><span>10</span>Flow B. <code>propose</code>: change через интервью и чтение master spec</a>
+<a href="#section-11" data-target="section-11"><span>11</span>Flow C. <code>change-from-diff</code>: change из двух веток master spec</a>
+<a href="#section-12" data-target="section-12"><span>12</span>Как Jira связывается с <code>docs-hub</code>, change и кодом</a>
+<a href="#section-13" data-target="section-13"><span>13</span>Что должно быть в <code>change.md</code></a>
+<a href="#section-14" data-target="section-14"><span>14</span>Когда нужен <code>design.md</code> и <code>tasks.md</code></a>
+<a href="#section-15" data-target="section-15"><span>15</span>Definition of Ready</a>
+<a href="#section-16" data-target="section-16"><span>16</span>Definition of Done</a>
+<a href="#section-17" data-target="section-17"><span>17</span>Правила работы с AI-агентами</a>
+<a href="#section-18" data-target="section-18"><span>18</span>Где AI пока не используем без отдельного согласования</a>
+<a href="#section-19" data-target="section-19"><span>19</span>Быстрые фразы для команды</a>
+<a href="#section-20" data-target="section-20"><span>20</span>Метрики пилота</a>
+<a href="#section-21" data-target="section-21"><span>21</span>Предлагаемый план пилота</a>
+<a href="#section-22" data-target="section-22"><span>22</span>Вопросы для обсуждения перед финальным HTML</a>
+<a href="#section-23" data-target="section-23"><span>23</span>Короткая формула для команды</a>
+        </nav>
+    </aside>
+    <main>
+        <header class="hero">
+            <div class="hero-copy">
+                <div class="eyebrow">Пилотный гайд · НСиР · SDD/OpenSpec</div>
+                <h1>Гайд SDD/OpenSpec для пилота НСиР</h1>
+                <p class="lead">Новый самостоятельный HTML-гайд для команды НСиР: как вести требования через docs-hub, folder-based master specification, <code>change.md</code>, review, design, tasks, реализацию и проверку документации.</p>
+                <div class="hero-facts" aria-label="Ключевые числа">
+                    <div class="fact"><b>23</b><span>раздела из Markdown-черновика</span></div>
+                    <div class="fact"><b>4</b><span>рабочих режима OpenSpec</span></div>
+                    <div class="fact"><b>2</b><span>пути создания change: propose и branch-diff</span></div>
+                </div>
+            </div>
+            <div class="process-map" aria-label="Схема процесса">
+                <div class="map-title">Рабочая траектория <span>docs → change → code</span></div>
+                <div class="map-row"><b>01</b><p>Инициализировать <code>_sdd</code>: manifest, navigation, coverage и stale-files.</p></div>
+                <div class="map-row"><b>02</b><p>Создать <code>change.md</code> через интервью или diff ветки аналитика.</p></div>
+                <div class="map-row"><b>03</b><p>Провести review, согласовать статус и подготовить <code>design.md</code> с <code>tasks.md</code>.</p></div>
+                <div class="map-row"><b>04</b><p>Реализовать код, проверить документы master spec и закрыть change в архив.</p></div>
+            </div>
+        </header>
+
+        <section class="intro-block" id="intro">
+            <h2>Статус и основа</h2>
+            <div class="prose">
+<blockquote>Статус: черновик для обсуждения.<br/><br/>Основа: Markdown-черновик НСиР по folder-based OpenSpec, docs-hub, сервисной архитектуре и работе через изменения документации до разработки.</blockquote>
+            </div>
+        </section>
+
+        <section class="toc-block" id="toc">
+            <h2>Карта гайда</h2>
+            <div class="toc-grid">
+<a class="toc-tile" href="#section-1"><b>1</b><span>Зачем НСиР запускает пилот</span></a>
+<a class="toc-tile" href="#section-2"><b>2</b><span>Фокус гайда</span></a>
+<a class="toc-tile" href="#section-3"><b>3</b><span>Словарь пилота</span></a>
+<a class="toc-tile" href="#section-4"><b>4</b><span>Рекомендуемый layout для <code>docs-hub</code></span></a>
+<a class="toc-tile" href="#section-5"><b>5</b><span>Источник истины</span></a>
+<a class="toc-tile" href="#section-6"><b>6</b><span>Инициализация master spec для сервиса</span></a>
+<a class="toc-tile" href="#section-7"><b>7</b><span>Роли в процессе</span></a>
+<a class="toc-tile" href="#section-8"><b>8</b><span>Схема режимов OpenSpec</span></a>
+<a class="toc-tile" href="#section-9"><b>9</b><span>Flow A. Инициализация и refresh master spec</span></a>
+<a class="toc-tile" href="#section-10"><b>10</b><span>Flow B. <code>propose</code>: change через интервью и чтение master spec</span></a>
+<a class="toc-tile" href="#section-11"><b>11</b><span>Flow C. <code>change-from-diff</code>: change из двух веток master spec</span></a>
+<a class="toc-tile" href="#section-12"><b>12</b><span>Как Jira связывается с <code>docs-hub</code>, change и кодом</span></a>
+<a class="toc-tile" href="#section-13"><b>13</b><span>Что должно быть в <code>change.md</code></span></a>
+<a class="toc-tile" href="#section-14"><b>14</b><span>Когда нужен <code>design.md</code> и <code>tasks.md</code></span></a>
+<a class="toc-tile" href="#section-15"><b>15</b><span>Definition of Ready</span></a>
+<a class="toc-tile" href="#section-16"><b>16</b><span>Definition of Done</span></a>
+<a class="toc-tile" href="#section-17"><b>17</b><span>Правила работы с AI-агентами</span></a>
+<a class="toc-tile" href="#section-18"><b>18</b><span>Где AI пока не используем без отдельного согласования</span></a>
+<a class="toc-tile" href="#section-19"><b>19</b><span>Быстрые фразы для команды</span></a>
+<a class="toc-tile" href="#section-20"><b>20</b><span>Метрики пилота</span></a>
+<a class="toc-tile" href="#section-21"><b>21</b><span>Предлагаемый план пилота</span></a>
+<a class="toc-tile" href="#section-22"><b>22</b><span>Вопросы для обсуждения перед финальным HTML</span></a>
+<a class="toc-tile" href="#section-23"><b>23</b><span>Короткая формула для команды</span></a>
+            </div>
+        </section>
+
+
+        <section class="doc-section" id="section-1" data-section>
+            <div class="section-number">01</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 1</div>
+                <h2>Зачем НСиР запускает пилот</h2>
+                <div class="prose">
+<p>Цель пилота - не заменить аналитику или инженерное ревью новым формальным процессом. Цель - сохранить сильную сторону работы НСиР: аналитик сначала описывает изменение в документации, а разработчик реализует его по согласованному описанию. SDD/OpenSpec должен сделать этот процесс быстрее, проверяемее и удобнее для работы с AI-агентами.</p>
+<p>Для НСиР важно проверить, что подход работает в реальном контуре:</p>
+<ul><li>несколько основных сервисов, например <code>invest-dkz</code>, <code>invest-pay</code> и связанные модули;</li><li>много интеграций, сквозных бизнес-процессов и общих библиотек;</li><li>сервисная архитектура с Docker и OpenShift;</li><li>отдельные репозитории с кодом сервисов и отдельный репозиторий <code>docs-hub</code> с документацией;</li><li>уже существующая сильная аналитическая документация по сервисам, бизнес-процессам, интеграциям, доменной модели, справочникам, workflow и фронту.</li></ul>
+<p>Хороший результат пилота:</p>
+<ul><li>аналитики продолжают работать через изменение документации, но получают git-историю, PR и OpenSpec <code>change.md</code>;</li><li>разработчик получает не набор разрозненных страниц, а связанный change с источниками, влиянием на сервисы, рисками, критериями приемки и техническим планом;</li><li>агент помогает искать затронутые документы и код, но не подменяет ревью аналитика, разработчика и QA;</li><li>документация в <code>docs-hub</code> становится ближе к source of truth и не отстает от кода после реализации.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-2" data-section>
+            <div class="section-number">02</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 2</div>
+                <h2>Фокус гайда</h2>
+                <div class="prose">
+<p>Команда знает свой аналитический процесс, поэтому гайд не пересказывает его. Фокус только на том, как выполнять пилот по обновленному OpenSpec:</p>
+<ul><li>как подключить существующую документацию сервиса как folder-based master specification;</li><li>как агент читает master specification через <code>_sdd/manifest.yaml</code> и <code>_sdd/navigation.md</code>;</li><li>как создать <code>change.md</code> в режиме <code>propose</code>, когда требование формируется в диалоге;</li><li>как создать <code>change.md</code> в режиме <code>change-from-diff</code>, когда аналитик уже изменил документы master specification в своей ветке;</li><li>как перейти от <code>change.md</code> к <code>design.md</code>, <code>tasks.md</code>, реализации и проверке документации;</li><li>как отличать содержательные документы master specification от служебного слоя <code>_sdd</code>.</li></ul>
+<p>Главное отличие от старого OpenSpec: master specification больше не один огромный <code>spec.md</code>. Для НСиР master specification - это набор директорий и файлов по сервису или сквозной области.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-3" data-section>
+            <div class="section-number">03</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 3</div>
+                <h2>Словарь пилота</h2>
+                <div class="prose">
+<div class="table-scroll"><table><thead><tr><th>Термин</th><th>Как понимаем в НСиР</th></tr></thead><tbody><tr><td>SDD</td><td>Specification-Driven Development: сначала согласованное описание изменения, затем design, tasks, код и тесты.</td></tr><tr><td>OpenSpec</td><td>Рабочий процесс и набор агентских skills для ведения master spec, changes, design, tasks и archive.</td></tr><tr><td><code>docs-hub</code></td><td>Отдельный git-проект с документацией по сервисам НСиР, сквозным процессам, фронту, интеграциям и общим материалам.</td></tr><tr><td>Master specification</td><td>Актуальная документация сервиса или сквозной области. В пилоте это folder-based структура, а не один файл.</td></tr><tr><td>Master-spec documents</td><td>Содержательные документы требований: workflow, integrations, model, dictionaries, dbml, openapi, front, settings и другие файлы, которые описывают систему. Это не <code>_sdd</code>.</td></tr><tr><td><code>_sdd</code></td><td>Служебный слой SDD-навигации. Он помогает агенту читать master spec, но сам по себе не является бизнес-требованием.</td></tr><tr><td><code>_sdd/manifest.yaml</code></td><td>Машинный индекс документов master spec. Нужен агенту, чтобы выбирать релевантные файлы без чтения всего дерева.</td></tr><tr><td><code>_sdd/navigation.md</code></td><td>Человеко-читаемая карта: что читать первым, где workflow, модели, интеграции, API, фронт и риски.</td></tr><tr><td><code>_sdd/coverage.md</code></td><td>Карта покрытия: что описано полно, частично или отсутствует.</td></tr><tr><td><code>change.md</code></td><td>Аналитическое описание изменения: что меняется, зачем, где источники, какие критерии приемки. Не является техническим планом.</td></tr><tr><td><code>design.md</code></td><td>Технический проект реализации по согласованному <code>change.md</code>.</td></tr><tr><td><code>tasks.md</code></td><td>Исполняемый план для разработки и верификации.</td></tr><tr><td><code>propose</code></td><td>Режим, когда агент через интервью и чтение master spec помогает создать <code>change.md</code>.</td></tr><tr><td><code>explore</code></td><td>Read-only исследование кода или зоны изменения. Ничего не правит, сохраняет findings в <code>.research/</code>.</td></tr><tr><td><code>change-from-diff</code></td><td>Режим, когда агент создает <code>change.md</code> из git diff между базовой веткой и веткой аналитика.</td></tr><tr><td><code>manual-change</code></td><td>Документы master spec обновляются явно человеком или через осторожный manual gateway.</td></tr><tr><td><code>branch-diff</code></td><td>Документы master spec уже изменены в ветке аналитика; после реализации нужно verify, а не автоматический merge.</td></tr></tbody></table></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-4" data-section>
+            <div class="section-number">04</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 4</div>
+                <h2>Рекомендуемый layout для <code>docs-hub</code></h2>
+                <div class="prose">
+<p>В пилоте нужно зафиксировать один layout и использовать его одинаково в гайде, skills и примерах. Черновая рекомендация:</p>
+<pre><code class="language-text">docs-hub/
+  openspec/
+    changes/
+      &lt;change-name&gt;/
+        change.md
+        design.md
+        tasks.md
+        .research/
+        .spec-diff/
+      archive/
+        YYYY-MM-DD-&lt;change-name&gt;/
+    &lt;service-name&gt;/
+      _sdd/
+        manifest.yaml
+        navigation.md
+        coverage.md
+        stale-files.md
+
+  invest-dkz/
+    workflow/
+    integrations/
+    model/
+    dictionaries/
+    dbml/
+    openapi/
+    settings/
+
+  invest-pay/
+    workflow/
+    integrations/
+    model/
+    openapi/
+
+  common/
+    cross-processes/
+    front/
+    dictionaries/
+    architecture/</code></pre>
+<p>Пояснение к layout:</p>
+<ul><li>содержательная документация сервиса может лежать в привычной структуре <code>docs-hub/&lt;service&gt;/...</code>;</li><li>SDD-навигация и OpenSpec-служебные файлы лежат в <code>docs-hub/openspec/&lt;service&gt;/_sdd/</code>;</li><li>master-spec documents - это файлы <code>docs-hub/&lt;service&gt;/...</code>, а не файлы из <code>_sdd</code>;</li><li><code>manifest.yaml</code> обязан ссылаться на реальные Markdown/OpenAPI/DBML/diagram-файлы, которые составляют master specification;</li><li><code>openspec/changes/</code> хранит не документацию сервиса, а рабочие changes;</li><li><code>openspec/changes/archive/</code> хранит завершенные changes вместе с <code>change.md</code>, <code>design.md</code>, <code>tasks.md</code>, <code>.research/</code> и <code>.spec-diff/</code>.</li></ul>
+<p>Решить на пилоте: нужно ли физически переносить содержательные документы внутрь <code>docs-hub/openspec/&lt;service&gt;/...</code> или оставить их в <code>docs-hub/&lt;service&gt;/...</code>, а в <code>manifest.yaml</code> хранить ссылки на эти пути. Для НСиР второй вариант выглядит ближе к сервисной структуре документации, но его нужно стабильно поддержать в skills.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-5" data-section>
+            <div class="section-number">05</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 5</div>
+                <h2>Источник истины</h2>
+                <div class="prose">
+<p>На старте пилота source of truth фиксируется только для выбранных пилотных областей:</p>
+<ul><li><code>docs-hub</code> становится рабочим источником для пилотных областей после переноса, ревью и инициализации <code>_sdd</code>;</li><li>кодовые репозитории остаются источником фактической реализации;</li><li>если документация и код расходятся, агент фиксирует gap или open question, а не выбирает удобную версию молча.</li></ul>
+<p>Целевое состояние:</p>
+<ul><li>для пилотных сервисов и процессов source of truth по требованиям находится в <code>docs-hub</code>;</li><li>каждое новое изменение требований проходит через <code>openspec/changes/&lt;change&gt;/change.md</code>;</li><li>изменения документации проходят PR в <code>docs-hub</code>;</li><li>изменения кода проходят PR в сервисном репозитории;</li><li>Jira связывает оба PR и change.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-6" data-section>
+            <div class="section-number">06</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 6</div>
+                <h2>Инициализация master spec для сервиса</h2>
+                <div class="prose">
+<p>Перед тем как агент сможет качественно работать с документацией сервиса, нужно создать навигационный слой <code>_sdd</code>.</p>
+<p>Команда для агента в естественной форме:</p>
+<pre><code class="language-text">инициализируй master spec для invest-dkz в docs-hub</code></pre>
+<p>Ожидаемый результат:</p>
+<pre><code class="language-text">docs-hub/openspec/invest-dkz/_sdd/
+  manifest.yaml
+  navigation.md
+  coverage.md
+  stale-files.md</code></pre>
+<p>Что делает <code>openspec-init-master-spec</code>:</p>
+<ol><li>Собирает список документов сервиса.</li><li>Классифицирует их как <code>workflow</code>, <code>integration</code>, <code>data</code>, <code>api</code>, <code>dictionary</code>, <code>front</code>, <code>security</code>, <code>nfr</code>, <code>schema</code>, <code>diagram</code> или <code>other</code>.</li><li>Извлекает теги, сущности, интеграции, endpoints, события и связи.</li><li>Создает <code>manifest.yaml</code> для машинной навигации.</li><li>Создает <code>navigation.md</code> для человека и агента.</li><li>Создает <code>coverage.md</code>, чтобы честно показать пробелы.</li><li>Создает <code>stale-files.md</code>, если есть устаревшие ссылки, новые файлы без классификации или сомнения.</li></ol>
+<p>Правило пилота: если <code>manifest.yaml</code> отсутствует или явно устарел, сначала делаем refresh <code>_sdd</code>, а уже потом создаем <code>change.md</code>.</p>
+<p>Важно: <code>_sdd</code> не заменяет master specification. При генерации <code>change.md</code> агент использует <code>_sdd</code> как индекс, но смысл изменения берет из содержательных документов сервиса: <code>workflow</code>, <code>integrations</code>, <code>model</code>, <code>dictionaries</code>, <code>dbml</code>, <code>openapi</code>, <code>front</code>, <code>settings</code> и других документов master spec.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-7" data-section>
+            <div class="section-number">07</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 7</div>
+                <h2>Роли в процессе</h2>
+                <div class="prose">
+<div class="table-scroll"><table><thead><tr><th>Роль</th><th>Ответственность в пилоте</th></tr></thead><tbody><tr><td>Бизнес-аналитик</td><td>Формулирует цель, бизнес-смысл, процесс, правила, критерии приемки, согласует <code>change.md</code>.</td></tr><tr><td>Системный аналитик</td><td>Ведет структуру master spec, интеграции, модели, контракты, workflow, consistency review.</td></tr><tr><td>Backend-разработчик</td><td>Проверяет реализуемость, создает или ревьюит <code>design.md</code> и <code>tasks.md</code>, реализует код в сервисах.</td></tr><tr><td>Frontend-разработчик</td><td>Проверяет влияние на UI, формы, сценарии пользователя и фронтовую документацию.</td></tr><tr><td>QA</td><td>Проверяет критерии приемки, тестовые сценарии, регрессионные риски и DoD.</td></tr><tr><td>DevOps / Platform</td><td>Участвует, если change затрагивает Docker, OpenShift, Helm, конфигурацию, секреты, ресурсы, мониторинг.</td></tr><tr><td>Tech lead</td><td>Следит за границами change, архитектурными решениями, рисками сквозных изменений и качеством пилота.</td></tr></tbody></table></div>
+<p>AI-агент не является владельцем решения. Он ускоряет поиск, структурирование, генерацию черновиков и проверку связности.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-8" data-section>
+            <div class="section-number">08</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 8</div>
+                <h2>Схема режимов OpenSpec</h2>
+                <div class="prose">
+<p>В пилоте есть четыре рабочих режима. Они не конкурируют, а используются на разных этапах.</p>
+<pre><code class="language-text">Подготовка сервиса:
+  init-master-spec
+    -&gt; _sdd/manifest.yaml
+    -&gt; _sdd/navigation.md
+    -&gt; _sdd/coverage.md
+
+Требование еще не оформлено в документах:
+  propose
+    -&gt; change.md
+    -&gt; review
+    -&gt; design.md
+    -&gt; tasks.md
+    -&gt; implement
+    -&gt; manual update / verify
+    -&gt; archive
+
+Аналитик уже изменил master-spec documents в ветке:
+  change-from-diff(base_ref, analyst_ref)
+    -&gt; .spec-diff/
+    -&gt; change.md
+    -&gt; review / approve
+    -&gt; design.md
+    -&gt; tasks.md
+    -&gt; implement
+    -&gt; verify analyst_ref
+    -&gt; archive
+
+Нужно понять код или зону влияния:
+  explore
+    -&gt; .research/
+    -&gt; research-notes.md
+    -&gt; вход для propose / design / ревью</code></pre>
+<p><code>_sdd</code> участвует во всех режимах как навигационный слой. Но diff требований строится по master-spec documents, а не по <code>_sdd</code>.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-9" data-section>
+            <div class="section-number">09</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 9</div>
+                <h2>Flow A. Инициализация и refresh master spec</h2>
+                <div class="prose">
+<p>Этот flow готовит документацию сервиса к работе с агентом.</p>
+<pre><code class="language-text">docs-hub/&lt;service&gt;/
+  workflow/
+  integrations/
+  model/
+  dictionaries/
+  dbml/
+  openapi/
+  settings/
+        |
+        | openspec-init-master-spec
+        v
+docs-hub/openspec/&lt;service&gt;/_sdd/
+  manifest.yaml
+  navigation.md
+  coverage.md
+  stale-files.md</code></pre>
+<p>Шаги:</p>
+<ol><li>Выбрать сервис или сквозную область.</li><li>Убедиться, что master-spec documents лежат в согласованной структуре.</li><li>Запустить <code>openspec-init-master-spec</code>.</li><li>Проверить, что <code>manifest.yaml</code> ссылается на содержательные документы, а не описывает только <code>_sdd</code>.</li><li>Проверить <code>navigation.md</code>: агенту должно быть понятно, что читать первым.</li><li>Проверить <code>coverage.md</code>: пробелы не скрываются.</li><li>При изменениях в документах запускать refresh <code>_sdd</code>.</li></ol>
+<p>DoD: есть актуальный <code>_sdd</code>, но source of truth остается в master-spec documents.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-10" data-section>
+            <div class="section-number">10</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 10</div>
+                <h2>Flow B. <code>propose</code>: change через интервью и чтение master spec</h2>
+                <div class="prose">
+<p>Этот режим используется, когда требование еще не внесено в документы отдельной веткой.</p>
+<pre><code class="language-text">Идея / Jira / устное требование
+        |
+        | openspec-propose
+        v
+чтение _sdd/navigation.md
+чтение _sdd/manifest.yaml
+выбор master-spec documents
+точечный explore при необходимости
+        |
+        v
+openspec/changes/&lt;change&gt;/change.md
+        |
+        v
+review -&gt; статус &quot;Согласовано&quot; -&gt; design -&gt; tasks -&gt; implement
+        |
+        v
+manual-change: обновить master-spec documents и refresh _sdd</code></pre>
+<p>Шаги:</p>
+<ol><li>Аналитик задает цель и скоуп изменения.</li><li>Агент уточняет мотивацию, пользователей, ограничения, миграцию, обратную совместимость и критерии приемки.</li><li>Агент читает <code>_sdd</code> только как карту.</li><li>Агент выбирает и читает master-spec documents по <code>tags</code>, <code>entities</code>, <code>integrations</code>, <code>endpoints</code>, <code>events</code>, <code>related_files</code>, <code>depends_on</code>, <code>read_priority</code>.</li><li>При необходимости запускается read-only <code>explore</code>.</li><li>Агент создает <code>change.md</code> со статусом <code>На согласовании</code>.</li><li>После ревью человек переводит статус в <code>Согласовано</code>.</li><li>Дальше создаются <code>design.md</code> и <code>tasks.md</code>.</li></ol>
+<p>Критическое правило: <code>change.md</code> описывает &quot;что и зачем&quot;, а не технический план реализации.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-11" data-section>
+            <div class="section-number">11</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 11</div>
+                <h2>Flow C. <code>change-from-diff</code>: change из двух веток master spec</h2>
+                <div class="prose">
+<p>Это основной режим для сценария, где аналитик уже внес изменения в нужные файлы master specification.</p>
+<h3>11.1. Что сравниваем</h3>
+<p>Сравниваются две локальные git-ссылки:</p>
+<pre><code class="language-text">base_ref     = релизная / базовая ветка документации
+analyst_ref  = ветка аналитика с изменениями по фиче</code></pre>
+<p>Diff строится по содержательным master-spec documents:</p>
+<pre><code class="language-text">docs-hub/&lt;service&gt;/workflow/**
+docs-hub/&lt;service&gt;/integrations/**
+docs-hub/&lt;service&gt;/model/**
+docs-hub/&lt;service&gt;/dictionaries/**
+docs-hub/&lt;service&gt;/dbml/**
+docs-hub/&lt;service&gt;/openapi/**
+docs-hub/&lt;service&gt;/settings/**</code></pre>
+<p>Если команда запускается из корня git-репозитория <code>docs-hub</code>, pathspec будет без префикса <code>docs-hub/</code>:</p>
+<pre><code class="language-text">&lt;service&gt;/workflow/**
+&lt;service&gt;/integrations/**
+&lt;service&gt;/model/**
+...</code></pre>
+<p>Не путать с:</p>
+<pre><code class="language-text">docs-hub/openspec/&lt;service&gt;/_sdd/**</code></pre>
+<p><code>_sdd</code> можно читать для выбора контекста и проверки актуальности manifest, но изменения <code>_sdd</code> сами по себе не являются содержательным требованием. Если в ветке аналитика изменился только <code>_sdd</code>, <code>change.md</code> по требованиям создавать не нужно: сначала надо понять, какие master-spec documents реально изменились.</p>
+<h3>11.2. Схема веток</h3>
+<pre><code class="language-text">release/2026-06
+  docs-hub/invest-dkz/model/UdkzProductType.md
+  docs-hub/invest-dkz/workflow/14.../index.md
+  docs-hub/invest-dkz/dbml/invest_dkz.dbml
+          |
+          | branch
+          v
+analytics/NSIR-123/rename-product-type
+  docs-hub/invest-dkz/model/UdkzProductType.md        MODIFIED
+  docs-hub/invest-dkz/workflow/14.../index.md         MODIFIED
+  docs-hub/invest-dkz/dbml/invest_dkz.dbml            MODIFIED
+  docs-hub/openspec/invest-dkz/_sdd/manifest.yaml     metadata / index</code></pre>
+<p>Агент должен интерпретировать первые три файла как изменение master specification. <code>manifest.yaml</code> используется как индекс и может требовать refresh, но не должен стать единственным источником смысла.</p>
+<h3>11.3. Команда агенту</h3>
+<pre><code class="language-text">создай change из diff:
+service=invest-dkz
+base_ref=release/2026-06
+analyst_ref=analytics/NSIR-123/rename-product-type
+change_name=rename-product-type</code></pre>
+<h3>11.4. Что делает агент</h3>
+<ol><li>Проверяет локальные refs:</li></ol>
+<pre><code class="language-bash">git rev-parse --verify release/2026-06
+git rev-parse --verify analytics/NSIR-123/rename-product-type</code></pre>
+<ol><li>Определяет merge-base для default three-dot diff:</li></ol>
+<pre><code class="language-bash">git merge-base release/2026-06 analytics/NSIR-123/rename-product-type</code></pre>
+<ol><li>Получает список измененных master-spec documents:</li></ol>
+<pre><code class="language-bash">git diff --name-status --find-renames release/2026-06...analytics/NSIR-123/rename-product-type -- invest-dkz/</code></pre>
+<ol><li>Получает статистику и patch:</li></ol>
+<pre><code class="language-bash">git diff --stat release/2026-06...analytics/NSIR-123/rename-product-type -- invest-dkz/
+git diff --find-renames --find-copies release/2026-06...analytics/NSIR-123/rename-product-type -- invest-dkz/</code></pre>
+<ol><li>Читает old/new содержимое точечно через <code>git show</code>, без checkout веток:</li></ol>
+<pre><code class="language-bash">git show release/2026-06:invest-dkz/model/UdkzProductType.md
+git show analytics/NSIR-123/rename-product-type:invest-dkz/model/UdkzProductType.md</code></pre>
+<ol><li>Читает <code>_sdd/manifest.yaml</code> из <code>analyst_ref</code>, чтобы выбрать связанные документы:</li></ol>
+<pre><code class="language-bash">git show analytics/NSIR-123/rename-product-type:openspec/invest-dkz/_sdd/manifest.yaml</code></pre>
+<ol><li>Создает diff artifacts:</li></ol>
+<pre><code class="language-text">openspec/changes/rename-product-type/.spec-diff/
+  refs.txt
+  name-status.txt
+  stat.txt
+  patch.diff
+  changed-files.yaml
+  context-files.yaml</code></pre>
+<ol><li>Создает:</li></ol>
+<pre><code class="language-text">openspec/changes/rename-product-type/change.md</code></pre>
+<h3>11.5. Что попадает в <code>change.md</code></h3>
+<p><code>change.md</code> должен содержать не механический patch, а аналитическое описание изменения:</p>
+<ul><li><code>Spec update mode: branch-diff</code>;</li><li><code>Base ref</code>, <code>Analyst ref</code>, <code>Diff mode</code>, <code>Merge base</code>;</li><li>changed files: added / modified / deleted / renamed;</li><li>context files, выбранные через manifest;</li><li>какие требования добавлены, изменены или удалены;</li><li>влияние на workflow, модели, интеграции, DBML/OpenAPI, фронт, конфигурацию;</li><li>критерии приемки;</li><li>gaps и вопросы, если мотивация или последствия не выводятся надежно.</li></ul>
+<h3>11.6. Что запрещено в этом flow</h3>
+<ul><li>Делать <code>git fetch</code>, <code>git pull</code> или checkout base/analyst веток автоматически.</li><li>Сравнивать только <code>_sdd</code> и называть это diff master specification.</li><li>Создавать <code>change.md</code>, если изменены только служебные <code>_sdd</code> файлы и нет изменений master-spec documents.</li><li>Копировать patch в <code>change.md</code> вместо формулировки требований.</li><li>Автоматически применять документы из analyst branch в текущую ветку разработки.</li></ul>
+<h3>11.7. Дальнейшие шаги</h3>
+<pre><code class="language-text">change.md
+  -&gt; review / approve
+  -&gt; design.md
+  -&gt; tasks.md
+  -&gt; code PR в репозитории сервиса
+  -&gt; verify analyst_ref как source of truth по документации
+  -&gt; status &quot;Реализовано&quot;
+  -&gt; archive</code></pre>
+<p>Финальный <code>apply-change</code> по умолчанию не нужен. Документы master specification уже находятся в <code>analyst_ref</code>; после реализации нужно проверить, что они соответствуют реализованному поведению и <code>change.md</code>.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-12" data-section>
+            <div class="section-number">12</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 12</div>
+                <h2>Как Jira связывается с <code>docs-hub</code>, change и кодом</h2>
+                <div class="prose">
+<p>Для пилота нужно одно простое соглашение:</p>
+<ul><li>одна Jira-задача соответствует одному логическому OpenSpec change;</li><li>у Jira-задачи может быть один PR в <code>docs-hub</code> и один или несколько PR в кодовых репозиториях;</li><li>название ветки и change должно включать номер задачи или быть явно связано с ним;</li><li><code>change.md</code> должен указывать инициатор и ссылку на Jira;</li><li>PR в коде должен ссылаться на <code>change.md</code>.</li></ul>
+<p>Пример:</p>
+<pre><code class="language-text">Jira: NSIR-123
+docs-hub branch: analytics/NSIR-123/rename-product-type
+OpenSpec change: rename-product-type
+code branch: feature/NSIR-123/rename-product-type
+docs PR: NSIR-123 rename product type docs
+code PR: NSIR-123 rename product type implementation</code></pre>
+<p>Что именно поменялось по задаче, показывают:</p>
+<ul><li>diff ветки <code>docs-hub</code> по master-spec documents;</li><li><code>.spec-diff/changed-files.yaml</code>;</li><li>разделы <code>## 0. Источники master specification</code> и <code>## 0. Источники изменения</code> в <code>change.md</code>;</li><li>ссылки в Jira и PR.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-13" data-section>
+            <div class="section-number">13</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 13</div>
+                <h2>Что должно быть в <code>change.md</code></h2>
+                <div class="prose">
+<p><code>change.md</code> отвечает на вопрос &quot;что и зачем меняем&quot;. Он не должен быть техническим планом реализации.</p>
+<p>Минимально важные части:</p>
+<ul><li>статус: <code>На согласовании</code>, <code>Согласовано</code>, <code>В реализации</code>, <code>Реализовано</code>, <code>Архивировано</code>;</li><li>дата, автор, Jira;</li><li>master specification и manifest;</li><li><code>Spec update mode</code>: <code>manual-change</code> или <code>branch-diff</code>;</li><li>источники master specification;</li><li>цель изменения и бизнес-мотивация;</li><li>затронутые сервисы, интеграции, модели, workflow, фронт;</li><li>изменения бизнес-логики, FSM, моделей данных, интеграций, ошибок, безопасности, миграций, конфигурации;</li><li>критерии приемки;</li><li>gaps и open questions.</li></ul>
+<p>Правило для всех разделов: если раздел не затрагивается, пишем <code>Нет изменений.</code>, а не оставляем пустой шаблон.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-14" data-section>
+            <div class="section-number">14</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 14</div>
+                <h2>Когда нужен <code>design.md</code> и <code>tasks.md</code></h2>
+                <div class="prose">
+<p><code>design.md</code> и <code>tasks.md</code> нужны почти всегда, если изменение затрагивает:</p>
+<ul><li>больше одного сервиса;</li><li>БД, Liquibase, DBML или миграции;</li><li>OpenAPI, контракты или интеграции;</li><li>бизнес workflow;</li><li>фронт и backend одновременно;</li><li>Docker, OpenShift, Helm, конфигурацию, мониторинг;</li><li>безопасность, роли, аудит или персональные данные;</li><li>обратную совместимость.</li></ul>
+<p>Для маленького текстового или справочного изменения команда может решить обойтись без отдельного <code>design.md</code>, но это должно быть осознанное исключение.</p>
+<p><code>design.md</code> отвечает на вопрос &quot;как реализуем&quot;. <code>tasks.md</code> превращает design в последовательные чекбоксы, которые можно выполнять и проверять.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-15" data-section>
+            <div class="section-number">15</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 15</div>
+                <h2>Definition of Ready</h2>
+                <div class="prose">
+<p>Change можно передавать в разработку, если выполнены условия:</p>
+<ul><li>master spec по сервису инициализирован, есть <code>_sdd/manifest.yaml</code> и <code>_sdd/navigation.md</code>;</li><li><code>change.md</code> создан и лежит в <code>openspec/changes/&lt;change&gt;/</code>;</li><li>в <code>change.md</code> указан Jira-инициатор;</li><li>указаны master-spec sources и причина чтения каждого источника;</li><li>выбран <code>Spec update mode</code>;</li><li>для <code>branch-diff</code> есть измененные master-spec documents, а не только <code>_sdd</code>;</li><li>gaps и open questions явно видны;</li><li>критерии приемки описаны поведенчески;</li><li>влияние на 5 основных сервисов, интеграции, фронт, БД, конфигурацию и OpenShift либо подтверждено, либо явно исключено;</li><li>change прошел ревью и статус установлен в <code>Согласовано</code>;</li><li>для сложного изменения есть <code>design.md</code> и <code>tasks.md</code>.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-16" data-section>
+            <div class="section-number">16</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 16</div>
+                <h2>Definition of Done</h2>
+                <div class="prose">
+<p>Change можно закрывать, если выполнены условия:</p>
+<ul><li>все задачи из <code>tasks.md</code> выполнены или исключения явно согласованы;</li><li>кодовые PR прошли ревью;</li><li>релевантные тесты, сборка и линтер выполнены или зафиксирована причина невозможности;</li><li>документы master spec обновлены или подтверждены в <code>Analyst ref</code>;</li><li>для <code>manual-change</code> выполнен refresh <code>_sdd</code>;</li><li>для <code>branch-diff</code> проверено, что документы в ветке аналитика соответствуют <code>change.md</code> и <code>.spec-diff/</code>;</li><li>Jira содержит ссылки на docs PR, code PR и OpenSpec change;</li><li>статус <code>change.md</code> переведен в <code>Реализовано</code>;</li><li>change перенесен в <code>openspec/changes/archive/YYYY-MM-DD-&lt;change&gt;/</code>.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-17" data-section>
+            <div class="section-number">17</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 17</div>
+                <h2>Правила работы с AI-агентами</h2>
+                <div class="prose">
+<ol><li>Read-only first: сначала чтение <code>navigation.md</code>, <code>manifest.yaml</code>, выбранных документов и кода, потом предложения.</li><li>Агент не читает весь <code>docs-hub</code> рекурсивно, если есть manifest.</li><li>Агент не скрывает противоречия: все gaps попадают в вопросы или coverage.</li><li>Агент не делает destructive actions без явного подтверждения.</li><li>Агент не работает с production-секретами, доступами, реальными персональными данными и production-like окружениями без отдельного согласования.</li><li>Агент не делает <code>git fetch</code>, <code>git pull</code> и checkout аналитических веток в <code>change-from-diff</code> автоматически.</li><li>Агент не должен превращать <code>change.md</code> в техническую реализацию.</li><li>Разработчик не должен реализовывать change в статусе <code>На согласовании</code>.</li><li>Если реализация изменила design, нужно обновить <code>design.md</code>, <code>tasks.md</code> или зафиксировать расхождение в PR.</li><li>Человек принимает решение о статусах <code>Согласовано</code>, <code>Реализовано</code> и о спорных требованиях.</li></ol>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-18" data-section>
+            <div class="section-number">18</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 18</div>
+                <h2>Где AI пока не используем без отдельного согласования</h2>
+                <div class="prose">
+<p>На первом этапе пилота не даем агенту самостоятельно менять:</p>
+<ul><li>production-конфигурацию;</li><li>секреты, доступы, роли и права;</li><li>OpenShift manifests для критичных контуров;</li><li>миграции с риском потери данных;</li><li>массовые изменения во всех сервисах без <code>design.md</code>;</li><li>документы с персональными или чувствительными данными;</li><li>юридически значимые формулировки без ревью ответственного владельца.</li></ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-19" data-section>
+            <div class="section-number">19</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 19</div>
+                <h2>Быстрые фразы для команды</h2>
+                <div class="prose">
+<div class="table-scroll"><table><thead><tr><th>Что нужно</th><th>Фраза агенту</th><th>Ожидаемый режим</th></tr></thead><tbody><tr><td>Понять процесс</td><td><code>объясни openspec workflow для docs-hub НСиР</code></td><td><code>openspec-teach</code></td></tr><tr><td>Подключить сервис</td><td><code>инициализируй master spec для invest-dkz</code></td><td><code>openspec-init-master-spec</code></td></tr><tr><td>Обновить индекс после правок</td><td><code>я поменял документы invest-dkz, обнови _sdd</code></td><td><code>openspec-init-master-spec refresh</code></td></tr><tr><td>Исследовать сервис</td><td><code>сделай explore сервиса invest-dkz без правок</code></td><td><code>openspec-explore target=spec</code></td></tr><tr><td>Исследовать зону изменения</td><td><code>сделай explore зоны изменения вокруг UdkzProductType</code></td><td><code>openspec-explore target=change</code></td></tr><tr><td>Создать change через интервью</td><td><code>создай change для изменения процесса импорта ДЗ</code></td><td><code>openspec-propose</code></td></tr><tr><td>Создать change из ветки аналитика</td><td><code>создай change из diff по master-spec documents: service=invest-dkz base_ref=release/2026-06 analyst_ref=analytics/NSIR-123/rename-product-type change_name=rename-product-type</code></td><td><code>openspec-change-from-diff</code></td></tr><tr><td>Подготовить реализацию</td><td><code>подготовь design и tasks для rename-product-type</code></td><td><code>openspec-design</code></td></tr><tr><td>Реализовать задачи</td><td><code>реализуй tasks для rename-product-type</code></td><td><code>openspec-implement</code></td></tr><tr><td>Проверить master spec</td><td><code>проверь master spec update для rename-product-type</code></td><td><code>openspec-apply-change</code></td></tr><tr><td>Закрыть change</td><td><code>архивируй change rename-product-type</code></td><td><code>openspec-archive-change</code></td></tr></tbody></table></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-20" data-section>
+            <div class="section-number">20</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 20</div>
+                <h2>Метрики пилота</h2>
+                <div class="prose">
+<p>После каждой пилотной задачи фиксируем короткий отчет:</p>
+<div class="table-scroll"><table><thead><tr><th>Метрика</th><th>Что смотрим</th></tr></thead><tbody><tr><td>Время подготовки требований</td><td>Сколько заняло от идеи до согласованного <code>change.md</code>.</td></tr><tr><td>Время старта разработки</td><td>Насколько быстрее разработчик понял скоуп и начал работу.</td></tr><tr><td>Количество уточнений</td><td>Сколько вопросов возникло после передачи в разработку.</td></tr><tr><td>Документационные gaps</td><td>Сколько пробелов обнаружил агент или ревью.</td></tr><tr><td>Доля найденных затронутых файлов</td><td>Насколько полно агент нашел документы и код.</td></tr><tr><td>Качество критериев приемки</td><td>Смог ли QA использовать критерии без дополнительного устного контекста.</td></tr><tr><td>Актуальность документации</td><td>Осталась ли master spec актуальной после реализации.</td></tr><tr><td>Польза AI</td><td>Что агент реально ускорил, а где мешал или ошибался.</td></tr></tbody></table></div>
+<p>Минимальный формат отчета:</p>
+<pre><code class="language-text">Jira:
+Change:
+Сервисы:
+Flow: propose | branch-diff
+Что помогло:
+Что не сработало:
+Gaps:
+Решение на следующий пилот:</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-21" data-section>
+            <div class="section-number">21</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 21</div>
+                <h2>Предлагаемый план пилота</h2>
+                <div class="prose">
+<h3>Этап 1. Подготовка</h3>
+<ol><li>Выбрать 1-2 сервиса для первого прохода, например <code>invest-dkz</code> и один связанный сервис.</li><li>Подготовить документацию выбранной области в <code>docs-hub</code>.</li><li>Зафиксировать layout.</li><li>Инициализировать <code>_sdd</code>.</li><li>Провести короткую сессию с аналитиками, разработчиками и QA по flow.</li></ol>
+<h3>Этап 2. Первая задача через <code>propose</code></h3>
+<ol><li>Взять небольшую, но реальную задачу.</li><li>Создать <code>change.md</code> через интервью с агентом.</li><li>Провести ревью <code>change.md</code>.</li><li>Создать <code>design.md</code> и <code>tasks.md</code>.</li><li>Реализовать и закрыть.</li><li>Заполнить отчет пилота.</li></ol>
+<h3>Этап 3. Вторая задача через <code>change-from-diff</code></h3>
+<ol><li>Аналитик меняет документы в ветке <code>docs-hub</code>.</li><li>Агент генерирует <code>change.md</code> из diff.</li><li>Команда проверяет, насколько полно diff по master-spec documents превращается в <code>change.md</code>.</li><li>Разработчик проходит design, tasks, implement.</li><li>Проверяется, что master spec source находится в analyst ref.</li></ol>
+<h3>Этап 4. Сквозная задача</h3>
+<ol><li>Выбрать изменение, которое затрагивает несколько сервисов, интеграцию или фронт.</li><li>Проверить, как manifest и <code>explore</code> помогают не потерять связи.</li><li>Оценить качество <code>design.md</code> и <code>tasks.md</code> для multi-service изменения.</li></ol>
+<h3>Этап 5. Ретро и решение о масштабировании</h3>
+<ol><li>Сравнить оба flow.</li><li>Решить, какой layout <code>docs-hub</code> закрепляем.</li><li>Уточнить шаблоны <code>change.md</code>, <code>design.md</code>, <code>tasks.md</code>.</li><li>Настроить правила веток, PR и Jira-ссылок.</li><li>Подготовить финальный HTML-гайд и короткую памятку для команды.</li></ol>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-22" data-section>
+            <div class="section-number">22</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 22</div>
+                <h2>Вопросы для обсуждения перед финальным HTML</h2>
+                <div class="prose">
+<ol><li>Какой layout закрепляем для <code>docs-hub</code>: документы внутри <code>openspec/&lt;service&gt;/</code> или текущая структура <code>&lt;service&gt;/...</code> плюс <code>_sdd</code> в <code>openspec/&lt;service&gt;/_sdd/</code>?</li><li>Какие 5 основных сервисов перечисляем в гайде явно?</li><li>Какая ветка является базовой для <code>docs-hub</code>: <code>master</code>, <code>main</code>, релизная ветка или отдельная baseline-ветка?</li><li>Как называем аналитические ветки: <code>analytics/NSIR-123/...</code> или другой формат?</li><li>Кто ставит статус <code>Согласовано</code> в <code>change.md</code>?</li><li>Нужно ли для всех pilot changes требовать <code>design.md</code> и <code>tasks.md</code>, или разрешаем исключения?</li><li>Где хранить ссылку на <code>change.md</code> в Jira и PR?</li><li>Берем в пилот только новые изменения или также активные незавершенные задачи?</li><li>Какие сервисы и процессы не берем в первый пилот из-за риска?</li><li>Кто владелец <code>docs-hub</code> и кто ревьюит <code>_sdd/manifest.yaml</code>, <code>navigation.md</code>, <code>coverage.md</code>?</li></ol>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="section-23" data-section>
+            <div class="section-number">23</div>
+            <div class="section-panel">
+                <div class="section-kicker">Раздел 23</div>
+                <h2>Короткая формула для команды</h2>
+                <div class="prose">
+<p>SDD/OpenSpec в НСиР - это не &quot;агент сам кодит по смутному запросу&quot;. Это дисциплина:</p>
+<pre><code class="language-text">документация -&gt; change -&gt; review -&gt; design -&gt; tasks -&gt; code -&gt; verify docs -&gt; archive</code></pre>
+<p>А для привычного аналитического процесса:</p>
+<pre><code class="language-text">ветка аналитика в docs-hub -&gt; git diff по master-spec documents -&gt; change.md -&gt; разработка -&gt; verify -&gt; archive</code></pre>
+<p>Человек отвечает за смысл, приоритет и согласование. Агент помогает быстрее собрать контекст, найти связи, оформить артефакты и не потерять требования.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            SDD/OpenSpec Guide для НСиР · источник: <code>docs/sdd/guide-nsir-openspec-pilot-draft.md</code>
+        </footer>
+    </main>
+</div>
+<script>
+    const root = document.documentElement;
+    const progressBar = document.getElementById("progressBar");
+    const savedTheme = localStorage.getItem("nsir-guide-theme");
+    if (savedTheme) root.setAttribute("data-theme", savedTheme);
+
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      localStorage.setItem("nsir-guide-theme", next);
+    });
+
+    const links = [...document.querySelectorAll(".rail-nav a")];
+    const sectionsForNav = [...document.querySelectorAll("[data-section]")];
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        links.forEach((link) => link.classList.toggle("active", link.dataset.target === entry.target.id));
+      });
+    }, { rootMargin: "-35% 0px -55% 0px", threshold: 0.01 });
+    sectionsForNav.forEach((section) => observer.observe(section));
+
+    function updateProgress() {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const value = max > 0 ? window.scrollY / max : 0;
+      progressBar.style.width = Math.min(100, Math.max(0, value * 100)) + "%";
+    }
+    updateProgress();
+    window.addEventListener("scroll", updateProgress, { passive: true });
+</script>
+</body>
+</html>

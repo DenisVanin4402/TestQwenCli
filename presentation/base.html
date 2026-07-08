@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html data-theme="light" lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>SDD/OpenSpec: folder-based master spec</title>
+  <meta content="HTML-гайд по обновленному SDD/OpenSpec framework: master specification как папка документов и change.md из ветки аналитика." name="description"/>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --paper: #fffdf8;
+      --ink: #191714;
+      --ink-soft: #36302a;
+      --muted: #6d665d;
+      --line: #d8cfc0;
+      --line-strong: #9f927f;
+      --rail: #191714;
+      --rail-2: #28221b;
+      --teal: #0b7f83;
+      --blue: #2d5b9a;
+      --amber: #bd7414;
+      --red: #bb352e;
+      --green: #157f52;
+      --code: #12100d;
+      --code-text: #f2e7d5;
+      --shadow: 10px 10px 0 rgba(25, 23, 20, .14);
+      --sans: Bahnschrift, "Aptos Narrow", "Segoe UI", sans-serif;
+      --serif: Georgia, Cambria, "Times New Roman", serif;
+      --mono: "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
+    }
+
+    [data-theme="dark"] {
+      --bg: #11100d;
+      --paper: #1c1814;
+      --ink: #f5efe4;
+      --ink-soft: #dfd2c0;
+      --muted: #b9ad9c;
+      --line: #3b3329;
+      --line-strong: #685a46;
+      --rail: #080706;
+      --rail-2: #17130f;
+      --code: #070605;
+      --code-text: #f3e8d7;
+      --shadow: 10px 10px 0 rgba(0, 0, 0, .34);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.6;
+      background:
+        linear-gradient(90deg, rgba(25,23,20,.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(25,23,20,.05) 1px, transparent 1px),
+        var(--bg);
+      background-size: 84px 84px;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background:
+        linear-gradient(116deg, transparent 0 55%, rgba(11,127,131,.10) 55% 56%, transparent 56%),
+        linear-gradient(24deg, transparent 0 68%, rgba(189,116,20,.12) 68% 69%, transparent 69%);
+    }
+
+    a { color: inherit; text-decoration: none; }
+    code { font-family: var(--mono); }
+
+    .progress {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 4px;
+      z-index: 80;
+      background: transparent;
+    }
+
+    .progress span {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--red), var(--amber), var(--teal), var(--blue));
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 18vw) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 24px 16px;
+      color: #f7efe3;
+      background:
+        repeating-linear-gradient(135deg, transparent 0 10px, rgba(255,255,255,.035) 10px 11px),
+        linear-gradient(180deg, var(--rail), var(--rail-2));
+      border-right: 1px solid rgba(255,255,255,.12);
+    }
+
+    .brand {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 22px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.05);
+    }
+
+    .brand-mark {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      color: #191714;
+      background:
+        linear-gradient(135deg, #fffdf8 0 48%, var(--red) 48% 52%, var(--teal) 52%);
+      box-shadow: 7px 7px 0 rgba(189,116,20,.85);
+      font: 900 20px var(--serif);
+    }
+
+    .brand b {
+      font: 800 22px/1.15 var(--serif);
+      letter-spacing: 0;
+    }
+
+    .brand span {
+      color: #d7cbbb;
+      font-size: 13px;
+    }
+
+    .theme-toggle {
+      width: 100%;
+      min-height: 42px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255,255,255,.24);
+      background: #fffdf8;
+      color: #191714;
+      box-shadow: 4px 4px 0 rgba(11,127,131,.85);
+      font: 800 13px var(--sans);
+      cursor: pointer;
+    }
+
+    .rail-nav {
+      display: grid;
+      gap: 6px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,.16);
+    }
+
+    .rail-nav a {
+      display: grid;
+      grid-template-columns: 38px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 8px 10px;
+      color: #d6ccbd;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .rail-nav a span {
+      color: #f3b757;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .rail-nav a:hover,
+    .rail-nav a.active {
+      color: #fffdf8;
+      background: rgba(255,255,255,.095);
+      box-shadow: inset 4px 0 0 var(--red);
+    }
+
+    main {
+      min-width: 0;
+      padding: 30px clamp(18px, 4vw, 64px) 70px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr);
+      gap: clamp(18px, 3vw, 34px);
+      align-items: stretch;
+      min-height: min(760px, calc(100vh - 60px));
+      margin-bottom: 22px;
+    }
+
+    .hero-copy,
+    .process-board,
+    .intro,
+    .toc,
+    .section-panel,
+    .card,
+    .metric {
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-copy {
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: clamp(30px, 6vw, 76px);
+    }
+
+    .hero-copy::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto auto;
+      width: min(46%, 360px);
+      height: 44%;
+      background:
+        linear-gradient(90deg, transparent 0 46%, rgba(25,23,20,.16) 46% 48%, transparent 48%),
+        linear-gradient(0deg, transparent 0 46%, rgba(25,23,20,.16) 46% 48%, transparent 48%);
+      background-size: 28px 28px;
+      opacity: .82;
+    }
+
+    .eyebrow {
+      width: fit-content;
+      max-width: 100%;
+      margin-bottom: 18px;
+      padding: 6px 10px;
+      color: #fffdf8;
+      background: var(--red);
+      font: 900 12px var(--mono);
+      text-transform: uppercase;
+      position: relative;
+      z-index: 1;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 980px;
+      font: 800 clamp(42px, 7vw, 92px)/.94 var(--serif);
+      letter-spacing: 0;
+      text-wrap: balance;
+      position: relative;
+      z-index: 1;
+    }
+
+    .lead {
+      max-width: 780px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-facts {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 34px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .fact {
+      min-height: 92px;
+      padding: 14px;
+      background: color-mix(in srgb, var(--bg) 70%, var(--paper));
+      border-top: 4px solid var(--teal);
+    }
+
+    .fact:nth-child(2) { border-top-color: var(--amber); }
+    .fact:nth-child(3) { border-top-color: var(--blue); }
+    .fact b { display: block; font-size: 24px; line-height: 1.05; }
+    .fact span { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+    .process-board {
+      display: grid;
+      align-content: center;
+      gap: 12px;
+      padding: 24px;
+      color: #f8f1e6;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.05), transparent 40%),
+        var(--ink);
+    }
+
+    .board-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,.16);
+      font-weight: 900;
+    }
+
+    .board-title span {
+      color: #dacdbc;
+      font: 800 12px var(--mono);
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .flow-row b {
+      display: grid;
+      place-items: center;
+      min-height: 64px;
+      border: 1px solid rgba(243,183,87,.36);
+      color: #f3b757;
+      font: 900 12px var(--mono);
+    }
+
+    .flow-row p {
+      margin: 0;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      color: #e9decf;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      font-size: 14px;
+    }
+
+    .intro,
+    .toc {
+      margin: 22px 0;
+      padding: 24px;
+    }
+
+    .intro h2,
+    .toc h2 {
+      margin: 0 0 14px;
+      font: 800 28px/1.15 var(--serif);
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 1040px;
+    }
+
+    .toc-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .toc-tile {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 8px;
+      min-height: 98px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--paper) 82%, var(--bg));
+    }
+
+    .toc-tile:hover {
+      border-color: var(--line-strong);
+      box-shadow: 0 10px 24px rgba(25,23,20,.10);
+    }
+
+    .toc-tile b {
+      color: var(--teal);
+      font: 900 13px var(--mono);
+    }
+
+    .toc-tile span {
+      color: var(--ink-soft);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .doc-section {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 24px;
+      padding: 34px 0;
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 22px;
+    }
+
+    .section-number {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      color: var(--teal);
+      font: 900 24px var(--mono);
+    }
+
+    .section-panel {
+      min-width: 0;
+      padding: 28px;
+    }
+
+    .section-kicker {
+      margin-bottom: 8px;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .section-panel h2 {
+      margin: 0 0 20px;
+      font: 800 36px/1.1 var(--serif);
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+
+    .prose {
+      display: grid;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    .prose p { margin: 0; max-width: 980px; }
+    .prose h3 {
+      margin: 16px 0 0;
+      color: var(--ink);
+      font-size: 22px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .prose ul,
+    .prose ol {
+      margin: 0;
+      padding-left: 24px;
+    }
+
+    .prose li { margin: 7px 0; }
+
+    .prose code,
+    .toc-tile code,
+    .footer code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg) 82%, var(--paper));
+      color: var(--ink);
+    }
+
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 18px;
+      background: var(--code);
+      color: var(--code-text);
+      border: 1px solid #2e261d;
+      line-height: 1.55;
+    }
+
+    pre code {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card,
+    .metric {
+      padding: 18px;
+      box-shadow: 6px 6px 0 rgba(25, 23, 20, .10);
+    }
+
+    .card h3,
+    .metric b {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .card p,
+    .metric span {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      color: var(--ink);
+      background: color-mix(in srgb, var(--teal) 9%, var(--paper));
+      font-weight: 900;
+    }
+
+    td { color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+
+    .callout {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--teal);
+      background: color-mix(in srgb, var(--teal) 8%, var(--paper));
+    }
+
+    .callout.warning {
+      border-left-color: var(--amber);
+      background: color-mix(in srgb, var(--amber) 10%, var(--paper));
+    }
+
+    .callout.danger {
+      border-left-color: var(--red);
+      background: color-mix(in srgb, var(--red) 8%, var(--paper));
+    }
+
+    .callout h3 {
+      margin: 0 0 6px;
+      color: var(--ink);
+      font-size: 19px;
+    }
+
+    .callout p { margin: 0; color: var(--muted); }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(170px, 1fr));
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    .timeline-card {
+      min-height: 210px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--paper) 84%, var(--bg));
+    }
+
+    .timeline-card::before {
+      content: attr(data-step);
+      display: inline-grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      margin-bottom: 12px;
+      color: #fffdf8;
+      background: var(--teal);
+      font: 900 13px var(--mono);
+    }
+
+    .timeline-card:nth-child(2n)::before { background: var(--blue); }
+    .timeline-card:nth-child(3n)::before { background: var(--amber); }
+    .timeline-card h3 { margin: 0 0 8px; color: var(--ink); font-size: 16px; }
+    .timeline-card p { margin: 0; color: var(--muted); font-size: 13px; }
+
+    .footer {
+      margin-top: 28px;
+      padding: 24px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail {
+        position: relative;
+        height: auto;
+      }
+      .rail-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero { grid-template-columns: 1fr; min-height: auto; }
+      .hero-copy { min-height: 520px; }
+      .toc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 760px) {
+      main { padding: 18px 14px 42px; }
+      h1 { font-size: 40px; }
+      .lead { font-size: 16px; }
+      .hero-copy { min-height: auto; padding: 28px; }
+      .hero-facts,
+      .toc-grid,
+      .grid-2,
+      .grid-3,
+      .rail-nav {
+        grid-template-columns: 1fr;
+      }
+      .doc-section {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .section-number { position: static; }
+      .section-panel { padding: 20px; }
+      .section-panel h2 { font-size: 28px; }
+    }
+
+    @media print {
+      .rail,
+      .progress,
+      .theme-toggle { display: none; }
+      .layout { display: block; }
+      body { background: #fff; }
+      main { padding: 0; }
+      .hero-copy,
+      .process-board,
+      .intro,
+      .toc,
+      .section-panel { box-shadow: none; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<div class="progress"><span id="progressBar"></span></div>
+<div class="layout">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">SDD</div>
+      <b>Folder-based OpenSpec</b>
+      <span>Материал презентации и мини-гайд до детализации сценариев.</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button">Переключить тему</button>
+    <nav class="rail-nav">
+      <a href="#context" data-target="context"><span>01</span>Контекст</a>
+      <a href="#model" data-target="model"><span>02</span>Целевая модель</a>
+      <a href="#principles" data-target="principles"><span>03</span>Принципы</a>
+      <a href="#artifacts" data-target="artifacts"><span>04</span>Артефакты</a>
+      <a href="#lifecycle" data-target="lifecycle"><span>05</span>Lifecycle</a>
+      <a href="#modes" data-target="modes"><span>06</span>Режимы</a>
+      <a href="#reading" data-target="reading"><span>07</span>Чтение docs</a>
+      <a href="#diff" data-target="diff"><span>08</span>Branch diff</a>
+      <a href="#roles" data-target="roles"><span>09</span>Роли</a>
+      <a href="#quality" data-target="quality"><span>10</span>Качество</a>
+      <a href="#risks" data-target="risks"><span>11</span>Риски</a>
+      <a href="#scenarios" data-target="scenarios"><span>12</span>Сценарии</a>
+    </nav>
+  </aside>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">SDD/OpenSpec framework</div>
+        <h1>Master specification как папка документов</h1>
+        <p class="lead">
+          Обновленный workflow сохраняет дисциплину SDD, но больше не заставляет команду собирать всю спецификацию в один огромный Markdown. Existing docs становятся source of truth, а `_sdd` дает агенту карту чтения.
+        </p>
+        <div class="hero-facts">
+          <div class="fact"><b>folder</b><span>source of truth лежит в `openspec/&lt;service&gt;/`</span></div>
+          <div class="fact"><b>manifest</b><span>агент выбирает документы без чтения всего дерева</span></div>
+          <div class="fact"><b>diff</b><span>`change.md` можно создать из ветки аналитика</span></div>
+        </div>
+      </div>
+      <div class="process-board">
+        <div class="board-title">Карта процесса <span>source -> change -> code</span></div>
+        <div class="flow-row"><b>01</b><p>Документы сервиса лежат в привычной структуре: workflow, integrations, API, data, security.</p></div>
+        <div class="flow-row"><b>02</b><p>`openspec-init-master-spec` создает `_sdd`: manifest, navigation, coverage, stale-files.</p></div>
+        <div class="flow-row"><b>03</b><p>`propose` или `change-from-diff` формирует `change.md` с источниками и критериями.</p></div>
+        <div class="flow-row"><b>04</b><p>`design.md` и `tasks.md` превращают требования в реализуемый инженерный план.</p></div>
+        <div class="flow-row"><b>05</b><p>После реализации выполняется verify master spec, а не неявный merge в один файл.</p></div>
+      </div>
+    </section>
+
+    <section class="intro">
+      <h2>Зачем нужен этот материал</h2>
+      <p>
+        Это основа презентации и короткий гайд по уже обновленному SDD/OpenSpec framework из `docs/sdd`. Разделы ниже закрывают контекст, модель, артефакты, роли и правила качества до блока, где нужно отдельно разобрать рабочие сценарии.
+      </p>
+    </section>
+
+    <section class="toc">
+      <h2>Быстрая навигация</h2>
+      <div class="toc-grid">
+        <a class="toc-tile" href="#model"><b>master spec</b><span>Как папка документов заменяет single-file spec.</span></a>
+        <a class="toc-tile" href="#artifacts"><b>_sdd</b><span>Manifest, navigation, coverage и stale diagnostics.</span></a>
+        <a class="toc-tile" href="#modes"><b>modes</b><span>`manual-change` и `branch-diff` как два режима изменения.</span></a>
+        <a class="toc-tile" href="#diff"><b>git diff</b><span>Без fetch, pull и checkout аналитических веток.</span></a>
+      </div>
+    </section>
+
+    <section class="doc-section" id="context" data-section>
+      <div class="section-number">01</div>
+      <div class="section-panel">
+        <div class="section-kicker">Зачем меняем старую модель</div>
+        <h2>Один большой Markdown больше не является центром framework</h2>
+        <div class="prose">
+          <p>Для больших сервисов single-file master spec плохо масштабируется: документ становится тяжелым, агенту сложно выбирать контекст, а команда вынуждена переносить уже существующую документацию в искусственный формат.</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Боль</th><th>Практический эффект</th><th>Решение</th></tr></thead>
+              <tbody>
+                <tr><td>Монструозный spec</td><td>Обновлять и ревьюить один файл становится дорого.</td><td>Master specification становится папкой документов.</td></tr>
+                <tr><td>Существующие материалы</td><td>Workflow, API, DBML, схемы и интеграции уже живут в разных файлах.</td><td>Framework подключает текущую структуру вместо переписывания.</td></tr>
+                <tr><td>Слабая навигация для агента</td><td>Агент читает лишнее или пропускает связи.</td><td>`_sdd/manifest.yaml` и `_sdd/navigation.md` дают карту чтения.</td></tr>
+                <tr><td>Аналитик меняет docs заранее</td><td>Повторное интервью не нужно, но нужен `change.md`.</td><td>`openspec-change-from-diff` строит change из git diff.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="model" data-section>
+      <div class="section-number">02</div>
+      <div class="section-panel">
+        <div class="section-kicker">Целевая модель</div>
+        <h2>Source of truth - `openspec/&lt;service-name&gt;/`</h2>
+        <div class="prose">
+          <p>Master specification сервиса - это папка с документацией команды. Внутри может быть произвольная структура, которая отражает реальную работу проекта.</p>
+          <pre><code>openspec/
+  &lt;service-name&gt;/
+    _sdd/
+      manifest.yaml
+      navigation.md
+      coverage.md
+      stale-files.md
+    workflow/
+    integrations/
+    api/
+    data/
+    security/
+    ...
+  changes/
+    &lt;change-name&gt;/
+      change.md
+      design.md
+      tasks.md
+      .spec-diff/
+      .research/
+    archive/</code></pre>
+          <div class="callout">
+            <h3>Главное различие</h3>
+            <p>`_sdd` не является бизнес-требованием. Это навигационный слой, который помогает агенту и человеку быстро найти содержательные master-spec documents.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="principles" data-section>
+      <div class="section-number">03</div>
+      <div class="section-panel">
+        <div class="section-kicker">Принципы</div>
+        <h2>Framework разделяет смысл, проектирование и исполнение</h2>
+        <div class="grid-3">
+          <div class="card"><h3>Source of truth</h3><p>Текущее поведение описывает master-spec folder, а не один сгенерированный файл.</p></div>
+          <div class="card"><h3>Delta-first</h3><p>`change.md` фиксирует, что и зачем меняется, включая источники и критерии приемки.</p></div>
+          <div class="card"><h3>Engineering layer</h3><p>`design.md` и `tasks.md` отделяют технический план от аналитического change.</p></div>
+          <div class="card"><h3>Targeted reads</h3><p>Агент читает navigation, manifest и релевантные документы, а не все дерево подряд.</p></div>
+          <div class="card"><h3>Explicit gaps</h3><p>Противоречия попадают в open questions, а не решаются молча удобной версией.</p></div>
+          <div class="card"><h3>Verify over merge</h3><p>Для branch-diff финальный шаг - проверка source-of-truth docs в analyst ref.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="artifacts" data-section>
+      <div class="section-number">04</div>
+      <div class="section-panel">
+        <div class="section-kicker">Артефакты</div>
+        <h2>Что появляется в репозитории</h2>
+        <div class="prose">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Артефакт</th><th>Роль</th><th>Что содержит</th></tr></thead>
+              <tbody>
+                <tr><td>`openspec/&lt;service&gt;/`</td><td>Master specification</td><td>Документы, контракты, схемы, диаграммы и таблицы по сервису.</td></tr>
+                <tr><td>`_sdd/manifest.yaml`</td><td>Машинный индекс</td><td>Файлы, типы, hash, tags, entities, integrations, endpoints, depends_on и related_files.</td></tr>
+                <tr><td>`_sdd/navigation.md`</td><td>Карта чтения</td><td>Что читать первым, где искать workflow, API, data, errors, security и NFR.</td></tr>
+                <tr><td>`_sdd/coverage.md`</td><td>Матрица покрытия</td><td>Что документировано полно, частично или отсутствует.</td></tr>
+                <tr><td>`_sdd/stale-files.md`</td><td>Диагностика устаревания</td><td>Added, modified, deleted files, сомнения классификации и ручные проверки.</td></tr>
+                <tr><td>`change.md`</td><td>Аналитический инкремент</td><td>Зачем и что меняется, источники, влияние, acceptance, gaps.</td></tr>
+                <tr><td>`.spec-diff/`</td><td>След branch-diff</td><td>refs, name-status, stat, patch, changed-files.yaml, context-files.yaml.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="lifecycle" data-section>
+      <div class="section-number">05</div>
+      <div class="section-panel">
+        <div class="section-kicker">Lifecycle</div>
+        <h2>Нормальный путь от документации к реализации</h2>
+        <div class="timeline">
+          <div class="timeline-card" data-step="01"><h3>teach</h3><p>Понять workflow, выбрать следующий skill и не вернуться к single-file mental model.</p></div>
+          <div class="timeline-card" data-step="02"><h3>init</h3><p>Создать или обновить `_sdd` для master-spec folder.</p></div>
+          <div class="timeline-card" data-step="03"><h3>change</h3><p>Сформировать `change.md` через `propose` или `change-from-diff`.</p></div>
+          <div class="timeline-card" data-step="04"><h3>review</h3><p>Человек согласует смысл change и переводит статус в `Согласовано`.</p></div>
+          <div class="timeline-card" data-step="05"><h3>design</h3><p>Подготовить технический проект и источник требований.</p></div>
+          <div class="timeline-card" data-step="06"><h3>tasks</h3><p>Разбить реализацию на проверяемые шаги.</p></div>
+          <div class="timeline-card" data-step="07"><h3>verify</h3><p>Проверить код, tests, master spec source и архивировать change.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="modes" data-section>
+      <div class="section-number">06</div>
+      <div class="section-panel">
+        <div class="section-kicker">Два режима изменения</div>
+        <h2>`manual-change` и `branch-diff` закрывают разные ситуации</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Manual-change</h3>
+            <p>Требование формируется через интервью, Jira или обсуждение. Агент читает master spec, задает вопросы и создает `change.md`.</p>
+            <pre><code>идея -> propose -> change.md
+  -> review -> design -> tasks
+  -> code -> update docs -> refresh _sdd</code></pre>
+          </div>
+          <div class="card">
+            <h3>Branch-diff</h3>
+            <p>Аналитик уже изменил master-spec documents в своей ветке. Агент создает `change.md` из diff двух локальных refs.</p>
+            <pre><code>base_ref ... analyst_ref
+  -> git diff -- openspec/&lt;service&gt;/
+  -> .spec-diff/ + change.md
+  -> design -> tasks -> code -> verify</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="reading" data-section>
+      <div class="section-number">07</div>
+      <div class="section-panel">
+        <div class="section-kicker">Правила чтения</div>
+        <h2>Manifest делает чтение документации управляемым</h2>
+        <div class="prose">
+          <ol>
+            <li>Сначала читать `_sdd/navigation.md`.</li>
+            <li>Затем читать `_sdd/manifest.yaml`.</li>
+            <li>Проверить `_sdd/stale-files.md`.</li>
+            <li>Выбрать документы по `tags`, `entities`, `integrations`, `endpoints`, `events`, `related_files`, `depends_on`, `read_priority`.</li>
+            <li>Если manifest отсутствует или stale, предложить `openspec-init-master-spec`.</li>
+          </ol>
+          <div class="callout warning">
+            <h3>Не скрывать противоречия</h3>
+            <p>Если документы расходятся, агент фиксирует open question или gap. Он не выбирает удобную версию молча.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="diff" data-section>
+      <div class="section-number">08</div>
+      <div class="section-panel">
+        <div class="section-kicker">Branch-diff guardrails</div>
+        <h2>Diff строится через git, но без переключения веток</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Разрешено</h3>
+            <pre><code>git rev-parse --verify &lt;base_ref&gt;
+git rev-parse --verify &lt;analyst_ref&gt;
+git merge-base &lt;base_ref&gt; &lt;analyst_ref&gt;
+git diff --name-status --find-renames &lt;base_ref&gt;...&lt;analyst_ref&gt; -- openspec/&lt;service&gt;/
+git show &lt;ref&gt;:&lt;path&gt;</code></pre>
+          </div>
+          <div class="card">
+            <h3>Запрещено автоматически</h3>
+            <pre><code>git fetch
+git pull
+git checkout &lt;base_ref&gt;
+git checkout &lt;analyst_ref&gt;</code></pre>
+          </div>
+        </div>
+        <div class="callout">
+          <h3>Default semantics</h3>
+          <p>По умолчанию используется three-dot diff: `git diff &lt;base_ref&gt;...&lt;analyst_ref&gt; -- openspec/&lt;service&gt;/`. Two-dot допустим только по явному выбору пользователя.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="roles" data-section>
+      <div class="section-number">09</div>
+      <div class="section-panel">
+        <div class="section-kicker">Ответственность</div>
+        <h2>Агент помогает, но не владеет решением</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Роль</th><th>Ответственность</th></tr></thead>
+            <tbody>
+              <tr><td>Бизнес-аналитик</td><td>Смысл изменения, бизнес-цель, процесс, правила и критерии приемки.</td></tr>
+              <tr><td>Системный аналитик</td><td>Master specification, интеграции, модели, контракты и consistency review.</td></tr>
+              <tr><td>Разработчик</td><td>Реализуемость, design, tasks, код, техническая верификация.</td></tr>
+              <tr><td>QA</td><td>Проверка критериев приемки, регрессии и тестовых сценариев.</td></tr>
+              <tr><td>Tech lead</td><td>Границы change, архитектурные риски, качество design.</td></tr>
+              <tr><td>AI-агент</td><td>Поиск контекста, структурирование, черновики и проверка связности.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="quality" data-section>
+      <div class="section-number">10</div>
+      <div class="section-panel">
+        <div class="section-kicker">Quality gates</div>
+        <h2>Готовность определяется артефактами и проверками</h2>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Definition of Ready</h3>
+            <ul>
+              <li>Есть `_sdd/manifest.yaml` и `_sdd/navigation.md`.</li>
+              <li>`change.md` создан и содержит sources.</li>
+              <li>Выбран `Spec update mode`.</li>
+              <li>Gaps и open questions явно видны.</li>
+              <li>Change согласован человеком.</li>
+              <li>Для сложного изменения есть `design.md` и `tasks.md`.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Definition of Done</h3>
+            <ul>
+              <li>Tasks выполнены или исключения согласованы.</li>
+              <li>Кодовые PR прошли review.</li>
+              <li>Тесты, сборка и линтер выполнены или есть причина.</li>
+              <li>Master spec обновлен или подтвержден в `Analyst ref`.</li>
+              <li>Change переведен в `Реализовано` и архивирован.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="risks" data-section>
+      <div class="section-number">11</div>
+      <div class="section-panel">
+        <div class="section-kicker">Риски</div>
+        <h2>Главные сбои заранее видны в workflow</h2>
+        <div class="grid-3">
+          <div class="metric"><b>Stale manifest</b><span>Использовать refresh, hash и `stale-files.md`.</span></div>
+          <div class="metric"><b>Большая папка</b><span>Читать через manifest, priorities и structured research.</span></div>
+          <div class="metric"><b>Противоречия</b><span>Фиксировать gaps и open questions.</span></div>
+          <div class="metric"><b>Binary changes</b><span>Учитывать artifact и снижать confidence без текстового контекста.</span></div>
+          <div class="metric"><b>Ref drift</b><span>Повторять diff summary и сверять `.spec-diff/changed-files.yaml`.</span></div>
+          <div class="metric"><b>Explicit apply</b><span>Разрешать только после clean status и подтверждения.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="doc-section" id="scenarios" data-section>
+      <div class="section-number">12</div>
+      <div class="section-panel">
+        <div class="section-kicker">Следующий блок</div>
+        <h2>Детализация сценариев</h2>
+        <div class="prose">
+          <p>Этот гайд намеренно останавливается на границе сценариев. Дальше стоит раскрывать отдельные walkthrough:</p>
+          <ul>
+            <li>инициализация master spec;</li>
+            <li>создание `change.md` через `propose`;</li>
+            <li>создание `change.md` через `change-from-diff`;</li>
+            <li>переход к `design.md` и `tasks.md`;</li>
+            <li>реализация и verify master spec;</li>
+            <li>архивирование change.</li>
+          </ul>
+          <div class="callout danger">
+            <h3>Граница текущего материала</h3>
+            <p>Разделы до этого места дают рамку framework. Подробные пошаговые сценарии лучше делать отдельным блоком, чтобы не смешивать концепцию, правила безопасности и walkthrough.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      Источник Markdown: <code>presentation/base.md</code>. Framework: <code>docs/sdd/SDD_DETAILS.md</code>, <code>plan_1_step.md</code>, <code>plan_2_step.md</code>.
+    </footer>
+  </main>
+</div>
+<script>
+  const root = document.documentElement;
+  const progressBar = document.getElementById("progressBar");
+  const savedTheme = localStorage.getItem("sdd-base-guide-theme");
+  if (savedTheme) root.setAttribute("data-theme", savedTheme);
+
+  document.getElementById("themeToggle").addEventListener("click", () => {
+    const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("sdd-base-guide-theme", next);
+  });
+
+  const navLinks = [...document.querySelectorAll(".rail-nav a")];
+  const sections = [...document.querySelectorAll("[data-section]")];
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      navLinks.forEach((link) => link.classList.toggle("active", link.dataset.target === entry.target.id));
+    });
+  }, { rootMargin: "-35% 0px -55% 0px", threshold: 0.01 });
+  sections.forEach((section) => observer.observe(section));
+
+  function updateProgress() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const value = max > 0 ? window.scrollY / max : 0;
+    progressBar.style.width = Math.min(100, Math.max(0, value * 100)) + "%";
+  }
+
+  updateProgress();
+  window.addEventListener("scroll", updateProgress, { passive: true });
+</script>
+</body>
+</html>

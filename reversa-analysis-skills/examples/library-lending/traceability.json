@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "requirements": [
+    {
+      "id": "FR-001",
+      "documentId": "REQ-001",
+      "anchor": "fr-001",
+      "mode": "to-be",
+      "specificationIds": [
+        "WF-001"
+      ],
+      "ruleRefs": [
+        {
+          "documentId": "RULE-001",
+          "anchor": "br-001"
+        },
+        {
+          "documentId": "RULE-001",
+          "anchor": "br-002"
+        },
+        {
+          "documentId": "RULE-001",
+          "anchor": "br-003"
+        }
+      ],
+      "acceptanceRefs": [
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-001"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-002"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-003"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-004"
+        }
+      ],
+      "questionIds": [
+        "Q-002"
+      ]
+    },
+    {
+      "id": "FR-002",
+      "documentId": "REQ-001",
+      "anchor": "fr-002",
+      "mode": "to-be",
+      "specificationIds": [
+        "ALG-001"
+      ],
+      "ruleRefs": [
+        {
+          "documentId": "RULE-001",
+          "anchor": "br-004"
+        }
+      ],
+      "acceptanceRefs": [
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-001"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-005"
+        }
+      ],
+      "questionIds": [
+        "Q-001"
+      ]
+    },
+    {
+      "id": "FR-003",
+      "documentId": "REQ-001",
+      "anchor": "fr-003",
+      "mode": "to-be",
+      "specificationIds": [
+        "WF-001",
+        "PAGE-003"
+      ],
+      "ruleRefs": [
+        {
+          "documentId": "RULE-001",
+          "anchor": "br-005"
+        }
+      ],
+      "acceptanceRefs": [
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-002"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-003"
+        },
+        {
+          "documentId": "REQ-002",
+          "anchor": "ac-004"
+        }
+      ],
+      "questionIds": []
+    }
+  ]
+}

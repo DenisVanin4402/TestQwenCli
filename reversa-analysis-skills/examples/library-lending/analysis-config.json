@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "language": "ru",
+  "mode": "to-be",
+  "sourceRoots": [
+    "sources"
+  ],
+  "capabilityScope": [
+    "CAP-001"
+  ],
+  "outputFormat": "markdown",
+  "state": "example_draft",
+  "completedStages": [
+    "map",
+    "domain",
+    "spec",
+    "docs"
+  ],
+  "nextStep": "Разобрать открытые вопросы в контексте учебной задачи"
+}

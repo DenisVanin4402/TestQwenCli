@@ -1,0 +1,21 @@
+{
+  "name": "reversa-analysis-skills",
+  "version": "0.1.0",
+  "language": "ru",
+  "format": "Agent Skills",
+  "skills": [
+    "reversa-analysis",
+    "reversa-analysis-map",
+    "reversa-analysis-domain",
+    "reversa-analysis-spec",
+    "reversa-analysis-review",
+    "reversa-analysis-sync",
+    "reversa-analysis-docs"
+  ],
+  "sharedSkill": "reversa-analysis",
+  "testedReversa": {
+    "version": "1.3.2",
+    "commit": "57165e2d5ff1d5b754ba8b73a24a3c188b5f68a8"
+  },
+  "note": "Независимое дополнение; не официальная поставка Reversa. Все навыки устанавливаются вместе."
+}

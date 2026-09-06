@@ -1,0 +1,16 @@
+{
+  "version": "0.1.0",
+  "date": "2026-09-06",
+  "skills": 7,
+  "markdownTemplates": 22,
+  "jsonSchemas": 4,
+  "automatedTests": {"total": 24, "passed": 24, "failed": 0},
+  "officialSkillValidation": {"tool": "skill-creator quick_validate.py", "passed": 7, "yamlParser": "PyYAML 6.0.2", "scope": "Метаданные и незаполненные инструкции; не поведение моделей"},
+  "mermaid": {"version": "11.12.0", "rendered": 11, "example": 5, "templatesWithSampleLabels": 5, "guide": 1, "errors": 0, "visualReview": "Выборочно просмотрены модель и процесс учебного примера"},
+  "legacyPackage": {"documents": 28, "sources": 27, "claims": 50, "structuralValidation": "passed"},
+  "example": {"documents": 14, "requirements": 3, "scenarios": 5, "openQuestions": 2, "provenance": "synthetic"},
+  "installerTargets": {"codex": "tested in temporary project", "claude": "tested in temporary project", "qwen": "tested in temporary project"},
+  "agentBehavioralRuns": {"qwenCode": "not_run", "claudeCode": "not_run", "note": "Установка и перенос файлов не равны поведенческой проверке генерации моделью"},
+  "applicationTests": "not_run",
+  "notes": ["Зависимостей npm нет", "Mermaid-рендерер и PyYAML использованы только в среде проверки автора", "Подлинность предметного согласования не доказывается структурным валидатором"]
+}

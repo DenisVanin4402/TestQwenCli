@@ -1,0 +1,9 @@
+{
+  "name": "reversa-analysis-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Русскоязычные переносимые навыки системной аналитики поверх Reversa",
+  "type": "module",
+  "engines": {"node": ">=18.20.0"},
+  "scripts": {"test": "node --test tests/toolkit.test.mjs", "check": "node scripts/check-suite.mjs"}
+}

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "version",
+    "requirements"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "documentId",
+          "anchor",
+          "mode",
+          "specificationIds",
+          "ruleRefs",
+          "acceptanceRefs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^FR-[0-9]{3,}$"
+          },
+          "documentId": {
+            "type": "string",
+            "pattern": "^[A-Z]+-[0-9]{3,}$"
+          },
+          "anchor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "enum": [
+              "as-is",
+              "to-be",
+              "proposal"
+            ]
+          },
+          "specificationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-[0-9]{3,}$"
+            }
+          },
+          "ruleRefs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "documentId",
+                "anchor"
+              ],
+              "properties": {
+                "documentId": {
+                  "type": "string",
+                  "pattern": "^[A-Z]+-[0-9]{3,}$"
+                },
+                "anchor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "acceptanceRefs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "documentId",
+                "anchor"
+              ],
+              "properties": {
+                "documentId": {
+                  "type": "string",
+                  "pattern": "^[A-Z]+-[0-9]{3,}$"
+                },
+                "anchor": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "questionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-[0-9]{3,}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

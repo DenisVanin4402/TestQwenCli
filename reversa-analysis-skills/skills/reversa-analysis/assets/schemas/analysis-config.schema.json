@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "version",
+    "language",
+    "mode",
+    "sourceRoots",
+    "capabilityScope",
+    "outputFormat",
+    "state"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "enum": [
+        "as-is",
+        "to-be",
+        "mixed"
+      ]
+    },
+    "sourceRoots": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "capabilityScope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z]+-[0-9]{3,}$"
+      }
+    },
+    "outputFormat": {
+      "const": "markdown"
+    },
+    "state": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completedStages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "nextStep": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

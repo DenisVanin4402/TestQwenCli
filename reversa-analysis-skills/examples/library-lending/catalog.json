@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "system": "Учебная библиотека",
+  "baseline": "synthetic-policy-v1",
+  "scope": "Один процесс выдачи; ограничения указаны в scope.md",
+  "primaryFormat": "markdown",
+  "entrypoint": "README.md",
+  "documents": [
+    {
+      "id": "PAGE-001",
+      "kind": "overview",
+      "title": "Библиотека — выдача экземпляра",
+      "path": "README.md",
+      "parent": null,
+      "status": "draft"
+    },
+    {
+      "id": "PAGE-002",
+      "kind": "overview",
+      "title": "Границы учебного примера",
+      "path": "scope.md",
+      "parent": "PAGE-001",
+      "status": "draft"
+    },
+    {
+      "id": "CAP-001",
+      "kind": "capability",
+      "title": "Выдать экземпляр читателю",
+      "path": "capability.md",
+      "parent": "PAGE-001",
+      "status": "draft"
+    },
+    {
+      "id": "ENT-001",
+      "kind": "domain",
+      "title": "Предметные понятия",
+      "path": "domain.md",
+      "parent": "PAGE-001",
+      "status": "draft"
+    },
+    {
+      "id": "ENT-002",
+      "kind": "domain",
+      "title": "Логические данные выдачи",
+      "path": "data.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "RULE-001",
+      "kind": "rules",
+      "title": "Правила выдачи",
+      "path": "rules.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "ALG-001",
+      "kind": "algorithm",
+      "title": "Определить дату возврата",
+      "path": "algorithm.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "WF-001",
+      "kind": "workflow",
+      "title": "Процесс выдачи",
+      "path": "workflow.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "PAGE-003",
+      "kind": "states",
+      "title": "Состояния экземпляра",
+      "path": "states.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "REQ-001",
+      "kind": "rules",
+      "title": "Функциональные требования",
+      "path": "requirements.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "REQ-002",
+      "kind": "acceptance",
+      "title": "Проверочные сценарии",
+      "path": "acceptance.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    },
+    {
+      "id": "PAGE-004",
+      "kind": "questions",
+      "title": "Открытые вопросы",
+      "path": "questions.md",
+      "parent": "PAGE-001",
+      "status": "draft"
+    },
+    {
+      "id": "PAGE-005",
+      "kind": "overview",
+      "title": "Доказательства",
+      "path": "evidence.md",
+      "parent": "PAGE-001",
+      "status": "draft",
+      "audience": "evidence"
+    },
+    {
+      "id": "PAGE-006",
+      "kind": "overview",
+      "title": "Матрица трассируемости",
+      "path": "traceability.md",
+      "parent": "CAP-001",
+      "status": "draft"
+    }
+  ],
+  "attachments": [
+    {
+      "path": "sources/policy.md",
+      "purpose": "Вымышленная политика — сырой вход учебного примера"
+    }
+  ]
+}

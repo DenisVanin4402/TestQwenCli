@@ -1,0 +1,19 @@
+{
+  "documents": [
+    {
+      "id": "D001",
+      "inputs": {
+        "base": "fea3847e1880dff3ecbace30996ba70cf66337dc527da35b7af069f456216029",
+        "current": "dea486eebc2dffdac922a4cda3f5de9cc15c18978fbaf7233ffc09f68170ba91",
+        "proposed": "85d7dec0c894ec1d7fda0ef30600b4891b30dda83a6597913c0a9ea0fd2e142f"
+      },
+      "path": "workflow/discount.md",
+      "resolution": null,
+      "result_sha256": "0690cda153b33f602dffc797201e93c660bc982695000315196e221b5b9a247e",
+      "state": "conflict:overlap"
+    }
+  ],
+  "manifest_sha256": "73cc47bd1be77f2ad2714ff7f2f5185736fb2fa4db97e11877da41bb2bc16ad9",
+  "master_root": "openspec/orders",
+  "token": "837058ff58e5d190f9d599f75da82f2c8eee47e04e1f12ba18269ee9f8b0a036"
+}

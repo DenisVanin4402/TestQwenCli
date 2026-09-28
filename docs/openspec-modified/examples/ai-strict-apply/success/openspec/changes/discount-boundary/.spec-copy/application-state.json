@@ -1,0 +1,17 @@
+{
+  "schema_version": 2,
+  "apply_policy": "ai-strict",
+  "status": "verified",
+  "documents": [
+    {
+      "path": "workflow/discount.md",
+      "change_ids": [
+        "CH-01"
+      ],
+      "before_sha256": "4907759b1801feaf68b38fb157b88040616137832e5dd9e1f6c53156a2fa366f",
+      "status": "verified",
+      "candidate_sha256": "07a81bf1b841daa31a7aedfc8087c78ee3d28bf045ed894f4f7fc24b8cf54e4e",
+      "after_sha256": "07a81bf1b841daa31a7aedfc8087c78ee3d28bf045ed894f4f7fc24b8cf54e4e"
+    }
+  ]
+}

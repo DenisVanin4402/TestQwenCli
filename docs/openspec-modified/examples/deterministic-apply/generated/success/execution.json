@@ -1,0 +1,64 @@
+[
+  {
+    "command": [
+      "python",
+      "<spec_copy.py>",
+      "--repo",
+      ".",
+      "--change",
+      "openspec/changes/discount-boundary",
+      "init",
+      "--master",
+      "openspec/orders",
+      "--files",
+      "workflow/discount.md"
+    ],
+    "exit_code": 0,
+    "stdout": "{\r\n  \"result\": \"initialized\",\r\n  \"documents\": [\r\n    {\r\n      \"id\": \"D001\",\r\n      \"path\": \"workflow/discount.md\",\r\n      \"operation\": \"modify\",\r\n      \"base_sha256\": \"fea3847e1880dff3ecbace30996ba70cf66337dc527da35b7af069f456216029\"\r\n    }\r\n  ]\r\n}\r\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "python",
+      "<spec_copy.py>",
+      "--repo",
+      ".",
+      "--change",
+      "openspec/changes/discount-boundary",
+      "prepare"
+    ],
+    "exit_code": 0,
+    "stdout": "{\r\n  \"result\": \"prepared\",\r\n  \"review\": \".spec-copy/index.md\",\r\n  \"approval_invalidated\": true\r\n}\r\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "python",
+      "<spec_copy.py>",
+      "--repo",
+      ".",
+      "--change",
+      "openspec/changes/discount-boundary",
+      "check"
+    ],
+    "exit_code": 0,
+    "stdout": "{\r\n  \"master_root\": \"openspec/orders\",\r\n  \"manifest_sha256\": \"73cc47bd1be77f2ad2714ff7f2f5185736fb2fa4db97e11877da41bb2bc16ad9\",\r\n  \"documents\": [\r\n    {\r\n      \"id\": \"D001\",\r\n      \"path\": \"workflow/discount.md\",\r\n      \"state\": \"ready\",\r\n      \"inputs\": {\r\n        \"base\": \"fea3847e1880dff3ecbace30996ba70cf66337dc527da35b7af069f456216029\",\r\n        \"current\": \"fea3847e1880dff3ecbace30996ba70cf66337dc527da35b7af069f456216029\",\r\n        \"proposed\": \"85d7dec0c894ec1d7fda0ef30600b4891b30dda83a6597913c0a9ea0fd2e142f\"\r\n      },\r\n      \"result_sha256\": \"85d7dec0c894ec1d7fda0ef30600b4891b30dda83a6597913c0a9ea0fd2e142f\",\r\n      \"resolution\": null\r\n    }\r\n  ],\r\n  \"token\": \"ccb040c14509a7728dcd65b6ff9bb81b90aaead3f0fe60b886cc863615692ad0\"\r\n}\r\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "python",
+      "<spec_copy.py>",
+      "--repo",
+      ".",
+      "--change",
+      "openspec/changes/discount-boundary",
+      "apply",
+      "--plan-token",
+      "ccb040c14509a7728dcd65b6ff9bb81b90aaead3f0fe60b886cc863615692ad0"
+    ],
+    "exit_code": 0,
+    "stdout": "{\r\n  \"result\": \"applied\",\r\n  \"receipt\": \".spec-copy/applied.json\",\r\n  \"next\": \"refresh _sdd; verify implementation before changing status\"\r\n}\r\n",
+    "stderr": ""
+  }
+]

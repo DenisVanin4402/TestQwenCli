@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "apply_policy": "ai-strict",
+  "master_root": "openspec/orders",
+  "documents": [
+    {
+      "id": "D001",
+      "path": "workflow/discount.md",
+      "operation": "modify",
+      "change_ids": [
+        "CH-01"
+      ],
+      "base": "base/workflow/discount.md",
+      "base_sha256": "073f9da21714487e91f5a1ea3116a4681fbec9e8b9c741f3d7ba5f62582bc41d",
+      "proposed": "proposed/workflow/discount.md",
+      "proposed_sha256": "7a04745185da1b3025a8ecfb809905e9f400a19a1240f5591609510c30427c6c",
+      "review": "review/workflow/discount.md",
+      "review_sha256": "32bf982a7de38f30306ffd9739f24f637ead61d105c14ff5028c17b77d88f825"
+    }
+  ]
+}

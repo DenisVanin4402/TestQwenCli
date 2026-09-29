@@ -1,0 +1,16 @@
+{
+  "documents": [
+    {
+      "base_sha256": "fea3847e1880dff3ecbace30996ba70cf66337dc527da35b7af069f456216029",
+      "id": "D001",
+      "operation": "modify",
+      "path": "workflow/discount.md",
+      "proposed_sha256": "85d7dec0c894ec1d7fda0ef30600b4891b30dda83a6597913c0a9ea0fd2e142f",
+      "review_sha256": "5cd2a7bf9cb7eccb320f8a60754ba72004a49808d039380d4b37c3f9322b60f8"
+    }
+  ],
+  "master_root": "openspec/orders",
+  "prepared": "1bec19a24bb3a6015fbb71bcbce8da40dc6680c8e29c4863f4a3c92b7795d972",
+  "schema_version": 1,
+  "source_refs": {}
+}

@@ -1,0 +1,17 @@
+schema_version: 1
+service: "<service-name>"
+root: "openspec/<service-name>"
+generated_at: "<ISO-8601 UTC timestamp>"
+generator: "openspec-init-master-spec"
+
+summary:
+  purpose: "<краткое назначение сервиса или 'требует заполнения'>"
+  bounded_context: "<границы сервиса или 'требует заполнения'>"
+  main_domains: []
+  main_flows: []
+  main_integrations: []
+
+files: []
+
+reserved_paths:
+  - "openspec/<service-name>/_sdd/"

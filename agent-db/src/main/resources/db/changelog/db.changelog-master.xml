@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+    <include file="changeset/0001_session_persistence.xml" relativeToChangelogFile="true"/>
+    <include file="changeset/0002_native_ssm.xml" relativeToChangelogFile="true"/>
+    <include file="changeset/0003_session_semaphore.xml" relativeToChangelogFile="true"/>
+</databaseChangeLog>

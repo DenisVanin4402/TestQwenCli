@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: invest-pro
+  config:
+    import: classpath:config/gigachat-prompts.yaml,optional:file:.env[.properties]
+  ai:
+    model:
+      chat: ${GIGACHAT_MODE:none}
+      image: none
+    retry:
+      max-attempts: 1
+    gigachat:
+      base-url: ${GIGACHAT_BASE_URL:https://api.giga.chat/v1}
+      auth:
+        bearer:
+          api-key: ${GIGACHAT_API_KEY:}
+          url: ${GIGACHAT_AUTH_URL:https://ngw.devices.sberbank.ru:9443/api/v2/oauth}
+        scope: ${GIGACHAT_SCOPE:GIGACHAT_API_PERS}
+        unsafe-ssl: false
+      chat:
+        options:
+          model: ${GIGACHAT_MODEL:GigaChat-3-Ultra}
+          max-tokens: ${GIGACHAT_MAX_TOKENS:512}
+          internal-tool-execution-enabled: false
+      embedding:
+        enabled: false
+      internal:
+        connect-timeout: ${GIGACHAT_CONNECT_TIMEOUT:5s}
+        read-timeout: ${GIGACHAT_READ_TIMEOUT:30s}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  sql:
+    init:
+      mode: never
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: ${FEIGN_CONNECT_TIMEOUT:2000}
+            readTimeout: ${FEIGN_READ_TIMEOUT:2000}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# Штатный retry listener пишет upstream body и stack trace даже при одной попытке.
+logging:
+  level:
+    org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: "OFF"
+
+poc:
+  acl:
+    agent-code: ${POC_ACL_AGENT_CODE:invest-pro}
+  responses:
+    catalog: ${POC_RESPONSES_CATALOG:session-responses}
+    payment-date-format: ${POC_PAYMENT_DATE_FORMAT:dd.MM.yyyy}
+
+integrations:
+  invest-corr:
+    # Имя также служит ключом spring.cloud.openfeign.client.config для переопределений.
+    name: ${INVEST_CORR_NAME:invest-corr}
+    url: ${INVEST_CORR_URL:}

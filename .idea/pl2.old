@@ -1,0 +1,133 @@
+# Технический план: Task Management CRUD API
+
+## Обзор
+
+Реализация полного CRUD REST API для управления задачами (`/api/v1/tasks`) с in-memory хранилищем.
+Все пять эндпоинтов (POST, GET list, GET by ID, PUT, DELETE) обрабатывают JSON через Spring Boot `@RestController`.
+Валидация входных данных — ручная (без Bean Validation), чтобы избежать добавления новой зависимости.
+Обработка ошибок — через `@ControllerAdvice` (`@RestControllerAdvice`) с единым форматом `ProblemDetail`-совместимых ответов.
+
+Новый код размещается в пакете `com.example.testqwencli.task` рядом с `HomeController`, не затрагивая существующий функционал.
+
+## Подход
+
+### Почему Spring Boot без Bean Validation
+
+Spec требует валидацию `title` (required, ≤ 255 символов) и `status` (из допустимого набора).
+`spring-boot-starter-web` в Spring Boot 3.x **не включает** Bean Validation транзитивно (в отличие от 2.x).
+Добавление `spring-boot-starter-validation` — новая зависимость, которую нужно обосновать по конституции.
+
+Ручная валидация (2–3 условия в сервисе) проще, не добавляет зависимость, и полностью покрывает требования спеки.
+
+### Архитектурный слой
+
+```
+Controller (HTTP валидация пути, маппинг DTO ↔ Domain)
+    ↓
+Service   (бизнес-логика, валидация payload, in-memory storage)
+    ↓
+Model     (Task, TaskStatus, DTO, ErrorEnvelope)
+```
+
+- **Controller** — обработка HTTP, проверка UUID-формата `{id}`, делегирование в Service.
+- **Service** — CRUD-операции над `ConcurrentHashMap<UUID, Task>`, валидация полей, генерация timestamp.
+- **Exception Handler** — `@RestControllerAdvice` ловит исключения и формирует единый формат ошибок `{"error", "message", "status", "timestamp"}`.
+
+### Хранение данных
+
+`private final Map<UUID, Task> store = new ConcurrentHashMap<>();`
+
+`ConcurrentHashMap` выбран для потоковой безопасности (Spring Boot по умолчанию обрабатывает запросы в отдельных потоках) и O(1) lookup по UUID.
+
+## Затронутые компоненты
+
+| Компонент | Изменение | Обоснование |
+|-----------|-----------|-------------|
+| `src/main/java/.../task/model/Task.java` | create | Доменная модель задачи: id, title, description, status, createdAt, updatedAt |
+| `src/main/java/.../task/model/TaskStatus.java` | create | Enum: TODO, IN_PROGRESS, DONE |
+| `src/main/java/.../task/model/CreateTaskRequest.java` | create | DTO для POST/PUT тела запроса |
+| `src/main/java/.../task/model/ErrorEnvelope.java` | create | Обёртка ошибок: error, message, status, timestamp |
+| `src/main/java/.../task/TaskService.java` | create | In-memory CRUD-логика, валидация |
+| `src/main/java/.../task/TaskController.java` | create | REST-эндпоинты `/api/v1/tasks` |
+| `src/main/java/.../task/TaskNotFoundException.java` | create | RuntimeException для 404 |
+| `src/main/java/.../task/TaskValidationException.java` | create | RuntimeException для 400 |
+| `src/main/java/.../task/GlobalExceptionHandler.java` | create | `@RestControllerAdvice` — маппинг исключений → ErrorEnvelope |
+| `src/test/java/.../task/TaskControllerTest.java` | create | Интеграционные тесты всех эндпоинтов (MockMvc) |
+| `HomeController.java` | без изменений | Существующий `GET /` endpoint не затрагивается |
+| `TestQwenCliApplicationTests.java` | без изменений | Контекст-тест продолжает работать |
+| `pom.xml` | без изменений | Без новых зависимостей |
+
+## Зависимости
+
+- **Внешние:** Нет новых зависимостей. Используется `spring-boot-starter-web` (Jackson для JSON, Spring MVC).
+- **Внутренние:** `java.util.UUID`, `java.time.Instant`, `java.util.concurrent.ConcurrentHashMap`.
+- **JSON-сериализация:** Jackson (входит в `spring-boot-starter-web`) — сериализует `Instant` в ISO-8601 UTC по умолчанию, что соответствует spec.
+
+## Контракты
+
+Новые REST-эндпоинты с базовым префиксом `/api/v1`:
+
+| Метод | Путь | Описание | Коды |
+|-------|------|----------|------|
+| POST | `/api/v1/tasks` | Создание задачи | 201, 400 |
+| GET | `/api/v1/tasks` | Список всех задач | 200 |
+| GET | `/api/v1/tasks/{id}` | Задача по ID | 200, 400, 404 |
+| PUT | `/api/v1/tasks/{id}` | Полное обновление | 200, 400, 404 |
+| DELETE | `/api/v1/tasks/{id}` | Удаление задачи | 200, 400, 404 |
+
+Контракт ошибок (400/404):
+```json
+{
+  "error": "string",
+  "message": "string",
+  "status": 400,
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+OpenAPI-схема не создаётся в рамках v1 (зависит от добавления `springdoc` или ручного `.yaml` — out of scope).
+
+## Альтернативы
+
+### Альтернатива 1: Добавить spring-boot-starter-validation и использовать @Valid
+
+Использовать `@NotBlank`, `@Size(max = 255)` на DTO и `@Valid` в контроллере.
+
+- **Плюсы:** Меньше boilerplate в коде, декларативная валидация, стандартный подход для Spring.
+- **Минусы:** Новая зависимость `spring-boot-starter-validation` (требует обоснования по конституции). Избыточно для 2–3 проверок.
+
+**Не выбран:** Ручная валидация достаточна для текущей спеки. Если spec 0004+ добавит больше эндпоинтов с валидацией — можно перейти на Bean Validation с ADR.
+
+### Альтернатива 2: Один монолитный контроллер без сервисного слоя
+
+Вся бизнес-логика прямо в методах контроллера.
+
+- **Плюсы:** Меньше файлов, проще для < 100 строк.
+- **Минусы:** Тестируемость снижается (нет изоляции бизнес-логики), смешиваются HTTP и domain-конcerns.
+
+**Не выбран:** Сервисный слой — стандарт Spring Boot, даёт чистую тестируемость и разделение ответственности.
+
+### Альтернатива 3: Использовать List<Task> вместо Map<UUID, Task>
+
+- **Плюсы:** Проще для `GET /tasks` (возвращаем `values()`).
+- **Минусы:** O(n) lookup для `{id}`, нужен дополнительный stream/filter. Map даёт O(1).
+
+**Не выбран:** `ConcurrentHashMap` даёт O(1) для CRUD и потоковую безопасность.
+
+## Спецификации
+
+- Эта реализация соответствует `docs/specs/0003-task-crud/spec.md`.
+- Requirements: REQ-1 через REQ-8, AC-1 через AC-14.
+
+## ADR
+
+Значимого архитектурного решения, требующего отдельного ADR, нет.
+Выбранный подход (ручная валидация + ConcurrentHashMap + @RestControllerAdvice) — стандартная практика для Spring Boot CRUD без persistence.
+
+## Риски
+
+| Риск | Влияние | Митигация |
+|------|---------|-----------|
+| Jackson сериализация Instant может зависеть от конфигурации | Несоответствие формату времени | Jackson сериализует `Instant` как ISO-8601 по умолчанию. Покрывается тестом, проверяющим формат timestamp. |
+| Потоковая безопасность Spring MVC | Race condition в хранилище | `ConcurrentHashMap` обеспечивает thread-safe operations. Атомарные `putIfAbsent`/`remove` используются в Service где нужно. |
+<parameter>

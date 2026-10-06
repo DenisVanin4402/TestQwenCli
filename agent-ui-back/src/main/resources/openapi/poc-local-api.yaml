@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: Локальные данные для проверки POC
+  version: 1.0.0
+  description: Загрузка тестовых платежей; пользовательские действия передаются через локальное зеркало ACL в agent-ui-back по тому же acl-poc.yaml.
+tags:
+  - name: LocalHelper
+    description: Возвращает синтетические примеры для ACL без выполнения пользовательского действия.
+paths:
+  /local-api/v1/fixtures:
+    get:
+      tags: [LocalHelper]
+      operationId: getFixtures
+      summary: Получить синтетические платежи и metadata для первого ACL-входа
+      responses:
+        '200':
+          description: Каталог примеров; чтение не создаёт сессию.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FixtureList'}
+components:
+  schemas:
+    FixtureList:
+      type: object
+      description: Каталог синтетических примеров, доступный только в профиле poc-local.
+      properties:
+        agentCode:
+          type: string
+          description: Настроенный код адресата ACL-зеркала.
+        integrationMode:
+          type: string
+          description: Режим corr stub или real, известный до первого хода.
+        suggestions:
+          type: array
+          description: Начальные саджесты агента для синтетического примера в формате ACL.
+          items: {$ref: '../../../../../agent-api-in/src/main/resources/openapi/acl-poc.yaml#/components/schemas/AclSuggestion'}
+        fixtures:
+          type: array
+          description: Примеры платежей; их имена не передаются в ACL POST и не хранятся в бизнес-сессии.
+          items: {$ref: '#/components/schemas/Fixture'}
+    Fixture:
+      type: object
+      description: Тестовый платёж с готовыми metadata для ручного воспроизведения запроса статуса.
+      properties:
+        fixtureId:
+          type: string
+          description: Имя примера внутри локального каталога; не является идентификатором банковского платежа.
+        payment:
+          description: Синтетические реквизиты платежа, показываемые в карточке примера.
+          allOf:
+            - $ref: '#/components/schemas/Payment'
+        metadata:
+          description: Те же реквизиты вместе с организацией и пользователем в форме первого ACL-входа.
+          allOf:
+            - $ref: '#/components/schemas/FixtureMetadata'
+    FixtureMetadata:
+      type: object
+      description: Девять синтетических значений контекста в форме, которую принимает ACL POST.
+      properties:
+        organization:
+          description: Тестовая организация, которая станет владельцем сессии запроса статуса.
+          allOf:
+            - $ref: '#/components/schemas/FixtureOrganization'
+        customer_info:
+          description: Тестовый пользователь, от имени которого открывается сессия.
+          allOf:
+            - $ref: '#/components/schemas/FixtureCustomer'
+        additional_info:
+          type: array
+          description: Семь строковых параметров платежа, включая дату и сумму в формате локального ACL.
+          items: {$ref: '#/components/schemas/FixtureParameter'}
+    FixtureOrganization:
+      type: object
+      description: Синтетическая организация плательщика; используется только при локальной проверке.
+      properties:
+        epk_id:
+          type: string
+          description: Тестовый идентификатор организации, с которой будет связана сессия.
+    FixtureCustomer:
+      type: object
+      description: Синтетический пользователь, от имени которого открывается сессия.
+      properties:
+        digital_user_id:
+          type: string
+          description: Тестовый идентификатор пользователя; его смена внутри сессии отклоняется.
+    FixtureParameter:
+      type: object
+      description: Один параметр исходного платежа, уже преобразованный в строку для ACL metadata.
+      properties:
+        key:
+          type: string
+          description: Имя поля исходного платежа, например paymentDate или amount.
+        value:
+          type: string
+          description: Строковое значение поля для копирования в ACL metadata.additional_info.
+    Payment:
+      type: object
+      description: Исходный платёж, по которому пользователь готовит запрос статуса; данные сохраняются на всю сессию.
+      properties:
+        paymentId:
+          type: string
+          description: Идентификатор исходного платежа для запроса в corr; не имя локального примера.
+        paymentNumber:
+          type: string
+          description: Номер платёжного документа, отображаемый пользователю в сводке.
+        paymentDate:
+          type: string
+          format: date
+          description: Дата платёжного документа, отображаемая в сводке перед согласием.
+        amount:
+          type: number
+          description: Исходная сумма платежа для сводки; выбор операции не изменяет эту сумму.
+        currency:
+          type: string
+          description: Код валюты исходной суммы, например RUB.
+        recipientName:
+          type: string
+          description: Наименование исходного получателя платежа для проверки пользователем.
+        organizationName:
+          type: string
+          description: Наименование организации плательщика для сводки.

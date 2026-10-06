@@ -1,0 +1,756 @@
+openapi: 3.0.3
+info:
+  title: REST API ACL GIGAASSISTANT
+  version: 01.013.02
+
+tags:
+  - name: ACL GigaAssistant
+    description: Эндпоинт для общения с агентами по ACL-контракту
+
+paths:
+  /api/v1/ai/agents/{agent_code}:
+    post:
+      tags:
+        - ACL GigaAssistant
+      operationId: getAnswer
+      summary: Получение ответа на запрос клиента
+      description: Получение ответа на запрос клиента, поступивший от внешней поверхности
+      parameters:
+        - name: agent_code
+          in: path
+          description: Код агента
+          schema:
+            type: string
+          required: true
+        - name: Request-Id
+          in: header
+          description: Уникальный Id запроса из внешнего сервиса в формате uuid4
+          schema:
+            type: string
+            format: uuid
+        - name: System-Id
+          in: header
+          description: Id внешнего сервиса (Поверхность от которой идет запрос на продуктового агента)
+          schema:
+            type: string
+        - name: Request-Time
+          in: header
+          description: Время отправки запроса
+          schema:
+            type: string
+            format: timestamptz
+        - name: x-trace-id
+          in: header
+          description: Уникальный Id запроса из внешнего сервиса в формате uuid4 = Request-Id
+          schema:
+            type: string
+            format: uuid
+        - name: x-client-id
+          in: header
+          description: КЭ системы отправляющей запрос
+          schema:
+            type: string
+            example: CI08027100
+        - name: x-request-time
+          in: header
+          description: Время отправки запроса = Request-Time
+          schema:
+            type: string
+            format: timestamptz
+        - name: Gigachat-Session-Id
+          in: header
+          description: Идентификатор сессии GigaChat
+          schema:
+            type: string
+            format: uuid
+        - name: X-Authorization
+          in: header
+          description: Параметры для авторизации
+          schema:
+            type: string
+            example: {
+              "ufs_session": "gJeNRvOKTtel_hnxCPKymiceMC1NoQ08cKHZ6nLl0-EFm7IY7VENMt_DvWuKY-bW",
+              "ufs_token": "2fb690a1-f12a-44d5-b9ea-d2347fded16e",
+              "csrftoken": "2916941324748613412",
+              "digital_user_id": "10977890500",
+              "epk_id": "3536401",
+              "digital_id": "7894032567",
+              "sfl_epk_id": "1735689600"
+            }
+      requestBody:
+        required: true
+        content:
+          application/json;charset=UTF-8:
+            schema:
+              $ref: '#/components/schemas/AIProxyRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json;charset=UTF-8:
+              schema:
+                $ref: '#/components/schemas/AIProxyResponse'
+        '400':
+          description: Неверные параметры запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProxyResponse'
+        '404':
+          description: Не найден ответ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProxyResponse'
+        '500':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProxyResponse'
+          description: Внутренняя ошибка сервера
+
+
+components:
+  schemas:
+    attributeValues:
+      type: object
+      properties:
+        key:
+          type: string
+          maxLength: 100
+          description: Имя атрибута
+          example: S_ATTR_1
+        value:
+          type: string
+          maxLength: 500
+          description: Значение атрибута
+          example: Тутурум
+
+    suggestionAIProxy:
+      description: Саджест на основе последнего сообщения пользователя
+      type: object
+      properties:
+        guid:
+          $ref: '#/components/schemas/guid'
+        text:
+          type: string
+          maxLength: 300
+          description: Текст саджеста, который отображается пользователю
+          example: Как сдавать налоговую отчетность
+        agent_code:
+          type: string
+          maxLength: 100
+          description: Код агнета
+          example: MARKETOLOG
+        # Легаси-поле actionCode ("код действия (устаревший атрибут)") исключено из этой копии спеки:
+        # после camelCase-нормализации оно коллизирует с целевым action_code в Java-модели (генератор 7.x),
+        # в ответах используется только целевое поле action_code
+        action_code:
+          type: string
+          maxLength: 100
+          description: Код действия (целевой атрибут)
+          example: COMMON
+        transition:
+          $ref: '#/components/schemas/transition'
+        display_mode:
+          type: string
+          description: Тип отображения (кнопки/саджесты)
+          enum: [CLASSIC, BUTTON]
+        message_text:
+          type: string
+          description: Текст сообщения-запроса пользователя, которое передается агенту при клике по саджесту
+          example: Как сдавать налоговую отчетность
+        is_posted_to_chat:
+          type: boolean
+          description: Флаг, определяющий необходимость отображения саджеста в чате
+
+
+    guid:
+      type: string
+      format: uuid
+      description: Идентификатор какой-либо сущности
+      example: 047c0458-46c2-4f3b-945a-d063ab2c0bef
+
+    error:
+      type: object
+      properties:
+        error:
+          description: Описание ошибки
+          type: string
+
+    AIProxyRequest:
+      description: Запрос от внешней поверхности
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/messageAIProxyRequest'
+        metadata:
+          $ref: '#/components/schemas/metadataAIProxyRequest'
+        state:
+          type: array
+          items:
+            $ref: '#/components/schemas/stateAIProxy'
+      required:
+        - message
+
+
+    AIProxyResponse:
+      description: Запрос от внешней поверхности
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/messageAIProxyResponse'
+        metadata:
+          $ref: '#/components/schemas/metadataAIProxyResponse'
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/suggestionAIProxy'
+        state:
+          type: array
+          items:
+            $ref: '#/components/schemas/stateAIProxy'
+      required:
+        - message
+        - metadata
+
+
+    messageAIProxyRequest:
+      type: object
+      description: Объект с содержанием основного входящего или исходящего сообщения на агента
+      required:
+        - version
+        - performative
+        - sender
+        - receiver
+        - content
+      properties:
+        version:
+          type: string
+          description: Версия протокола
+          example: "1.0"
+        performative:
+          type: string
+          enum: [ request, inform, failure, reject_propose, accept_propose, proxy]
+          description: Перформатив — это тип сообщения или намерения агента.
+          example:
+            request - запрос на выполнение действия
+            inform - передача информации или результат выполнения
+            failure - ошибка выполнения задачи
+            accept_propose - подтверждено пользователем
+            reject_propose - отказ от подтверждения
+            proxy - перевод на другого агента
+        sender:
+          type: string
+          description: Поверхность, от которой идет запрос
+          example: "BUSINESS_ASSISTANT"
+        receiver:
+          type: string
+          description: Идентификатор агента-получателя
+          example: "GIGAASSISTANT"
+        conversation_id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор сессии
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        reply_with:
+          type: string
+          description: Уникальный идентификатор запроса (только для performative=request)
+          example: "req-12345"
+        content:
+          $ref: '#/components/schemas/contentRequest'
+
+
+
+    contentRequest:
+      type: object
+      description: Основное содержимое сообщения
+      minProperties: 1
+      properties:
+        user_input:
+          type: string
+          description: Изначальный запрос пользователя
+          example: "Измени пин-код моей карты Мир"
+        operator_input:
+          type: string
+          description: Вопрос оператора напрямую агенту
+        trigger_phrase_id:
+          type: string
+          description: Идентификатор последнего сообщения
+          example: "550e8400-e29b-41d4-a716-446683440999"
+        action_code:
+          type: string
+          description: Код действия
+          example: "COMMON"
+        phrases:
+          type: array
+          description: История разговора
+          items:
+            $ref: '#/components/schemas/phrase'
+
+    phrase:
+      type: object
+      properties:
+        time:
+          type: string
+          description: Дата и время фразы/текстового сообщения
+          format: date-time
+          example: "2023-10-07T15:21:00.000Z"
+        text:
+          type: string
+          description: Транскрибация фразы/ текст сообщения
+          example: "Хотел бы поменять PIN-код своей карты Мир"
+        phrase_id:
+          type: string
+          description: Уникальный идентификатор фразы
+          example: "550e8400-e29b-41d4-a716-446683440999"
+        speaker_type:
+          type: string
+          description: Тип говорящего и для чата, и для звонка OPERATOR/CUSTOMER/ROBOT
+          enum: [ OPERATOR, CUSTOMER, ROBOT ]
+
+    metadataAIProxyRequest:
+      type: object
+      description: Объект для специальных полей
+      properties:
+        communication_channel:
+          type: string
+          enum: [ CALL, CHAT, VOICE, TEXT ]
+          description: Канал взаимодействия
+        surface_mode:
+          type: string
+          enum: [ ASSISTANT, COPILOT ]
+          description: Режим поверхности
+          deprecated: true
+        organization:
+          $ref: '#/components/schemas/organization'
+        customer_info:
+          $ref: '#/components/schemas/customerInfo'
+        available_actions:
+          type: array
+          description: Список доступных действий
+          items:
+            type: string
+        available_transitions:
+          type: array
+          description: Список ссылок для вызываемого действия
+          items:
+            $ref: '#/components/schemas/availableTransition'
+        additional_info:
+          type: array
+          items:
+            $ref: '#/components/schemas/additionalInfo'
+        is_scenario_started:
+          type: boolean
+          description: Признак того, что сценарий был запущен
+        channel_context:
+          $ref: '#/components/schemas/channelContext'
+        agent_version:
+          type: string
+          description: Если заполнено ALPHA или null/отсутствует в запросе, то AI Proxy направляет запрос на основную работающую версию агента.
+            Если заполнено BETA, то AI Proxy направляет запрос на дополнительную версию агента (для тестирования гипотез)
+          enum: [ALPHA, BETA]
+          example: ALPHA
+        redirect:
+          $ref: '#/components/schemas/redirectAgent'
+        surface:
+          $ref: '#/components/schemas/surfaceAiProxy'
+
+    surfaceAiProxy:
+      type: object
+      description: Объект содержит информацию об организации
+      properties:
+        code:
+          type: string
+          description: Код поверхности
+        type:
+          type: string
+          description: "Тип платформы, с которой пришел запрос с поверхности: веб или мобильное приложение"
+          enum: [ WEB, MOBILE ]
+        properties:
+          type: array
+          items:
+            $ref: '#/components/schemas/surfaceAiProxyProperty'
+
+    surfaceAiProxyProperty:
+      type: object
+      description: "Дополнительные свойства: например, режим поверхности в формате key-value"
+      properties:
+        key:
+          type: string
+          description: Ключ параметра
+        value:
+          type: string
+          description: Значение параметра
+
+
+    stateAIProxy:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Ключ параметра
+        value:
+          type: string
+          description: Значение параметра
+        description:
+          type: string
+          description: Описание параметра
+        type:
+          type: string
+          enum: [MEMORY, REDIRECTION, CONFIRMATION, OPERATION]
+          description: Тип параметра
+          example:
+            MEMORY - параметры, которые необходимо сохранить, как память агента
+            REDIRECTION - параметры, которые описывают контекст для редиректа
+            CONFIRMATION - параметры, которые необходимо подтвердить у пользователя
+            OPERATION - параметры, которые используются для отображения операций по документам
+
+    redirectAgent:
+      type: object
+      description: Объект для редиректа агента
+      properties:
+        source_agent:
+          type: string
+          description: Идентификатор агента, который отправляет запрос
+          example: "TAX_CONSULTANT"
+        source_action:
+          type: string
+          description: Код действия агента, который отправляет запрос
+          example: "COMMON"
+        target_agent:
+          type: string
+          description: Идентификатор агента, который получает запрос
+          example: "TAX_CONSULTANT"
+        target_action:
+          type: string
+          description: Код действия агента, который получает запрос
+          example: "COMMON"
+
+
+    organization:
+      type: object
+      description: Объект содержит информацию об организации
+      properties:
+        epk_id:
+          type: string
+          description: Идентификатор организации ЕПК
+        digital_id:
+          type: string
+          description: Идентификатор личного кабинета пользователя
+
+    customerInfo:
+      type: object
+      description: Объект содержит информацию о клиенте
+      properties:
+        sfl_epk_id:
+          type: string
+          description: Идентификатор физического лица, связанного с организацией
+        digital_user_id:
+          type: string
+          description: Уникальный идентификатор учетной записи клиента в  Сбербизнес (передается из поверхности Чат-Сбербизнес)
+          example: 446683440999
+        device_info:
+          $ref: '#/components/schemas/device_info'
+
+    device_info:
+      type: object
+      description: Объект содержит информацию об устройстве и ОС клиента
+      properties:
+        device_type:
+          type: string
+          description: Тип устройства клиента
+        browser:
+          type: string
+          description: Браузер клиента
+        os:
+          type: string
+          description: Операционная система клиента
+        mobile_app_version:
+          type: string
+          description: Версия мобильного приложения клиента
+
+    additionalInfo:
+      type: object
+      description: Дополнительная информация, состоящая из пар ключ-значение.
+      properties:
+        id:
+          type: string
+          description: Идентификатор для связи пар "key"/"value" (при необходимости)
+        key:
+          type: string
+          description: Ключ
+        value:
+          type: string
+          description: Значение
+        description:
+          type: string
+          description: Описание объекта, переданного в additional_info
+
+    availableTransition:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Код перехода
+          example: PAYMENT_DONE
+        parameters:
+          type: array
+          items:
+            type: string
+
+    messageAIProxyResponse:
+      type: object
+      description: Основное сообщение ответа агента
+      properties:
+        version:
+          type: string
+          description: Версия протокола
+          example: "1.0"
+        performative:
+          type: string
+          enum: [ inform, failure, proxy, propose ]
+          description: |
+            inform - успешный результат выполнения
+            failure - ошибка выполнения задачи
+        sender:
+          type: string
+          description: Идентификатор агента-отправителя
+          example: "ga-qa-sberbusiness"
+        receiver:
+          type: string
+          description: Поверхность-получатель
+          example: "TEXTASSISTANT"
+        conversation_id:
+          type: string
+          format: uuid
+          description: Идентификатор сессии из запроса
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        in_reply_to:
+          type: string
+          format: uuid
+          description: Идентификатор исходного запроса
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        type:
+          type: string
+          description: Тип сообщения
+        is_hidden:
+          type: boolean
+          description: Признак того, что сообщение необходимо скрыть от пользователя
+        parameters:
+          type: array
+          description: Параметры сообщения
+          items:
+            $ref: '#/components/schemas/attributeValues'
+        content:
+          $ref: '#/components/schemas/contentResponse'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/transition'
+
+    transition:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Код перехода
+          example: PAYMENT_DONE
+        is_auto_expended:
+          type: boolean
+          description: Признак того, что переход должен автоматически сработать у пользователя
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/attributeValues'
+
+
+    contentResponse:
+      type: object
+      description: Содержимое ответа
+      properties:
+        result:
+          type: string
+          description: Результат работы (только для performative=inform)
+          example: "Платеж успешно выполнен"
+        reason:
+          type: string
+          description: Причина ошибки (только для performative=failure)
+          example: "Недостаточно средств"
+        status_code:
+          type: string
+          description: Статус-код ответа
+          example: '200'
+
+
+    metadataAIProxyResponse:
+      type: object
+      description: Метаданные ответа
+      properties:
+        final_message:
+          type: boolean
+          description: |
+            true - финальный ответ, не требует доуточнений
+            false - требуется дополнительная информация
+          example: true
+        additional_info:
+          type: array
+          items:
+            $ref: '#/components/schemas/additionalInfo'
+        redirect:
+          $ref: '#/components/schemas/redirectAgent'
+
+
+    channelContext:
+      type: object
+      properties:
+        efs_session:
+          type: string
+        sbbol_csrf_token:
+          type: string
+        efs_token:
+          type: string
+
+    AIProxyPollRequest:
+      description: Запрос от внешней поверхности
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/messageAIProxyPollRequest'
+        metadata:
+          $ref: '#/components/schemas/metadataAIProxyPollRequest'
+      required:
+        - message
+
+    AIProxyPollReqResponse:
+      description: Запрос от внешней поверхности
+      type: object
+      properties:
+        external_request_id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор запроса
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    AIProxyPollResponse:
+      description: Запрос от внешней поверхности для поллинг запросов
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/messageAIProxyPollResponse'
+      required:
+        - message
+
+    pollingResponse:
+      description: Ответ поллинга
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ERROR
+            - NOT_FOUND
+            - RUNNING
+            - SUCCESS
+          description: Текст запроса
+          example: RUNNING
+      required:
+        - status
+
+    messageAIProxyPollRequest:
+      type: object
+      description: Объект с содержанием основного входящего или исходящего сообщения на агента для поллинг запроса
+      required:
+        - version
+        - performative
+        - sender
+        - receiver
+        - content
+      properties:
+        version:
+          type: string
+          description: Версия протокола
+          example: "1.0"
+        performative:
+          type: string
+          enum: [ request, inform, failure ]
+          description: Перформатив — это тип сообщения или намерения агента.
+          example:
+            request - запрос на выполнение действия
+            inform - передача информации или результат выполнения
+            failure - ошибка выполнения задачи
+        sender:
+          type: string
+          description: Поверхность, от которой идет запрос
+          example: "VOICEASSISTANT"
+        receiver:
+          type: string
+          description: Идентификатор агента-получателя
+          example: "GLOBAL_SEARCH"
+        content:
+          $ref: '#/components/schemas/contentPollRequest'
+
+    contentPollRequest:
+      type: object
+      description: Основное содержимое сообщения для поллинг запроса
+      minProperties: 1
+      properties:
+        user_input:
+          type: string
+          description: Изначальный запрос пользователя
+          example: "Измени пин-код моей карты Мир"
+        action_code:
+          type: string
+          description: Код действия
+          example: "COMMON"
+
+
+    metadataAIProxyPollRequest:
+      type: object
+      description: Объект для специальных полей для поллинг запроса
+      properties:
+        organization:
+          $ref: '#/components/schemas/organization'
+        customer_info:
+          $ref: '#/components/schemas/customerInfo'
+        additional_info:
+          type: array
+          items:
+            $ref: '#/components/schemas/additionalInfo'
+        channel_context:
+          $ref: '#/components/schemas/channelContext'
+        agent_version:
+          type: string
+          description: Если заполнено ALPHA или null/отсутствует в запросе, то AI Proxy направляет запрос на основную работающую версию агента.
+            Если заполнено BETA, то AI Proxy направляет запрос на дополнительную версию агента (для тестирования гипотез)
+          enum: [ALPHA, BETA]
+          example: ALPHA
+
+
+    messageAIProxyPollResponse:
+      type: object
+      description: Основное сообщение ответа агента при поллинг запросе
+      properties:
+        version:
+          type: string
+          description: Версия протокола
+          example: "1.0"
+        performative:
+          type: string
+          enum: [ inform, failure ]
+          description: |
+            inform - успешный результат выполнения
+            failure - ошибка выполнения задачи
+        sender:
+          type: string
+          description: Идентификатор агента-отправителя
+          example: "ga-qa-sberbusiness"
+        receiver:
+          type: string
+          description: Поверхность-получатель
+          example: "TEXTASSISTANT"
+        content:
+          $ref: '#/components/schemas/contentResponse'
+
+
+# Powered by APIStudio

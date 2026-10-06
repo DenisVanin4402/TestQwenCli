@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Чат с помощником · invest-pro</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="./">invest-pro</a>
+      <p class="subtitle">Помощник по платежам</p>
+      <button id="new" class="new-chat" disabled>＋ Новый диалог</button>
+      <section class="payment"><h2>Тестовый платёж</h2><div id="payment">Загружаем реквизиты…</div></section>
+      <p class="sidebar-note">Новый диалог не отменяет ранее отправленный запрос. После перезагрузки история не восстанавливается.</p>
+      <span id="mode" class="mode">Подключение…</span>
+    </aside>
+    <main class="chat">
+      <header class="chat-header"><div class="avatar" aria-hidden="true">и</div><div><h1>Помощник по платежам</h1><p id="status">Тестовый чат</p></div></header>
+      <div id="conversation" class="conversation" role="log" aria-live="polite" aria-label="История диалога"></div>
+      <div class="composer-area">
+        <div id="notice" class="notice" role="alert" hidden></div>
+        <p id="progress" class="progress" role="status"></p>
+        <form id="composer" class="composer">
+          <label class="sr-only" for="message">Сообщение помощнику</label>
+          <textarea id="message" rows="2" placeholder="Напишите сообщение…" aria-describedby="input-help" disabled></textarea>
+          <button id="send" type="submit" disabled>Отправить</button>
+        </form>
+        <p id="input-help" class="input-help">Пока доступны саджесты и кнопки «Подтвердить» / «Отклонить». Обработка текста появится позже.</p>
+        <details class="diagnostics"><summary>Диагностика</summary><pre id="diagnostics"></pre></details>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Только запуск каркаса без API и БД; не является демонстрацией сценария POC.
+spring:
+  main:
+    web-application-type: none
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.liquibase.LiquibaseAutoConfiguration
+      - chat.giga.springai.autoconfigure.GigaChatAutoConfiguration

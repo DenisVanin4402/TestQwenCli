@@ -1,0 +1,279 @@
+openapi: 3.0.3
+info:
+  title: Усечённый ACL API запроса статуса
+  version: 1.0.0
+  description: >-
+    Производный профиль docs/api/rest_api_acl_gigaasistant.02.013.02.yml для локального POC.
+    Уточняет версию ACL 1.6, обязательные UUID заголовков и final_message.
+    Поддерживает status, accept_propose и reject_propose; настоящий GA ещё не подключён.
+    Неизвестные JSON-поля игнорируются. Явный null в контексте сохраняется при чтении JSON,
+    чтобы адаптер мог отличить ошибку от отсутствующего поля последующего сообщения.
+tags:
+  - name: Acl
+    description: Принимает сообщение о запросе статуса платежа и возвращает ответ для того же внешнего диалога.
+paths:
+  /api/v1/ai/agents/{agent_code}:
+    post:
+      tags: [Acl]
+      operationId: handleMessage
+      summary: Выполнить один шаг подготовки или подтверждения запроса статуса
+      parameters:
+        - name: agent_code
+          in: path
+          required: true
+          description: Код агента; должен совпасть с получателем сообщения и настройкой приложения.
+          schema: {type: string}
+        - name: Request-Id
+          in: header
+          required: true
+          description: UUID пользовательского сообщения; должен совпасть с message.reply_with.
+          schema: {type: string}
+        - name: Gigachat-Session-Id
+          in: header
+          required: true
+          description: UUID сессии приложения; сохраняется между шагами одного запроса статуса.
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AclRequest'}
+      responses:
+        '200':
+          description: Шаг обработан; принятие corr означает принятие запроса статуса, а не исполнение платежа.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AclResponse'}
+        '400':
+          description: Неверное сообщение или действие недопустимо для сохранённого состояния; при повреждённых UUID тело ACL не формируется.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AclResponse'}
+        '404': {description: Код агента не обслуживается приложением.}
+        '500':
+          description: Исход отправки неизвестен либо сохранность результата не подтверждена.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AclResponse'}
+components:
+  schemas:
+    AclRequest:
+      type: object
+      required: [message]
+      description: Сообщение внешнего диалога и явно переданный контекст платежа; отсутствие контекста допустимо после создания сессии.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        state:
+          type: array
+          description: Возвращённые поверхностью параметры предложения. Источником бизнес-данных остаётся сохранённая подготовка.
+          items: {$ref: '#/components/schemas/AclState'}
+        message:
+          description: Адресация сообщения, его UUID и намерение пользователя для текущего шага запроса статуса.
+          allOf:
+            - $ref: '#/components/schemas/AclInputMessage'
+        metadata:
+          description: Явно переданные данные платежа и его владельца; пропуски последующих сообщений дополнит бизнес-сценарий.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AclMetadata'
+    AclInputMessage:
+      type: object
+      required: [version, performative, sender, receiver, conversation_id, reply_with]
+      description: Адресация и намерение пользователя; UUID позволяют связать ответ с исходным сообщением.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        version:
+          type: string
+          description: Версия ACL; этот профиль принимает только строку 1.6.
+        performative:
+          type: string
+          description: request выбирает действие, accept_propose принимает показанное предложение, reject_propose отклоняет его.
+        sender:
+          type: string
+          description: Отправитель исходного сообщения; становится получателем ответа.
+        receiver:
+          type: string
+          description: Код агента-получателя; должен совпадать с кодом маршрута и настройкой приложения.
+        conversation_id:
+          type: string
+          description: UUID внешнего диалога; возвращается без изменения и не заменяет идентификатор сессии приложения.
+        reply_with:
+          type: string
+          description: UUID этого сообщения в теле; проверяется на равенство заголовку Request-Id.
+        content:
+          description: Код выбираемого действия; при отдельном согласии или отказе игнорируется.
+          allOf:
+            - $ref: '#/components/schemas/AclInputContent'
+    AclInputContent:
+      type: object
+      description: Действие локального POC; при accept_propose или reject_propose поля этого объекта не влияют на решение.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        user_input:
+          type: string
+          description: Текущий текст клиента; разбирается только при отсутствии явного action_code. Не является подтверждением.
+        action_code:
+          type: string
+          description: status выбирает запрос статуса на шаге выбора операции; в ожидании подтверждения повторный выбор возвращает ошибку. Другие коды действий не поддерживаются.
+    AclMetadata:
+      type: object
+      nullable: true
+      description: Явно переданные идентификаторы организации, пользователя и исходного платежа; при первом входе нужны все девять значений.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        organization:
+          description: Идентификатор организации, от имени которой пользователь готовит запрос статуса.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AclOrganization'
+        customer_info:
+          description: Идентификатор пользователя; проверяется на неизменность в уже созданной сессии.
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AclCustomerInfo'
+        additional_info:
+          type: array
+          nullable: true
+          description: Семь строковых параметров платежа; известные ключи нельзя повторять, передавать пустыми или с null.
+          items: {$ref: '#/components/schemas/AclAdditionalInfo'}
+    AclOrganization:
+      type: object
+      nullable: true
+      description: Организация, от имени которой готовится запрос статуса; в локальном профиле идентификатор синтетический.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        epk_id:
+          type: string
+          nullable: true
+          description: Идентификатор организации; при повторной передаче должен совпасть с сохранённым в сессии.
+    AclCustomerInfo:
+      type: object
+      nullable: true
+      description: Пользователь, открывший сессию подготовки запроса статуса.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        digital_user_id:
+          type: string
+          nullable: true
+          description: Идентификатор пользователя; его нельзя заменить в уже созданной сессии.
+    AclAdditionalInfo:
+      type: object
+      description: Один строковый параметр исходного платежа; неизвестные ключи не используются сценарием.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)'
+      properties:
+        key:
+          type: string
+          description: Имя параметра paymentId, paymentNumber, paymentDate, amount, currency, recipientName или organizationName.
+        value:
+          type: string
+          nullable: true
+          description: Значение параметра; дата передаётся как 2026-10-03, сумма как 12500.00, остальные значения как непустые строки.
+    AclResponse:
+      type: object
+      description: Ответ на конкретное сообщение внешнего диалога и признак завершения сессии приложения.
+      properties:
+        suggestions:
+          type: array
+          description: Доступные действия агента; пустой массив не создаёт кнопок.
+          items: {$ref: '#/components/schemas/AclSuggestion'}
+        state:
+          type: array
+          description: Параметры предложения для подтверждения пользователем.
+          items: {$ref: '#/components/schemas/AclState'}
+        message:
+          description: Ответ с текстом результата и идентификаторами исходного сообщения.
+          allOf:
+            - $ref: '#/components/schemas/AclOutputMessage'
+        metadata:
+          description: Сохранённый признак завершения обращения после принятия запроса corr.
+          allOf:
+            - $ref: '#/components/schemas/AclOutputMetadata'
+    AclOutputMessage:
+      type: object
+      description: Ответ с обратной адресацией; in_reply_to всегда содержит UUID из заголовка Request-Id.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      properties:
+        version:
+          type: string
+          description: Версия ответа ACL, всегда 1.6.
+        performative:
+          type: string
+          description: propose запрашивает подтверждение сводки; inform сообщает результат; failure сообщает ошибку.
+        sender:
+          type: string
+          description: Получатель исходного сообщения, от имени которого возвращается ответ.
+        receiver:
+          type: string
+          description: Отправитель исходного сообщения, которому адресован ответ.
+        conversation_id:
+          type: string
+          description: UUID внешнего диалога, перенесённый из исходного сообщения без изменения.
+        in_reply_to:
+          type: string
+          format: uuid
+          description: UUID из заголовка Request-Id; используется и при ошибке несовпадения с reply_with тела.
+        content:
+          description: Сводка, результат действия или объяснение ошибки с HTTP-кодом ответа.
+          allOf:
+            - $ref: '#/components/schemas/AclOutputContent'
+    AclOutputContent:
+      type: object
+      description: Контролируемый текст результата или ошибки; произвольный текст внешнего corr сюда не переносится.
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      properties:
+        result:
+          type: string
+          description: Текст сводки локального предложения propose или результат inform. Регистрация шаблонов GA не входит в локальный профиль.
+        reason:
+          type: string
+          description: Причина невозможности обработать действие; присутствует в failure.
+        status_code:
+          type: string
+          description: HTTP-код ответа в виде строки 200, 400 или 500; это уточнение локального ACL-профиля.
+    AclOutputMetadata:
+      type: object
+      description: Признак того, что запрос статуса уже принят corr и новые действия в этой сессии запрещены.
+      properties:
+        final_message:
+          type: boolean
+          description: true только для сохранённого состояния COMPLETED, в том числе в ответе об ошибке; иначе false.
+    AclSuggestion:
+      type: object
+      description: Саджест из исходного ACL-контракта; текущий профиль предлагает действие status.
+      required: [text]
+      properties:
+        guid:
+          type: string
+          format: uuid
+          description: Идентификатор саджеста.
+        text:
+          type: string
+          description: Подпись кнопки или саджеста.
+        action_code:
+          type: string
+          description: Код действия, отправляемый при клике.
+        display_mode:
+          type: string
+          description: BUTTON для кнопки, CLASSIC для саджеста.
+        message_text:
+          type: string
+          description: Подпись пользовательского сообщения после клика.
+        is_posted_to_chat:
+          type: boolean
+          description: Показывать ли клик в истории чата.
+    AclState:
+      type: object
+      description: Параметр state исходного ACL. Предложение STATUS содержит paymentNumber и preparationNo типа CONFIRMATION; accept_propose возвращает оба значения из предложения. reject_propose не требует state.
+      properties:
+        key:
+          type: string
+          description: Имя параметра.
+        value:
+          type: string
+          description: Значение параметра.
+        type:
+          type: string
+          description: CONFIRMATION для параметров подтверждения.
+        description:
+          type: string
+          description: Понятное пользователю название параметра.

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+    <changeSet id="003-session-semaphore" author="invest-pro">
+        <!-- Существующий checkpoint не конвертируется и не выдаётся за новый формат. -->
+        <addColumn tableName="agent_session">
+            <column name="format_id" type="varchar(255)" defaultValue="legacy-v1" remarks="Формат native FSM, проверяемый перед десериализацией.">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <dropDefaultValue tableName="agent_session" columnName="format_id" columnDataType="varchar(255)"/>
+        <dropTable tableName="corr_attempt"/>
+        <dropTable tableName="corr_submission"/>
+        <dropTable tableName="fsm_command"/>
+        <dropTable tableName="fsm_binding"/>
+        <dropTable tableName="session_execution"/>
+        <dropTable tableName="executor_node"/>
+        <dropColumn tableName="agent_session" columnName="projection_version"/>
+        <dropColumn tableName="agent_session" columnName="row_version"/>
+    </changeSet>
+</databaseChangeLog>

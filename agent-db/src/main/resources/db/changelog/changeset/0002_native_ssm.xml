@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+    <property name="nativeContextType" value="blob" dbms="h2"/>
+    <property name="nativeContextType" value="oid" dbms="postgresql"/>
+    <changeSet id="002-native-ssm" author="invest-pro">
+        <createTable tableName="state_machine">
+            <column name="machine_id" type="varchar(255)"><constraints primaryKey="true" primaryKeyName="pk_state_machine" nullable="false"/></column>
+            <column name="state" type="varchar(255)"/>
+            <column name="state_machine_context" type="${nativeContextType}"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+

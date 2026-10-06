@@ -1,0 +1,12 @@
+[
+  {"id":"p01","text":"Запроси статус платежа","expectedActionCode":"status"},
+  {"id":"p02","text":"Проверь, прошёл ли мой платёж","expectedActionCode":"status"},
+  {"id":"p03","text":"На каком этапе сейчас мой перевод?","expectedActionCode":"status"},
+  {"id":"p04","text":"Хочу узнать состояние выбранного платежа","expectedActionCode":"status"},
+  {"id":"p05","text":"Что сейчас с моим платежом?","expectedActionCode":"status"},
+  {"id":"n01","text":"Что означает статус «Исполнен»?","expectedActionCode":null},
+  {"id":"n02","text":"Отзови платёж","expectedActionCode":null},
+  {"id":"n03","text":"Измени назначение на оплату по договору Б","expectedActionCode":null},
+  {"id":"n04","text":"Подтверждаю отправку","expectedActionCode":null},
+  {"id":"n05","text":"Не запрашивай статус платежа","expectedActionCode":null}
+]

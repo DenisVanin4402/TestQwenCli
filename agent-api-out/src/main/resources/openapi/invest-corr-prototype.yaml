@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: Временный контракт стенда Invest corr
+  version: 1.0.0
+  description: Контракт прототипа для проверки отправки запроса статуса; совместимость с банковским API не подтверждена.
+tags:
+  - name: InvestCorr
+    description: Одна физическая попытка передачи подтверждённого запроса статуса.
+paths:
+  /prototype/v1/status-requests:
+    post:
+      tags: [InvestCorr]
+      operationId: submitStatus
+      summary: Передать запрос статуса с сохранённым ключом отправки.
+      description: Валидный отказ означает гарантированное непринятие; HTTP-ошибка оставляет результат неизвестным.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          description: Неизменный ключ одной логической отправки и всех её технических попыток.
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusRequest'
+      responses:
+        '200':
+          description: Достоверное принятие либо гарантированное непринятие стендом.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+components:
+  schemas:
+    StatusRequest:
+      type: object
+      description: Неизменные значимые данные подтверждённого запроса статуса.
+      required: [clientRequestId, operation, epkId, digitalUserId, paymentId]
+      properties:
+        clientRequestId:
+          type: string
+          format: uuid
+          description: Идентификатор логической отправки; отличается от ID пользовательского сообщения.
+        operation:
+          type: string
+          description: Код операции прототипа; единственное допустимое значение status — запрос статуса.
+          pattern: '^status$'
+        epkId:
+          type: string
+          description: Организация из сохранённой привязки сессии.
+        digitalUserId:
+          type: string
+          description: Пользователь из сохранённой привязки сессии.
+        paymentId:
+          type: string
+          description: Платёж, для которого подтверждён запрос статуса.
+    StatusResponse:
+      type: object
+      description: Ответ одной попытки; только полный ACCEPTED или REJECTED считается достоверным.
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          description: ACCEPTED — запрос принят; REJECTED — гарантированно не принят; остальные значения недостоверны.
+        reference:
+          type: string
+          description: Обязательная при ACCEPTED ссылка на принятое обращение.
+        reasonCode:
+          type: string
+          description: Обязательный при REJECTED машинный код гарантированного отказа.
+        reasonText:
+          type: string
+          description: Обязательное при REJECTED описание причины; не используется как пользовательский ответ агента.

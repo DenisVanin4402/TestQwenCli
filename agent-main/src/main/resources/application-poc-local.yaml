@@ -1,0 +1,7 @@
+# Явно локальный стенд с синтетическим контекстом и управляемой заглушкой corr.
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+integrations:
+  invest-corr:
+    stub: ${INVEST_CORR_STUB:enabled}
+    stub-scenario: ${INVEST_CORR_STUB_SCENARIO:accepted}

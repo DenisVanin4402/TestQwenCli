@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    # Для целевой БД нет локальных значений по умолчанию и автоматического перехода на H2.
+    url: ${POC_POSTGRES_URL}
+    username: ${POC_POSTGRES_USER}
+    password: ${POC_POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver

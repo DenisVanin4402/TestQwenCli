@@ -1,0 +1,131 @@
+# Технический план: REST API для управления задачами (0003-task-crud)
+
+## Обзор
+
+Реализация CRUD REST API в существующем Spring Boot-приложении через добавление пакета `com.example.testqwencli.task` с контроллером, сервисом, моделью сущности, DTO, обработчиком ошибок и in-memory репозиторием. База данных не подключается — хранилище на основе `ConcurrentHashMap` в сервисном слое.
+
+## Подход
+
+### Архитектура слоёв
+
+```
+TaskController (HTTP layer)
+    ↓
+TaskService (бизнес-логика + in-memory store)
+    ↓
+Task (domain model / entity)
+    ↓
+TaskError (DTO для ошибок)
+```
+
+### Ключевые решения
+
+1. **In-memory хранилище** — `ConcurrentHashMap<UUID, Task>` в сервисном слое. Потокобезопасный, O(1) lookup/insert/delete. Подходит для v1 без БД.
+
+2. **DTO для входящих запросов** — `CreateTaskRequest` и `UpdateTaskRequest` с Bean Validation (`@NotBlank`, `@Size`, `@Pattern`). Отделяет API-контракт от domain-модели.
+
+3. **Ошибка UUID-строкости** — кастомный `@PathVariable` конвертер/валидация в контроллере. Если `@PathVariable UUID id` не парсится, Spring вернет 400 (Bad Request) автоматически через `MethodArgumentTypeMismatchException`.
+
+4. **Обработка ошибок** — `@ControllerAdvice` с `@ExceptionHandler` для валидации (400), не найдено (404) и общего случая. Все ответы — структурированный JSON `{"error", "message", "status", "timestamp"}`.
+
+5. **Временная зона** — Jackson сериализует `Instant` в ISO-8601 UTC по умолчанию (`"2024-01-15T10:30:00Z"`), что соответствует решению CL-4.
+
+## Затронутые компоненты
+
+| Компонент | Изменение | Обоснование |
+|-----------|-----------|-------------|
+| `src/main/java/.../task/Task.java` | create | Domain-модель с id(UUID), title, description, status, createdAt, updatedAt |
+| `src/main/java/.../task/TaskStatus.java` | create | Enum: TODO, IN_PROGRESS, DONE |
+| `src/main/java/.../task/CreateTaskRequest.java` | create | DTO для POST с Bean Validation |
+| `src/main/java/.../task/UpdateTaskRequest.java` | create | DTO для PUT с Bean Validation |
+| `src/main/java/.../task/ErrorResponse.java` | create | DTO для error JSON-ответов |
+| `src/main/java/.../task/TaskService.java` | create | Сервис с CRUD-логикой и in-memory хранилищем |
+| `src/main/java/.../task/TaskController.java` | create | REST-контроллер с 5 endpoints |
+| `src/main/java/.../task/TaskNotFoundException.java` | create | Runtime exception для 404 |
+| `src/main/java/.../task/GlobalExceptionHandler.java` | create | @ControllerAdvice для валидации и 404 |
+| `src/test/java/.../task/TaskControllerTest.java` | create | Integration-тесты через MockMvc (полный цикл CRUD) |
+| `src/test/java/.../task/TaskServiceTest.java` | create | Unit-тесты сервисного слоя (включая edge cases) |
+| `src/test/java/.../task/ErrorResponseTests.java` | create | Тесты структуры error JSON |
+| `pom.xml` | edit | Добавить `spring-boot-starter-validation` зависимость |
+
+## Зависимости
+
+- **spring-boot-starter-validation** (новая) — Bean Validation аннотации для DTO (`@NotBlank`, `@Size`).
+- **spring-boot-starter-web** (уже есть) — `@RestController`, `@ControllerAdvice`, MockMvc.
+- **JUnit 5** (уже есть) — тесты.
+- **UUID** (JDK builtin) — генерация идентификаторов.
+
+## Контракты
+
+REST API контракты (по spec CL-5, AC-14):
+
+### POST /api/v1/tasks
+- **Тело запроса:** `{"title": "string", "description": "string"?}` 
+- **Response 201:** `{"id": "uuid", "title": "...", "description": "...", "status": "TODO", "createdAt": "ISO-8601", "updatedAt": "ISO-8601"}`
+- **Header:** `Location: /api/v1/tasks/{id}`
+- **Response 400 валидация:** `{"error": "ValidationFailed", "message": "...", "status": 400, "timestamp": "..."}`
+
+### GET /api/v1/tasks
+- **Response 200:** `[Task, ...]` (пустой массив `[]` если нет задач)
+
+### GET /api/v1/tasks/{id}
+- **Response 200:** Task JSON
+- **Response 404 (не найдено):** `{"error": "NotFound", "message": "...", "status": 404, "timestamp": "..."}`
+- **Response 400 (не UUID):** `{"error": "InvalidUuid", "message": "...", "status": 400, "timestamp": "..."}`
+
+### PUT /api/v1/tasks/{id}
+- **Тело запроса:** `{"title": "string", "description": "string", "status": "TODO|IN_PROGRESS|DONE"}`
+- **Response 200:** Обновлённый Task JSON
+- **Response 404 / 400** — аналогично GET
+
+### DELETE /api/v1/tasks/{id}
+- **Response 200:** Task JSON (удалённая задача)
+- **Response 404** — аналогично GET
+
+## Альтернативы
+
+### Альтернатива 1: `List<Task>` вместо `ConcurrentHashMap`
+- **Плюсы:** Проще концептуально
+- **Минусы:** O(n) lookup — неоптимально при росте. Нет преимущества для вложенной структуры, ConcurrentHashMap — естественный выбор для in-memory key-value store.
+- **Решение:** Не выбрано.
+
+### Альтернатива 2: H2 embedded database
+- **Плюсы:** Реализация ближе к production, persistence между перезапусками
+- **Минусы:** Нарушает non-goal спеки ("Подключение к базе данных НЕ входит"); увеличивает сложность setup; требует дополнительных зависимостей и конфигурации, избыточно для валидации API-контракта
+- **Решение:** Не выбрано — в scope явно указано In-memory.
+
+### Альтернатива 3: Records (Java 21) вместо classes для DTO
+- **Плюсы:** Иммутабельность, conciseness, `equals`/`hashCode` автоматически.
+- **Минусы:** Bean Validation с records требует дополнительных конфигураций; `@Size` и `@NotBlank` на record полях не поддерживаются Spring валидацией "из коробки" без кастомных десериализаторов
+- **Решение:** Использовать regular classes для DTO — меньше boilerplate с Bean Validation. `Task.java` (domain model) может быть record, но для единообразия — все entity как classes.
+
+## Значимое архитектурное решение
+
+**Решение о применении Bean Validation и `@ControllerAdvice`** — это стандартная Spring Boot практика, не требующая ADR. Обосновано:
+- `spring-boot-starter-validation` — официальный starter, совместимый с Spring Boot 3.4
+- `@ControllerAdvice` + `@ExceptionHandler` — стандартная Spring-практика для обработки ошибок
+- Не меняет публичный контракт без спецификации — контракты уже зафиксированы в spec.md
+
+**ADR не требуется** для данной задачи.
+
+## Риски
+
+| Риск | Вероятность | Митигация |
+|------|------------|-----------|
+| Валидация UUID через `@PathVariable UUID id` может вернуть 500 вместо 400 при неправильном формате | Средняя | Обработать `MethodArgumentTypeMismatchException` в `@ControllerAdvice` → 400 |
+| Jackson может сериализовать `Instant` в timestamp вместо ISO-8601 | Низкая | Настроить ObjectMapper через `@JsonFormat` или Jackson properties в `application.properties` |
+| Race condition при concurrent запросах к in-memory store | Средняя | `ConcurrentHashMap` гарантирует потокобезопасность отдельных операций; составные операции (check+insert) синхронизированы через `computeIfAbsent` |
+
+## Требования к тестированию
+
+- **Integration (MockMvc):** `TaskControllerTest` — полный цикл CRUD, все success и error paths, проверка JSON-структуры, заголовка Location, HTTP-кодов.
+- **Unit:** `TaskServiceTest` — создание с валидацией status, обновление с сохранением createdAt, удаление, lookup по несуществующему ID.
+- **Тесты ошибок:** `ErrorResponseTests` — проверка структуры error JSON (AC-14) через сериализацию.
+- **Тесты валидации:** проверка `@NotBlank`, `@Size`, `@Pattern` через MockMvc.
+- Все тесты изолированные — не зависят от внешних ресурсов.
+
+## Спецификации
+
+- Эта реализация соответствует `docs/specs/0003-task-crud/spec.md`.
+- Requirements: REQ-1..REQ-8, AC-1..AC-14.
+- Clarifications: CL-1..CL-5 (все RESOLVED).

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+    <property name="snapshotTextType" value="varchar(1000000)" dbms="h2"/>
+    <property name="snapshotTextType" value="text" dbms="postgresql"/>
+    <changeSet id="001-session-persistence" author="invest-pro">
+        <createTable tableName="agent_session" remarks="Техническая строка общей блокировки сессии и номера обновления её представления.">
+            <column name="session_id" type="uuid" remarks="Идентификатор сессии.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_agent_session" />
+            </column>
+            <column name="projection_version" type="bigint" remarks="Версия видимой проекции.">
+                <constraints nullable="false" />
+            </column>
+            <column name="row_version" type="bigint" remarks="Версия ORM для конкурентного изменения.">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <createTable tableName="fsm_binding" remarks="Связь прикладной сессии с одним native checkpoint.">
+            <column name="session_id" type="uuid" remarks="Идентификатор прикладной сессии.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_fsm_binding" />
+            </column>
+            <column name="engine_code" type="varchar(255)" remarks="Код реализации движка.">
+                <constraints nullable="false" />
+            </column>
+            <column name="native_machine_id" type="varchar(255)" remarks="Уникальный ID native машины.">
+                <constraints nullable="false" />
+            </column>
+            <column name="binding_version" type="integer" remarks="Версия схемы binding.">
+                <constraints nullable="false" />
+            </column>
+            <column name="serialization_version" type="integer" remarks="Версия формата native checkpoint.">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <createTable tableName="corr_submission" remarks="Одна логическая отправка с неизменными ключом и данными.">
+            <column name="submission_id" type="uuid" remarks="Идентификатор отправки.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_corr_submission" />
+            </column>
+            <column name="session_id" type="uuid" remarks="Сессия отправки.">
+                <constraints nullable="false" />
+            </column>
+            <column name="preparation_id" type="uuid" remarks="Подтверждённая подготовка.">
+                <constraints nullable="false" />
+            </column>
+            <column name="idempotency_key" type="varchar(255)" remarks="Ключ всех физических попыток.">
+                <constraints nullable="false" />
+            </column>
+            <column name="payload_json" type="${snapshotTextType}" remarks="Канонический сохранённый payload.">
+                <constraints nullable="false" />
+            </column>
+            <column name="payload_hash" type="varchar(255)" remarks="Hash сохранённого payload.">
+                <constraints nullable="false" />
+            </column>
+            <column name="status" type="varchar(255)" remarks="Сохранённый исход.">
+                <constraints nullable="false" />
+            </column>
+            <column name="attempt_count" type="integer" remarks="Число разрешённых попыток.">
+                <constraints nullable="false" />
+            </column>
+            <column name="reference" type="varchar(255)" remarks="Ссылка на принятое обращение.">
+                <constraints nullable="true" />
+            </column>
+            <column name="reason" type="${snapshotTextType}" remarks="Последняя причина неопределённости или отказа.">
+                <constraints nullable="true" />
+            </column>
+        </createTable>
+        <createTable tableName="corr_attempt" remarks="Зафиксированное разрешение и результат физической попытки.">
+            <column name="submission_id" type="uuid" remarks="Логическая отправка.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_corr_attempt" />
+            </column>
+            <column name="attempt_no" type="integer" remarks="Номер физической попытки.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_corr_attempt" />
+            </column>
+            <column name="result_command_id" type="uuid" remarks="Стабильный ID внутреннего результата.">
+                <constraints nullable="false" />
+            </column>
+            <column name="status" type="varchar(255)" remarks="Завершённость попытки.">
+                <constraints nullable="false" />
+            </column>
+            <column name="outcome" type="varchar(255)" remarks="Достоверность результата.">
+                <constraints nullable="true" />
+            </column>
+            <column name="reason" type="${snapshotTextType}" remarks="Причина результата.">
+                <constraints nullable="true" />
+            </column>
+            <column name="started_at" type="timestamp with time zone" remarks="Время разрешения вызова.">
+                <constraints nullable="false" />
+            </column>
+            <column name="finished_at" type="timestamp with time zone" remarks="Время фиксации исхода.">
+                <constraints nullable="true" />
+            </column>
+        </createTable>
+        <createTable tableName="fsm_command" remarks="Журнал внутренних команд, независимый от идемпотентности HTTP.">
+            <column name="session_id" type="uuid" remarks="Сессия команды.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_fsm_command" />
+            </column>
+            <column name="command_id" type="uuid" remarks="Идентификатор внутренней обработки.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_fsm_command" />
+            </column>
+            <column name="request_id" type="uuid" remarks="Корреляция хода.">
+                <constraints nullable="false" />
+            </column>
+            <column name="event_hash" type="varchar(255)" remarks="Hash значимых данных команды.">
+                <constraints nullable="false" />
+            </column>
+            <column name="source_revision" type="bigint" remarks="Версия перед командой.">
+                <constraints nullable="false" />
+            </column>
+            <column name="result_revision" type="bigint" remarks="Версия после команды.">
+                <constraints nullable="false" />
+            </column>
+            <column name="status" type="varchar(255)" remarks="Сохранённый результат применения.">
+                <constraints nullable="false" />
+            </column>
+            <column name="result_json" type="${snapshotTextType}" remarks="Внутренний результат команды.">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <createTable tableName="session_execution" remarks="Владелец незавершённого хода и монотонное право записи.">
+            <column name="session_id" type="uuid" remarks="Идентификатор сессии.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_session_execution" />
+            </column>
+            <column name="status" type="varchar(255)" remarks="Занятость либо прерывание.">
+                <constraints nullable="false" />
+            </column>
+            <column name="node_id" type="varchar(255)" remarks="Узел последнего владельца.">
+                <constraints nullable="false" />
+            </column>
+            <column name="boot_generation" type="uuid" remarks="Запуск последнего владельца.">
+                <constraints nullable="false" />
+            </column>
+            <column name="execution_token" type="bigint" remarks="Монотонное право записи.">
+                <constraints nullable="false" />
+            </column>
+            <column name="request_id" type="uuid" remarks="Ход последнего владельца.">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <createTable tableName="executor_node" remarks="Текущий запуск постоянного узла исполнителя.">
+            <column name="node_id" type="varchar(255)" remarks="Уникальное постоянное имя узла.">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_executor_node" />
+            </column>
+            <column name="boot_generation" type="uuid" remarks="Разрешённый текущий запуск узла.">
+                <constraints nullable="false" />
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="fsm_binding" columnNames="native_machine_id" constraintName="uq_binding_native" />
+        <addUniqueConstraint tableName="corr_submission" columnNames="preparation_id" constraintName="uq_submission_preparation" />
+        <addUniqueConstraint tableName="corr_submission" columnNames="idempotency_key" constraintName="uq_submission_key" />
+        <addUniqueConstraint tableName="corr_attempt" columnNames="result_command_id" constraintName="uq_attempt_result_command" />
+        <addForeignKeyConstraint baseTableName="fsm_binding" baseColumnNames="session_id" referencedTableName="agent_session" referencedColumnNames="session_id" constraintName="fk_fsm_binding_session_id" />
+        <addForeignKeyConstraint baseTableName="corr_submission" baseColumnNames="session_id" referencedTableName="agent_session" referencedColumnNames="session_id" constraintName="fk_corr_submission_session_id" />
+        <addForeignKeyConstraint baseTableName="corr_attempt" baseColumnNames="submission_id" referencedTableName="corr_submission" referencedColumnNames="submission_id" constraintName="fk_corr_attempt_submission_id" />
+        <addForeignKeyConstraint baseTableName="fsm_command" baseColumnNames="session_id" referencedTableName="agent_session" referencedColumnNames="session_id" constraintName="fk_fsm_command_session_id" />
+        <addForeignKeyConstraint baseTableName="session_execution" baseColumnNames="session_id" referencedTableName="agent_session" referencedColumnNames="session_id" constraintName="fk_session_execution_session_id" />
+        <addForeignKeyConstraint baseTableName="session_execution" baseColumnNames="node_id" referencedTableName="executor_node" referencedColumnNames="node_id" constraintName="fk_session_execution_node_id" />
+        <createIndex tableName="session_execution" indexName="idx_execution_owner">
+            <column name="node_id" />
+            <column name="status" />
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

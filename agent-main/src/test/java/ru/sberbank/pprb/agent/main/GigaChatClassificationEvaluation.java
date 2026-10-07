@@ -45,7 +45,6 @@ class GigaChatClassificationEvaluation {
         }
         var evaluation = new ClassificationEvaluation();
         var http = new PocHttpClient(port, "", Duration.ofMinutes(4));
-        String clarification = renderer.clarification(UUID.randomUUID()).getResult().getMessage();
         for (var sample : samples) {
             String actual = null;
             boolean error = true;
@@ -70,7 +69,9 @@ class GigaChatClassificationEvaluation {
                         actual = "status";
                         error = false;
                     } else if ("inform".equals(performative)
-                            && clarification.equals(result.at("/message/content/result").asText())
+                            && !result.at("/message/content/result").asText().isBlank()
+                            && "information"
+                                    .equals(result.at("/metadata/additional_info/0/value").asText())
                             && result.path("state").isArray()
                             && result.path("state").isEmpty()
                             && result.path("suggestions").isArray()

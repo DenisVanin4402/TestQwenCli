@@ -67,7 +67,11 @@ public class AclInputAdapter {
             ResultDTO envelopeError = validateEnvelope(request, requestHeader);
             AclInputMessage message = request.getMessage();
             Operation operation =
-                    "request".equals(message.getPerformative()) && message.getContent() != null
+                    "request".equals(message.getPerformative())
+                                    && message.getContent() != null
+                                    && NavigationAction.resolve(
+                                                    message.getContent().getActionCode())
+                                            .isEmpty()
                             ? operations
                                     .resolve(message.getContent().getActionCode())
                                     .map(spec -> spec.getOperation())
@@ -123,7 +127,8 @@ public class AclInputAdapter {
             return 200;
         }
         return switch (result.getCode()) {
-            case OPERATION_FAILED, STORAGE_UNAVAILABLE, TEXT_ANALYSIS_FAILED -> 500;
+            case OPERATION_FAILED, STORAGE_UNAVAILABLE, TEXT_ANALYSIS_FAILED, REFERENCE_FAILED ->
+                    500;
             case SESSION_NOT_FOUND -> 404;
             case INVALID_REQUEST,
                             INVALID_CONFIRMATION,
@@ -135,7 +140,12 @@ public class AclInputAdapter {
                             SESSION_BUSY,
                             SESSION_COMPLETED ->
                     400;
-            case CLARIFICATION_REQUIRED,
+            case OPERATION_CHOICE_REQUIRED,
+                            INPUT_SOURCE_CONFLICT,
+                            MULTIPLE_ACTIONS,
+                            REFERENCE_ANSWER,
+                            REFERENCE_NOT_FOUND,
+                            CLARIFICATION_REQUIRED,
                             CONFIRMATION_REQUIRED,
                             PREPARATION_CANCELLED,
                             NO_ACTIVE_PREPARATION,

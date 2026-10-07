@@ -59,7 +59,9 @@ public class SessionStateMachineConfiguration implements OperationCatalog {
         Set<String> codes = new HashSet<>();
         for (OperationDefinition definition : definitions) {
             OperationSpecDTO spec = definition.getSpec();
-            if (!operations.add(spec.getOperation()) || !codes.add(spec.getActionCode())) {
+            if (NavigationAction.resolve(spec.getActionCode()).isPresent()
+                    || !operations.add(spec.getOperation())
+                    || !codes.add(spec.getActionCode())) {
                 throw new IllegalArgumentException("Повторная регистрация операции или actionCode");
             }
         }
@@ -226,7 +228,9 @@ public class SessionStateMachineConfiguration implements OperationCatalog {
     /** Предлагает операции только на шаге выбора; допустимость входа решает сама SSM. */
     @Override
     public List<OperationSpecDTO> choices(SessionState state) {
-        return state == SessionState.CHOOSING_REQUEST_TYPE ? registeredOperations() : List.of();
+        return state.getCategory() == SessionStateCategory.INITIAL
+                ? registeredOperations()
+                : List.of();
     }
 
     /** Единый список операций для саджестов и текстового разбора. */

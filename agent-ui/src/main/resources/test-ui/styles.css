@@ -32,12 +32,21 @@ h1 { font-size: 18px; font-weight: 650; margin: 0; }
 .error .message-text { background: #fff0dc; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .actions:empty { display: none; }
+.confirmation-card { padding: 18px 20px; background: #f0f5f5; border-radius: 4px 18px 18px 18px; overflow-wrap: anywhere; }
+.confirmation-card h2 { margin: 0 0 16px; font-size: 17px; }
+.confirmation-card dl { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 10px 18px; }
+.confirmation-card dt, .confirmation-card dd { margin: 0; font-size: 14px; line-height: 1.5; }
+.confirmation-card dt { font-weight: 700; color: inherit; }
+.confirmation-question { margin: 18px 0 0; font-size: 15px; line-height: 1.6; }
+@media (max-width: 540px) { .confirmation-card dl { grid-template-columns: minmax(0, 1fr); gap: 4px; } .confirmation-card dd { margin-bottom: 10px; } }
 .actions button { font-size: 14px; }
 .actions .reject { color: #5b7077; border-color: #d3dcdf; }
 .composer-area { padding: 12px 36px 20px; }
 .composer { display: flex; align-items: flex-end; gap: 12px; padding: 10px 12px 10px 16px; border: 1px solid #b6caca; border-radius: 16px; background: white; }
+.composer:focus-within { border-color: #222; }
 textarea { resize: vertical; flex: 1; min-width: 0; max-height: 180px; border: 0; background: transparent; color: #243c43; line-height: 1.5; padding: 5px 0; }
-textarea:focus-visible { outline-offset: 1px; }
+textarea:focus-visible { outline: none; }
+.composer button:focus-visible { outline: 2px solid #222; outline-offset: 2px; }
 .composer button { background: var(--teal); color: white; border: 0; }
 .composer button:hover:not(:disabled) { background: #00584f; }
 .input-help { margin: 9px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }

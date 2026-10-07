@@ -117,6 +117,28 @@ class PostgresSessionPersistenceIT extends SessionPersistenceTest {
                                         .get(3, TimeUnit.SECONDS)
                                         .getState())
                         .isEqualTo(SessionState.COMPLETED);
+                workers.submit(
+                                () ->
+                                        assertThatThrownBy(
+                                                        () ->
+                                                                engine.cancelIfPresent(
+                                                                        ru.sberbank.pprb.agent.model
+                                                                                .dto.turn
+                                                                                .SessionTurnInDTO
+                                                                                .builder()
+                                                                                .sessionId(first)
+                                                                                .requestId(
+                                                                                        UUID
+                                                                                                .randomUUID())
+                                                                                .build()))
+                                                .isInstanceOfSatisfying(
+                                                        SessionPersistenceException.class,
+                                                        error ->
+                                                                assertThat(error.getCode())
+                                                                        .isEqualTo(
+                                                                                ResultCode
+                                                                                        .SESSION_BUSY)))
+                        .get(3, TimeUnit.SECONDS);
             } finally {
                 release.countDown();
             }

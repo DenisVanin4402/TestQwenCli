@@ -7,13 +7,15 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import ru.sberbank.pprb.agent.gigachat.GigaChatMessageClassifier;
+import ru.sberbank.pprb.agent.gigachat.GigaChatReferenceAnswerProvider;
 import ru.sberbank.pprb.agent.gigachat.GigaChatResponseAdvisor;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerProvider;
 import ru.sberbank.pprb.agent.service.port.out.TextMessageClassifier;
 
 /** Подключает синхронный клиент к модели, созданной штатной автоконфигурацией GigaChat. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "spring.ai.model.chat", havingValue = "gigachat")
-@EnableConfigurationProperties(GigaChatPromptProperties.class)
+@EnableConfigurationProperties({GigaChatPromptProperties.class, GigaChatReferenceProperties.class})
 public class GigaChatConfiguration {
     /**
      * SDK 1.1.2 регистрирует embedding-модель без условия, игнорируя enabled=false. Удаляем только
@@ -39,5 +41,12 @@ public class GigaChatConfiguration {
     TextMessageClassifier textMessageClassifier(
             ChatClient gigaChatClient, GigaChatPromptProperties prompts) {
         return new GigaChatMessageClassifier(gigaChatClient, prompts);
+    }
+
+    /** Ресурс проверяется при старте только включённой модели. */
+    @Bean
+    ReferenceAnswerProvider referenceAnswerProvider(
+            ChatClient gigaChatClient, GigaChatReferenceProperties prompts) {
+        return new GigaChatReferenceAnswerProvider(gigaChatClient, prompts);
     }
 }

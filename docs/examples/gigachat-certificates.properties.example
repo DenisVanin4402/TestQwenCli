@@ -1,0 +1,13 @@
+# Example only: Spring does not import this file automatically.
+# Copy to a private *.properties file and fill the OAuth Authorization Key.
+# Use KEY=value without quotes; Windows paths must use forward slashes.
+spring.ai.model.chat=gigachat
+GIGACHAT_API_KEY=
+GIGACHAT_SCOPE=GIGACHAT_API_PERS
+GIGACHAT_MODEL=GigaChat-3-Ultra
+GIGACHAT_BASE_URL=https://api.giga.chat/v1
+GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+
+# Trusted CA in PEM format. Adjust the path for your computer.
+spring.ai.gigachat.auth.certs.ca-certs=file:C:/Users/deanv/IdeaProjects/invest-pro/data/certs/russian_trusted_root_ca.pem
+spring.ai.gigachat.auth.unsafe-ssl=false

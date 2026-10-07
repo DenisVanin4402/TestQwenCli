@@ -23,7 +23,9 @@ import ru.sberbank.pprb.agent.model.entity.persistence.session.SessionEntity;
 import ru.sberbank.pprb.agent.model.enums.ResultCode;
 import ru.sberbank.pprb.agent.model.enums.SessionEvent;
 import ru.sberbank.pprb.agent.model.enums.SessionState;
+import ru.sberbank.pprb.agent.model.enums.SessionStateCategory;
 import ru.sberbank.pprb.agent.model.enums.TurnOutcome;
+import ru.sberbank.pprb.agent.service.fsm.guard.common.ContextConsistencyGuard;
 
 /**
  * Создаёт или восстанавливает одну машину для обработки сообщения и сохраняет тот же экземпляр.
@@ -81,12 +83,14 @@ public class SessionExecutionService {
      * результат. При исключении изменённый экземпляр отбрасывается, а рабочая транзакция должна
      * откатиться.
      */
-    private SessionSnapshotDTO processLocked(SessionEntity session, SessionTurnInDTO input) {
+    private SessionSnapshotDTO processLocked(
+            SessionEntity session, SessionTurnInDTO input, boolean navigationReset) {
         StateMachine<SessionState, SessionEvent> machine = null;
         Exception failure = null;
         SessionExecutionContext execution = new SessionExecutionContext(input);
         try {
             boolean exists = repository.existsById(session.getSessionId().toString());
+            if (navigationReset && !exists) return null;
 
             verifyFormat(session);
             if (!exists) {
@@ -101,7 +105,18 @@ public class SessionExecutionService {
                 persister.restore(machine, session.getSessionId().toString());
                 execution.snapshot = snapshot(machine, session.getSessionId());
                 execution.restoredTerminal =
-                        execution.snapshot.getState() == SessionState.COMPLETED;
+                        execution.snapshot.getState().getCategory()
+                                == SessionStateCategory.TERMINAL;
+
+                if (navigationReset) {
+                    if (!ContextConsistencyGuard.matches(
+                            input.getContext(), execution.snapshot.getContext())) {
+                        throw new SessionPersistenceException(
+                                ResultCode.CONTEXT_MISMATCH, "Контекст не совпадает");
+                    }
+                    if (execution.snapshot.getState().getCategory()
+                            != SessionStateCategory.INTERMEDIATE) return execution.snapshot;
+                }
 
             } else {
                 machine.startReactively().block();
@@ -142,6 +157,9 @@ public class SessionExecutionService {
                         ResultCode.INVALID_COMMAND, "Бизнес-сессия не инициализирована");
             }
             if (!execution.actionCompleted) {
+                if (navigationReset)
+                    throw new SessionPersistenceException(
+                            ResultCode.INVALID_COMMAND, "Отмена шага не принята");
                 snapshot.setLastResult(
                         machine.getState().getId() == SessionState.COMPLETED
                                 ? TurnOutcome.SESSION_COMPLETED
@@ -321,7 +339,23 @@ public class SessionExecutionService {
         } catch (PessimisticLockingFailureException exception) {
             throw busy(exception);
         }
-        return processLocked(session, input);
+        return processLocked(session, input, false);
+    }
+
+    /**
+     * Отменяет существующий промежуточный шаг через SSM без создания семафора или второй машины.
+     */
+    @Transactional
+    public Optional<SessionSnapshotDTO> cancelIfPresent(SessionTurnInDTO input) {
+        try {
+            Optional<SessionEntity> session = sessions.getAndLock(input.getSessionId());
+            if (session.isEmpty()) return Optional.empty();
+            SessionTurnInDTO cancel =
+                    input.toBuilder().event(SessionEvent.CANCEL).navigationAction(null).build();
+            return Optional.ofNullable(processLocked(session.get(), cancel, true));
+        } catch (PessimisticLockingFailureException exception) {
+            throw busy(exception);
+        }
     }
 
     /**

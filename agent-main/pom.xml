@@ -151,6 +151,18 @@
     </build>
     <profiles>
         <profile>
+            <id>gigachat-reference-eval</id>
+            <properties>
+                <poc.integration.tests>**/GigaChatReferenceEvaluation.java</poc.integration.tests>
+                <gigachat.test.config>file:${maven.multiModuleProjectDirectory}/.env[.properties]</gigachat.test.config>
+            </properties>
+            <build><plugins><plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration><skipTests>false</skipTests></configuration>
+            </plugin></plugins></build>
+        </profile>
+        <profile>
             <id>gigachat-classification-eval</id>
             <properties>
                 <poc.integration.tests>**/GigaChatClassificationEvaluation.java</poc.integration.tests>

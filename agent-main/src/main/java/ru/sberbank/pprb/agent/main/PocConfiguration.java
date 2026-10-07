@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerException;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerProvider;
 import ru.sberbank.pprb.agent.service.port.out.TextAnalysisException;
 import ru.sberbank.pprb.agent.service.port.out.TextMessageClassifier;
 
@@ -21,6 +23,18 @@ import ru.sberbank.pprb.agent.service.port.out.TextMessageClassifier;
             "ru.sberbank.pprb.agent.investcorr"
         })
 public class PocConfiguration {
+    /** Отключённая справка не читает ресурс и не подменяет ответ модели. */
+    @Bean
+    @ConditionalOnProperty(
+            name = "spring.ai.model.chat",
+            havingValue = "none",
+            matchIfMissing = true)
+    ReferenceAnswerProvider disabledReferenceProvider() {
+        return question -> {
+            throw new ReferenceAnswerException("GigaChat выключен");
+        };
+    }
+
     /** Выключенная модель даёт явный технический отказ, не подменяя распознавание заглушкой. */
     @Bean
     @ConditionalOnProperty(

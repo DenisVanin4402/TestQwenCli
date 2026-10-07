@@ -197,10 +197,24 @@ class PocHttpIntegrationTest {
         var proposal = http.body(prepared);
         assertThat(proposal.at("/message/performative").asText()).isEqualTo("propose");
         assertThat(proposal.at("/message/content/result").asText())
-                .contains("42")
-                .doesNotContain("ООО Альфа");
+                .isEqualTo(
+                        "Запрос статуса платежа\n\nНомер платежа: 42\nОрганизация: ООО Вектор\nДата платежа: 03.10.2026\nПолучатель: ООО Альфа\n\nОтправить запрос статуса этого платежа?");
+        var view = proposal.at("/message/content/confirmation_view");
+        assertThat(view.path("title").asText()).isEqualTo("Запрос статуса платежа");
+        assertThat(view.path("fields"))
+                .extracting(field -> field.path("label").asText())
+                .containsExactly("Номер платежа", "Организация", "Дата платежа", "Получатель");
+        assertThat(view.path("fields"))
+                .extracting(field -> field.path("value").asText())
+                .containsExactly("42", "ООО Вектор", "03.10.2026", "ООО Альфа");
+        assertThat(view.path("question").asText())
+                .isEqualTo("Отправить запрос статуса этого платежа?");
         assertThat(proposal.at("/metadata/final_message").asBoolean()).isFalse();
-        assertThat(proposal.path("suggestions").isEmpty()).isTrue();
+        assertThat(proposal.path("suggestions")).hasSize(2);
+        assertThat(proposal.at("/suggestions/0/performative").asText()).isEqualTo("accept_propose");
+        assertThat(proposal.at("/suggestions/1/performative").asText()).isEqualTo("reject_propose");
+        assertThat(proposal.path("suggestions"))
+                .allSatisfy(button -> assertThat(button.hasNonNull("action_code")).isFalse());
         assertThat(proposal.path("state")).hasSize(2);
         assertThat(proposal.path("state"))
                 .allSatisfy(
@@ -209,27 +223,47 @@ class PocHttpIntegrationTest {
         var before = queries.find(session).orElseThrow();
         assertThat(post(http, session, "request", "restart_status", false).statusCode())
                 .isEqualTo(400);
-        assertThat(post(http, session, "request", "status", false).statusCode()).isEqualTo(400);
+        var invalid = post(http, session, "request", "status", false);
+        assertThat(invalid.statusCode()).isEqualTo(400);
+        assertThat(http.body(invalid).at("/message/content/reason").asText())
+                .isEqualTo(
+                        "Сейчас это действие недоступно. Есть незавершённая операция.\n\nХотите продолжить незавершённую операцию?");
+        assertThat(http.body(invalid).at("/message/content").has("confirmation_view")).isFalse();
         assertThat(queries.find(session).orElseThrow())
                 .usingRecursiveComparison()
                 .comparingOnlyFields("state", "context", "preparation")
                 .isEqualTo(before);
         var cancelled = http.body(post(http, session, "reject_propose", null, false));
         assertThat(cancelled.at("/message/performative").asText()).isEqualTo("inform");
+        assertThat(cancelled.at("/message/content").has("confirmation_view")).isFalse();
         assertThat(cancelled.at("/suggestions/0/action_code").asText()).isEqualTo("status");
         assertThat(cancelled.at("/suggestions/0/display_mode").asText()).isEqualTo("BUTTON");
         assertThat(cancelled.path("state").isEmpty()).isTrue();
-        assertThat(post(http, session, "accept_propose", null, false).statusCode()).isEqualTo(400);
+        var staleId = UUID.randomUUID();
+        var stale = http.post(session, staleId, http.confirmation(staleId, proposal));
+        assertThat(stale.statusCode()).isEqualTo(400);
+        assertThat(http.body(stale).at("/message/content/reason").asText())
+                .isEqualTo("Сейчас это действие недоступно.");
+        assertThat(http.body(stale).at("/suggestions/0/action_code").asText()).isEqualTo("status");
+        assertThat(queries.find(session).orElseThrow().getPreparation()).isNull();
         var nextProposal = http.body(post(http, session, "request", "status", false));
         assertThat(queries.find(session).orElseThrow().getPreparation().getPreparationId())
                 .isNotEqualTo(before.getPreparation().getPreparationId());
         var confirmationId = UUID.randomUUID();
         var confirmation = http.confirmation(confirmationId, nextProposal);
         ((ObjectNode) confirmation.path("message").path("content")).put("action_code", "ignored");
+        var conflict = http.body(http.post(session, confirmationId, confirmation));
+        assertThat(conflict.at("/metadata/additional_info/0/value").asText())
+                .isEqualTo("information");
+        assertThat(queries.find(session).orElseThrow().getState())
+                .isEqualTo(SessionState.AWAITING_CONFIRM);
+        confirmationId = UUID.randomUUID();
+        confirmation = http.confirmation(confirmationId, nextProposal);
         var accepted = http.post(session, confirmationId, confirmation);
         assertThat(accepted.statusCode()).isEqualTo(200);
         var result = http.body(accepted);
         assertThat(result.at("/message/performative").asText()).isEqualTo("inform");
+        assertThat(result.at("/message/content").has("confirmation_view")).isFalse();
         assertThat(result.at("/metadata/final_message").asBoolean()).isTrue();
         assertThat(result.path("suggestions").isEmpty()).isTrue();
         assertThat(result.path("state").isEmpty()).isTrue();

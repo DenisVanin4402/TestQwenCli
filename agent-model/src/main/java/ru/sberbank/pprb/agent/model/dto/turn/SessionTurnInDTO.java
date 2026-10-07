@@ -42,4 +42,10 @@ public class SessionTurnInDTO {
 
     /** Текущий текст клиента, если вход не содержит явного действия. */
     private String userInput;
+
+    /** Адаптер обнаружил несколько источников действия; ни один не выполняется. */
+    private boolean inputSourceConflict;
+
+    /** Явная навигация, не являющаяся бизнес-событием FSM. */
+    private ru.sberbank.pprb.agent.model.enums.NavigationAction navigationAction;
 }

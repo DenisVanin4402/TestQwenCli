@@ -10,6 +10,7 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import ru.sberbank.pprb.agent.gigachat.config.GigaChatPromptProperties;
 import ru.sberbank.pprb.agent.model.dto.operation.OperationSpecDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.MessageAnalysisDTO;
+import ru.sberbank.pprb.agent.model.enums.MessageRoute;
 import ru.sberbank.pprb.agent.service.port.out.*;
 
 /** Синхронный JSON-разбор без доступа к FSM; технические повторы ограничены этим вызовом. */
@@ -29,7 +30,7 @@ public class GigaChatMessageClassifier implements TextMessageClassifier {
         java.util.Map<String, Object> generated =
                 new BeanOutputConverter<>(MessageAnalysisDTO.class).getJsonSchemaMap();
         ObjectNode node = json.valueToTree(generated);
-        node.putArray("required").add("actionCode");
+        node.putArray("required").add("route").add("actionCode");
         node.put("additionalProperties", false);
         ((ObjectNode) node.path("properties").path("actionCode"))
                 .putArray("type")
@@ -59,17 +60,30 @@ public class GigaChatMessageClassifier implements TextMessageClassifier {
                 JsonNode node = json.readTree(raw);
                 if (node == null
                         || !node.isObject()
-                        || node.size() != 1
+                        || node.size() != 2
+                        || !node.has("route")
+                        || !node.get("route").isTextual()
                         || !node.has("actionCode")
                         || !(node.get("actionCode").isNull()
                                 || node.get("actionCode").isTextual())) {
                     throw new IllegalArgumentException("Нарушен JSON-контракт разбора");
                 }
-                MessageAnalysisDTO result = json.treeToValue(node, MessageAnalysisDTO.class);
-                if (result.getActionCode() != null
-                        && operations.stream()
-                                .noneMatch(o -> o.getActionCode().equals(result.getActionCode()))) {
-                    throw new IllegalArgumentException("Незарегистрированная операция");
+                MessageAnalysisDTO result =
+                        new MessageAnalysisDTO(
+                                MessageRoute.valueOf(node.get("route").textValue()),
+                                node.get("actionCode").textValue());
+                if (result.getRoute() == MessageRoute.COMMAND) {
+                    if (result.getActionCode() == null
+                            || result.getActionCode().isBlank()
+                            || operations.stream()
+                                    .noneMatch(
+                                            o ->
+                                                    o.getActionCode()
+                                                            .equals(result.getActionCode()))) {
+                        throw new IllegalArgumentException("Незарегистрированная операция");
+                    }
+                } else if (result.getActionCode() != null) {
+                    throw new IllegalArgumentException("Код операции допустим только для COMMAND");
                 }
                 return result;
             } catch (Exception exception) {

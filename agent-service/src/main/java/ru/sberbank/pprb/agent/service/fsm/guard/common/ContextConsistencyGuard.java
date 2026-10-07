@@ -22,23 +22,26 @@ public class ContextConsistencyGuard implements Guard<SessionState, SessionEvent
         SessionTurnInDTO input = execution.getInput();
         TrustedPaymentContextDTO saved = snapshot.getContext();
         PaymentContextInDTO supplied = input.getContext();
+        return matches(supplied, saved) ? true : execution.reject(ResultCode.CONTEXT_MISMATCH);
+    }
+
+    /** Чистая проверка контекста общая для событий FSM и чтения навигации. */
+    public static boolean matches(PaymentContextInDTO supplied, TrustedPaymentContextDTO saved) {
         if (saved == null || supplied == null) return true;
-        boolean matches =
-                matches(supplied.getEpkId(), saved.getEpkId())
-                        && matches(supplied.getDigitalUserId(), saved.getDigitalUserId())
-                        && matches(supplied.getPaymentId(), saved.getPaymentId())
-                        && matches(supplied.getPaymentNumber(), saved.getPaymentNumber())
-                        && matches(supplied.getPaymentDate(), saved.getPaymentDate())
-                        && (supplied.getAmount() == null
-                                || supplied.getAmount().compareTo(saved.getAmount()) == 0)
-                        && matches(supplied.getCurrency(), saved.getCurrency())
-                        && matches(supplied.getRecipientName(), saved.getRecipientName())
-                        && matches(supplied.getOrganizationName(), saved.getOrganizationName());
-        return matches ? true : execution.reject(ResultCode.CONTEXT_MISMATCH);
+        return matches(supplied.getEpkId(), saved.getEpkId())
+                && matches(supplied.getDigitalUserId(), saved.getDigitalUserId())
+                && matches(supplied.getPaymentId(), saved.getPaymentId())
+                && matches(supplied.getPaymentNumber(), saved.getPaymentNumber())
+                && matches(supplied.getPaymentDate(), saved.getPaymentDate())
+                && (supplied.getAmount() == null
+                        || supplied.getAmount().compareTo(saved.getAmount()) == 0)
+                && matches(supplied.getCurrency(), saved.getCurrency())
+                && matches(supplied.getRecipientName(), saved.getRecipientName())
+                && matches(supplied.getOrganizationName(), saved.getOrganizationName());
     }
 
     /** Пропущенное поле не меняет контекст; переданное должно точно совпадать с сохранённым. */
-    private boolean matches(Object supplied, Object saved) {
+    private static boolean matches(Object supplied, Object saved) {
         return supplied == null || Objects.equals(supplied, saved);
     }
 }

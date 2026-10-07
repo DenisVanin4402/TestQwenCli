@@ -20,6 +20,30 @@ import ru.sberbank.pprb.agent.service.fsm.guard.common.*;
 
 /** Проверяет порядок штатных callbacks на настоящей SSM, без собственного плана перехода. */
 class SessionStateMachineTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {"resume_operation", "reset_operation"})
+    void operationCannotUseReservedNavigationCode(String code) {
+        var definition =
+                new OperationDefinition(
+                        new OperationSpecDTO(
+                                Operation.STATUS,
+                                code,
+                                "Статус",
+                                "Статус",
+                                "status.proposal",
+                                List.of()),
+                        c -> {},
+                        c -> {},
+                        List.of(),
+                        List.of());
+        var configuration =
+                new SessionStateMachineConfiguration(
+                        List.of(definition), null, null, null, null, null, null, null, null, null);
+        assertThatThrownBy(configuration::verifyDefinitions)
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     /** Первый отказ блокирует последующие guards/action; новая машина имеет независимый допуск. */
     @Test
     void shortCircuitsGuardsAndDoesNotShareRejectionWithNextMachine() throws Exception {

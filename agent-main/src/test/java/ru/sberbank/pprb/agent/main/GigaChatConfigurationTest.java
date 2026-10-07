@@ -23,6 +23,7 @@ import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfigura
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import ru.sberbank.pprb.agent.gigachat.config.GigaChatConfiguration;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerProvider;
 
 /** Проверяет реальные YAML и импорт .env без обращений к внешнему сервису. */
 class GigaChatConfigurationTest {
@@ -36,6 +37,7 @@ class GigaChatConfigurationTest {
                     .withPropertyValues(
                             "GIGACHAT_MODE=none",
                             "GIGACHAT_API_KEY=",
+                            "gigachat.prompts.reference.knowledge-resource=classpath:missing-knowledge.md",
                             "spring.profiles.active=" + profile)
                     .run(
                             context -> {
@@ -65,6 +67,7 @@ class GigaChatConfigurationTest {
                             assertThat(context)
                                     .hasNotFailed()
                                     .hasSingleBean(ChatClient.class)
+                                    .hasSingleBean(ReferenceAnswerProvider.class)
                                     .hasSingleBean(GigaChatModel.class)
                                     .doesNotHaveBean(EmbeddingModel.class)
                                     .doesNotHaveBean(ImageModel.class);
@@ -136,6 +139,24 @@ class GigaChatConfigurationTest {
     /** Включает только модель, без запуска POC и БД. */
     private ApplicationContextRunner realContext() {
         return context().withPropertyValues("GIGACHAT_MODE=gigachat");
+    }
+
+    @Test
+    void invalidKnowledgeFailsOnlyEnabledModelAtStartup() throws Exception {
+        for (String content : new String[] {"", " \n\t"}) {
+            Path knowledge = directory.resolve("invalid-knowledge.md");
+            Files.writeString(knowledge, content);
+            realContext()
+                    .withPropertyValues(
+                            "GIGACHAT_API_KEY=synthetic-key",
+                            "gigachat.prompts.reference.knowledge-resource=" + knowledge.toUri())
+                    .run(context -> assertThat(context).hasFailed());
+        }
+        realContext()
+                .withPropertyValues(
+                        "GIGACHAT_API_KEY=synthetic-key",
+                        "gigachat.prompts.reference.knowledge-resource=classpath:missing-knowledge.md")
+                .run(context -> assertThat(context).hasFailed());
     }
 
     /** Загружает YAML приложения, изолируя локальный пользовательский .env. */

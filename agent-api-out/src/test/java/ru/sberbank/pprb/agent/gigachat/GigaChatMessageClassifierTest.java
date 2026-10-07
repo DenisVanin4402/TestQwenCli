@@ -49,7 +49,13 @@ class GigaChatMessageClassifierTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{\"actionCode\":\"status\"}", "{\"actionCode\":null}"})
+    @ValueSource(
+            strings = {
+                "{\"route\":\"COMMAND\",\"actionCode\":\"status\"}",
+                "{\"route\":\"UNCLEAR\",\"actionCode\":null}",
+                "{\"route\":\"REFERENCE\",\"actionCode\":null}",
+                "{\"route\":\"MIXED\",\"actionCode\":null}"
+            })
     void acceptsValidResultOnce(String json) throws Exception {
         when(model.call(any(Prompt.class))).thenReturn(answer(json));
         var classifier = classifier();
@@ -73,6 +79,11 @@ class GigaChatMessageClassifierTest {
     @ValueSource(
             strings = {
                 "{}",
+                "{\"route\":\"0\",\"actionCode\":\"status\"}",
+                "{\"actionCode\":null}",
+                "{\"route\":\"COMMAND\",\"actionCode\":null}",
+                "{\"route\":\"REFERENCE\",\"actionCode\":\"status\"}",
+                "{\"route\":\"UNKNOWN\",\"actionCode\":null}",
                 "null",
                 "[]",
                 "{\"actionCode\":1}",
@@ -101,7 +112,7 @@ class GigaChatMessageClassifierTest {
     void stopsOnFirstSuccessAfterTechnicalError() {
         when(model.call(any(Prompt.class)))
                 .thenThrow(new IllegalStateException("synthetic"))
-                .thenReturn(answer("{\"actionCode\":null}"));
+                .thenReturn(answer("{\"route\":\"UNCLEAR\",\"actionCode\":null}"));
         assertThat(classifier().classify("текст", operations).getActionCode()).isNull();
         verify(model, times(2)).call(any(Prompt.class));
     }

@@ -11,14 +11,19 @@ import ru.sberbank.pprb.agent.model.dto.session.SessionSnapshotDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.MessageAnalysisDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.SessionTurnInDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.TurnOutDTO;
+import ru.sberbank.pprb.agent.model.enums.MessageRoute;
+import ru.sberbank.pprb.agent.model.enums.NavigationAction;
 import ru.sberbank.pprb.agent.model.enums.ResultCode;
 import ru.sberbank.pprb.agent.model.enums.SessionEvent;
 import ru.sberbank.pprb.agent.service.fsm.SessionExecutionService;
 import ru.sberbank.pprb.agent.service.fsm.SessionPersistenceException;
+import ru.sberbank.pprb.agent.service.fsm.guard.common.ContextConsistencyGuard;
 import ru.sberbank.pprb.agent.service.port.in.OperationCatalog;
 import ru.sberbank.pprb.agent.service.port.in.SessionQueryException;
 import ru.sberbank.pprb.agent.service.port.in.SessionQueryUseCase;
 import ru.sberbank.pprb.agent.service.port.in.SessionTurnUseCase;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerException;
+import ru.sberbank.pprb.agent.service.port.out.ReferenceAnswerProvider;
 import ru.sberbank.pprb.agent.service.port.out.TextAnalysisException;
 import ru.sberbank.pprb.agent.service.port.out.TextMessageClassifier;
 
@@ -43,6 +48,9 @@ public class SessionTurnOrchestrator implements SessionTurnUseCase, SessionQuery
     /** Проверяет код модели по тому же каталогу, что используется саджестами. */
     private final OperationCatalog operations;
 
+    /** Справка выполняется вне транзакции; затем текущий снимок определяет навигацию. */
+    private final ReferenceAnswerProvider reference;
+
     /**
      * Обрабатывает проверенный вход через движок и готовит ответ после завершения транзакции. Ключ
      * передаётся отдельной строкой для будущей библиотеки идемпотентности; пока она не подключена,
@@ -60,6 +68,30 @@ public class SessionTurnOrchestrator implements SessionTurnUseCase, SessionQuery
                     .result(input.getValidationError())
                     .build();
         }
+        if (input.isInputSourceConflict()
+                || (input.getNavigationAction() != null
+                        && (input.getEvent() != null
+                                || (input.getUserInput() != null
+                                        && !input.getUserInput().isBlank())))) {
+            return navigation(input, renderer.inputSourceConflict(input.getRequestId()));
+        }
+        if (input.getNavigationAction() != null) {
+            try {
+                SessionSnapshotDTO current =
+                        input.getNavigationAction() == NavigationAction.RESUME
+                                ? fsm.find(input.getSessionId()).orElse(null)
+                                : fsm.cancelIfPresent(input).orElse(null);
+                if (current != null
+                        && !ContextConsistencyGuard.matches(
+                                input.getContext(), current.getContext()))
+                    return failure(input, ResultCode.CONTEXT_MISMATCH, false);
+                return renderer.renderCurrent(current, input.getRequestId());
+            } catch (SessionPersistenceException exception) {
+                return failure(input, exception.getCode(), exception.isTerminal());
+            } catch (RuntimeException exception) {
+                return failure(input, ResultCode.STORAGE_UNAVAILABLE, false);
+            }
+        }
         if (input.getEvent() == null) {
             if (input.getUserInput() == null || input.getUserInput().isBlank()) {
                 return failure(input, ResultCode.INVALID_REQUEST, false);
@@ -68,9 +100,29 @@ public class SessionTurnOrchestrator implements SessionTurnUseCase, SessionQuery
                 MessageAnalysisDTO analysis =
                         classifier.classify(
                                 input.getUserInput(), operations.registeredOperations());
-                if (analysis == null) throw new TextAnalysisException("Пустой результат разбора");
-                if (analysis.getActionCode() == null)
-                    return renderer.clarification(input.getRequestId());
+                if (analysis == null || analysis.getRoute() == null)
+                    throw new TextAnalysisException("Пустой результат разбора");
+                if (analysis.getRoute() != MessageRoute.COMMAND && analysis.getActionCode() != null)
+                    throw new TextAnalysisException("Код операции не соответствует маршруту");
+                switch (analysis.getRoute()) {
+                    case UNCLEAR:
+                        return navigation(input, renderer.clarification(input.getRequestId()));
+                    case MIXED:
+                        return navigation(input, renderer.multipleActions(input.getRequestId()));
+                    case REFERENCE:
+                        try {
+                            return navigation(
+                                    input,
+                                    renderer.reference(
+                                            input.getRequestId(),
+                                            reference.answer(input.getUserInput())));
+                        } catch (ReferenceAnswerException exception) {
+                            log.warn("Reference answer failed: session={}", input.getSessionId());
+                            return failure(input, ResultCode.REFERENCE_FAILED, false);
+                        }
+                    case COMMAND:
+                        break;
+                }
                 OperationSpecDTO operation =
                         operations
                                 .resolve(analysis.getActionCode())
@@ -86,6 +138,7 @@ public class SessionTurnOrchestrator implements SessionTurnUseCase, SessionQuery
                                 .confirmation(java.util.List.of())
                                 .build();
             } catch (TextAnalysisException exception) {
+                log.error("Problems with gigachat lm", exception);
                 log.warn("Text analysis failed: session={}", input.getSessionId());
                 return failure(input, ResultCode.TEXT_ANALYSIS_FAILED, false);
             }
@@ -100,14 +153,32 @@ public class SessionTurnOrchestrator implements SessionTurnUseCase, SessionQuery
                     input.getSessionId(),
                     exception.getCode(),
                     exception);
-            return failure(input, exception.getCode(), exception.isTerminal());
+            TurnOutDTO output = failure(input, exception.getCode(), exception.isTerminal());
+            return exception.getCode() == ResultCode.INVALID_COMMAND
+                    ? navigation(input, output)
+                    : output;
         } catch (RuntimeException exception) {
             log.error("Session transaction failed: session={}", input.getSessionId(), exception);
             return failure(input, ResultCode.STORAGE_UNAVAILABLE, false);
         }
         // Состояние уже зафиксировано. Ошибка формирования ответа не должна повторно запускать
         // действие машины и внешний вызов, поэтому обработка ответа находится за границей try.
-        return renderer.render(snapshot);
+        return renderer.withNavigation(renderer.render(snapshot), snapshot);
+    }
+
+    /** Читает актуальный шаг после LLM или отката; отсутствие не подменяет ошибку хранения. */
+    private TurnOutDTO navigation(SessionTurnInDTO input, TurnOutDTO output) {
+        try {
+            SessionSnapshotDTO snapshot = fsm.find(input.getSessionId()).orElse(null);
+            if (snapshot != null
+                    && !ContextConsistencyGuard.matches(input.getContext(), snapshot.getContext()))
+                return failure(input, ResultCode.CONTEXT_MISMATCH, false);
+            return renderer.withNavigation(output, snapshot);
+        } catch (SessionPersistenceException exception) {
+            return failure(input, exception.getCode(), exception.isTerminal());
+        } catch (RuntimeException exception) {
+            return failure(input, ResultCode.STORAGE_UNAVAILABLE, false);
+        }
     }
 
     /**

@@ -18,20 +18,18 @@ class LocalHelperBoundaryTest {
     void exposesFixtureAndDoesNotExposeSession() throws Exception {
         var operations =
                 org.mockito.Mockito.mock(
-                        ru.sberbank.pprb.agent.service.port.in.OperationCatalog.class);
+                        ru.sberbank.pprb.agent.service.turn.SessionResponseRenderer.class);
         org.mockito.Mockito.when(
-                        operations.choices(
+                        operations.operationSuggestions(
                                 ru.sberbank.pprb.agent.model.enums.SessionState
                                         .CHOOSING_REQUEST_TYPE))
                 .thenReturn(
                         java.util.List.of(
-                                ru.sberbank.pprb.agent.model.dto.operation.OperationSpecDTO
-                                        .builder()
-                                        .actionCode("status")
-                                        .title("Запросить статус")
-                                        .messageText("Запросить статус")
-                                        .confirmationFields(java.util.List.of())
-                                        .build()));
+                                new ru.sberbank.pprb.agent.model.dto.turn.TurnSuggestionDTO(
+                                        "Запросить статус",
+                                        "status",
+                                        ru.sberbank.pprb.agent.model.enums.SuggestionKind
+                                                .COMMAND)));
         var http =
                 MockMvcBuilders.standaloneSetup(
                                 new LocalHelperController(
@@ -48,6 +46,7 @@ class LocalHelperBoundaryTest {
                 .andExpect(jsonPath("$.fixtures[0].payment.paymentId").value("test-payment-42"))
                 .andExpect(jsonPath("$.suggestions[0].action_code").value("status"))
                 .andExpect(jsonPath("$.suggestions[0].display_mode").value("BUTTON"))
+                .andExpect(jsonPath("$.suggestions[0].performative").value("request"))
                 .andExpect(jsonPath("$.availableCommands").doesNotExist());
         http.perform(get("/local-api/v1/sessions/" + UUID.randomUUID()))
                 .andExpect(status().isNotFound());

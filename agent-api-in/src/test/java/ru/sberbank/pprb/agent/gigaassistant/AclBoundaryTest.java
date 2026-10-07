@@ -45,6 +45,41 @@ import ru.sberbank.pprb.agent.service.port.in.SessionTurnUseCase;
  * адаптером.
  */
 class AclBoundaryTest {
+    @ParameterizedTest
+    @ValueSource(strings = {"resume_operation", "reset_operation"})
+    void navigationRemainsSeparateFromBusinessEvents(String code) throws Exception {
+        var body = envelope("request", code, null);
+        http.perform(
+                        post("/api/v1/ai/agents/invest-pro")
+                                .header("Request-Id", REQUEST_ID)
+                                .header("Gigachat-Session-Id", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body.toString()))
+                .andExpect(status().isOk());
+        var input = capturedInput();
+        assertThat(input.getValidationError()).isNull();
+        assertThat(input.getEvent()).isNull();
+        assertThat(input.getOperation()).isNull();
+        assertThat(input.getNavigationAction().getActionCode()).isEqualTo(code);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"request", "accept_propose", "reject_propose"})
+    void conflictingNavigationNeverBecomesConsent(String performative) throws Exception {
+        var body = envelope(performative, "resume_operation", null);
+        if (performative.equals("request"))
+            ((ObjectNode) body.at("/message/content")).put("user_input", "да");
+        http.perform(
+                        post("/api/v1/ai/agents/invest-pro")
+                                .header("Request-Id", REQUEST_ID)
+                                .header("Gigachat-Session-Id", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body.toString()))
+                .andExpect(status().isOk());
+        assertThat(capturedInput().isInputSourceConflict()).isTrue();
+        assertThat(capturedInput().getValidationError()).isNull();
+    }
+
     private static final String REQUEST_ID = "22222222-2222-4222-8222-222222222222";
     private static final String SESSION_ID = "11111111-1111-4111-8111-111111111111";
     private SessionTurnUseCase useCase;
@@ -98,7 +133,7 @@ class AclBoundaryTest {
     /** Mapper сохраняет дефекты согласия до guards и исключает другие валидные типы state. */
     @Test
     void preservesDuplicateAndNullConfirmationValues() throws Exception {
-        ObjectNode body = envelope("accept_propose", "ignored", fullMetadata());
+        ObjectNode body = envelope("accept_propose", null, fullMetadata());
         var state = body.putArray("state");
         state.addObject()
                 .put("key", "paymentNumber")
@@ -178,9 +213,8 @@ class AclBoundaryTest {
     }
 
     @Test
-    @DisplayName(
-            "Частичный контекст сохраняет пропуски; согласие имеет приоритет над action_code и текстом")
-    void keepsPartialContextAndControlPriority() throws Exception {
+    @DisplayName("Частичный контекст сохраняет пропуски; несколько источников не выбирают действие")
+    void keepsPartialContextAndDetectsSourceConflict() throws Exception {
         ObjectNode metadata = json.createObjectNode();
         metadata.putArray("additional_info")
                 .addObject()
@@ -196,11 +230,75 @@ class AclBoundaryTest {
                                                 .toString()))
                 .andExpect(status().isOk());
         SessionTurnInDTO input = capturedInput();
-        assertThat(input.getEvent()).isEqualTo(SessionEvent.CONFIRM);
+        assertThat(input.isInputSourceConflict()).isTrue();
         assertThat(input.getContext().getPaymentNumber()).isEqualTo("42");
         assertThat(input.getContext().getEpkId()).isNull();
         assertThat(input.getContext().getAmount()).isNull();
         assertThat(input.getValidationError()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"request", "accept_propose", "reject_propose"})
+    void preservesTextAndDetectsSourceConflict(String performative) throws Exception {
+        var body =
+                envelope(
+                        performative,
+                        "request".equals(performative) ? "status" : null,
+                        fullMetadata());
+        ((ObjectNode) body.at("/message/content")).put("user_input", "Какая комиссия?");
+        http.perform(
+                        post("/api/v1/ai/agents/invest-pro")
+                                .header("Request-Id", REQUEST_ID)
+                                .header("Gigachat-Session-Id", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body.toString()))
+                .andExpect(status().isOk());
+        var input = capturedInput();
+        assertThat(input.isInputSourceConflict()).isTrue();
+        assertThat(input.getUserInput()).isEqualTo("Какая комиссия?");
+    }
+
+    @Test
+    void informationMetadataIsDistinctFromOperationalInform() throws Exception {
+        org.mockito.Mockito.doReturn(
+                        TurnOutDTO.builder()
+                                .result(
+                                        new ResultDTO(
+                                                ResultKind.ERROR,
+                                                ResultCode.REFERENCE_FAILED,
+                                                "Справка недоступна"))
+                                .build())
+                .when(useCase)
+                .handle(any(), anyString());
+        http.perform(
+                        post("/api/v1/ai/agents/invest-pro")
+                                .header("Request-Id", REQUEST_ID)
+                                .header("Gigachat-Session-Id", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(envelope("request", "status", null).toString()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.metadata.additional_info[0].key").value("response_mode"))
+                .andExpect(jsonPath("$.metadata.additional_info[0].value").value("information"))
+                .andExpect(jsonPath("$.metadata.final_message").value(false))
+                .andExpect(jsonPath("$.state").isEmpty())
+                .andExpect(jsonPath("$.suggestions").isEmpty());
+    }
+
+    @Test
+    void unsupportedPerformativeIsNotHiddenBySourceConflict() throws Exception {
+        ObjectNode body = envelope("inform", "status", fullMetadata());
+        ((ObjectNode) body.at("/message/content")).put("user_input", "Какая комиссия?");
+        http.perform(
+                        post("/api/v1/ai/agents/invest-pro")
+                                .header("Request-Id", REQUEST_ID)
+                                .header("Gigachat-Session-Id", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message.performative").value("failure"))
+                .andExpect(jsonPath("$.metadata.additional_info").isEmpty());
+        assertThat(capturedInput().getValidationError().getCode())
+                .isEqualTo(ResultCode.UNSUPPORTED_COMMAND);
     }
 
     @ParameterizedTest

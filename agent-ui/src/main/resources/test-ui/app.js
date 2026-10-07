@@ -5,7 +5,7 @@ let catalog;
 /** Ответы и реквизиты выводятся как текст; HTML и шаблонные выражения не исполняются. */
 function element(tag, text, className) {
   const node = document.createElement(tag);
-  if (text != null) node.textContent = String(text).replace(/\{\{[^}]*\}\}/g, '');
+  if (text != null) node.textContent = String(text);
   if (className) node.className = className;
   return node;
 }
@@ -24,7 +24,17 @@ function render() {
   const nearBottom = conversation.scrollHeight - conversation.scrollTop - conversation.clientHeight < 100;
   const messages = state.messages.map((message, index) => {
     const row = element('article', null, 'message ' + message.role + (message.error ? ' error' : ''));
-    row.append(element('p', message.role === 'user' ? 'Вы' : 'Помощник', 'author'), element('p', message.text, 'message-text'));
+    row.append(element('p', message.role === 'user' ? 'Вы' : 'Помощник', 'author'));
+    if (message.confirmationView) {
+      const view = message.confirmationView;
+      const card = element('section', null, 'confirmation-card');
+      const fields = element('dl');
+      for (const field of view.fields) fields.append(element('dt', field.label), element('dd', field.value));
+      card.append(element('h2', view.title), fields, element('p', view.question, 'confirmation-question'));
+      row.append(card);
+    } else {
+      row.append(element('p', message.text, 'message-text'));
+    }
     if (index === state.messages.length - 1 && message.role === 'agent') {
       const actions = element('div', null, 'actions');
       for (const action of session.actions()) {
@@ -43,13 +53,24 @@ function render() {
 }
 
 const session = new TestSession(globalThis.fetch.bind(globalThis), render);
+
+/** Очищает отправленный текст только после успешного ответа в том же диалоге. */
+async function sendText() {
+  const state = session.state;
+  const text = byId('message').value;
+  if (await session.sendText(text) && session.state === state && byId('message').value === text) {
+    byId('message').value = '';
+    render();
+  }
+}
+
 byId('new').addEventListener('click', () => { byId('message').value = ''; session.start(catalog); });
 byId('message').addEventListener('input', () => { byId('send').disabled = !session.canSendText() || !byId('message').value.trim(); });
-byId('composer').addEventListener('submit', event => { event.preventDefault(); session.sendText(byId('message').value); });
+byId('composer').addEventListener('submit', event => { event.preventDefault(); sendText(); });
 byId('message').addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
-    session.sendText(byId('message').value);
+    sendText();
   }
 });
 

@@ -16,6 +16,109 @@ import ru.sberbank.pprb.agent.service.port.in.OperationCatalog;
 /** Текст и state используют сохранённые значения; неверный каталог запрещает старт. */
 class SessionResponseRendererTest {
 
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultCode.class,
+            names = {
+                "REFERENCE_ANSWER",
+                "REFERENCE_NOT_FOUND",
+                "CLARIFICATION_REQUIRED",
+                "MULTIPLE_ACTIONS",
+                "INPUT_SOURCE_CONFLICT",
+                "INVALID_COMMAND"
+            })
+    void navigationUsesCategoryAndNeverExposesConfirmation(ResultCode code) {
+        var renderer =
+                new SessionResponseRenderer(
+                        operations(fields()), "session-responses", "dd.MM.yyyy");
+        for (SessionState state : SessionState.values()) {
+            var snapshot = SessionSnapshotDTO.builder().state(state).build();
+            var output =
+                    ru.sberbank.pprb.agent.model.dto.turn.TurnOutDTO.builder()
+                            .requestId(UUID.randomUUID())
+                            .result(
+                                    new ru.sberbank.pprb.agent.model.dto.turn.ResultDTO(
+                                            code == ResultCode.INVALID_COMMAND
+                                                    ? ResultKind.ERROR
+                                                    : ResultKind.SUCCESS,
+                                            code,
+                                            "Исходный текст"))
+                            .build();
+            renderer.withNavigation(output, snapshot);
+            assertThat(output.getResult().getCode()).isEqualTo(code);
+            assertThat(output.getConfirmation()).isEmpty();
+            if (state == SessionState.AWAITING_CONFIRM) {
+                assertThat(output.getResult().getMessage())
+                        .isEqualTo("Исходный текст\n\nХотите продолжить незавершённую операцию?");
+                assertThat(output.getSuggestions()).extracting("text").containsExactly("Да", "Нет");
+                assertThat(output.getSuggestions())
+                        .extracting("actionCode")
+                        .containsExactly("resume_operation", "reset_operation");
+            } else {
+                assertThat(output.getResult().getMessage()).isEqualTo("Исходный текст");
+                assertThat(output.getSuggestions())
+                        .hasSize(state == SessionState.COMPLETED ? 0 : 1);
+            }
+            assertThat(output.isTerminal()).isEqualTo(state == SessionState.COMPLETED);
+        }
+    }
+
+    @Test
+    void currentStepDoesNotRepeatSavedErrorOrMutateSnapshot() {
+        var renderer =
+                new SessionResponseRenderer(
+                        operations(fields()), "session-responses", "dd.MM.yyyy");
+        var preparation =
+                PreparationDTO.builder()
+                        .operation(Operation.STATUS)
+                        .preparationNo(3)
+                        .context(context())
+                        .confirmationSnapshot(
+                                List.of(
+                                        new ConfirmationValueDTO("paymentNumber", "0042"),
+                                        new ConfirmationValueDTO("preparationNo", "3")))
+                        .build();
+        var savedRequest = UUID.randomUUID();
+        var request = UUID.randomUUID();
+        var snapshot =
+                SessionSnapshotDTO.builder()
+                        .state(SessionState.AWAITING_CONFIRM)
+                        .preparation(preparation)
+                        .lastResult(TurnOutcome.INVALID_COMMAND)
+                        .lastRequestId(savedRequest)
+                        .projectionVersion(8)
+                        .build();
+        var output = renderer.renderCurrent(snapshot, request);
+        assertThat(output.getResult().getCode()).isEqualTo(ResultCode.CONFIRMATION_REQUIRED);
+        assertThat(output.getRequestId()).isEqualTo(request);
+        assertThat(output.getConfirmation()).extracting("value").containsExactly("0042", "3");
+        assertThat(output.getSuggestions())
+                .extracting("kind")
+                .containsExactly(SuggestionKind.CONFIRM, SuggestionKind.CANCEL);
+        assertThat(snapshot.getLastResult()).isEqualTo(TurnOutcome.INVALID_COMMAND);
+        assertThat(snapshot.getLastRequestId()).isEqualTo(savedRequest);
+        assertThat(snapshot.getProjectionVersion()).isEqualTo(8);
+        assertThat(renderer.renderCurrent(null, request).getSuggestions()).hasSize(1);
+    }
+
+    /** Отказ на шаге выбора не должен приписывать уже отменённую подготовку. */
+    @Test
+    void invalidCommandWithoutPreparationDoesNotClaimAnActiveOperation() {
+        var renderer =
+                new SessionResponseRenderer(
+                        operations(fields()), "session-responses", "dd.MM.yyyy");
+        var snapshot =
+                SessionSnapshotDTO.builder()
+                        .state(SessionState.CHOOSING_REQUEST_TYPE)
+                        .lastResult(TurnOutcome.INVALID_COMMAND)
+                        .lastRequestId(UUID.randomUUID())
+                        .build();
+        var output = renderer.withNavigation(renderer.render(snapshot), snapshot);
+        assertThat(output.getResult().getMessage()).isEqualTo("Сейчас это действие недоступно.");
+        assertThat(output.getConfirmation()).isEmpty();
+        assertThat(output.getSuggestions()).extracting("actionCode").containsExactly("status");
+    }
+
     /** Подменяет только читаемый каталог, сохраняя реальный renderer и mapper. */
     private OperationCatalog operations(List<ConfirmationFieldDTO> fields) {
         var operations = mock(OperationCatalog.class);
@@ -44,25 +147,14 @@ class SessionResponseRendererTest {
      * только показ.
      */
     void rendersSavedValuesWithoutRereadingContext(String format, String expectedDate) {
-        var fields = new ArrayList<>(fields());
-        fields.add(
-                new ConfirmationFieldDTO(
-                        "paymentDate",
-                        PaymentField.PAYMENT_DATE,
-                        ConfirmationValueType.DATE,
-                        "Дата"));
         var preparation =
                 PreparationDTO.builder()
                         .operation(Operation.STATUS)
                         .preparationNo(2)
-                        .context(
-                                TrustedPaymentContextDTO.builder()
-                                        .paymentNumber("Не показывать")
-                                        .build())
+                        .context(context())
                         .confirmationSnapshot(
                                 List.of(
                                         new ConfirmationValueDTO("paymentNumber", "0042"),
-                                        new ConfirmationValueDTO("paymentDate", "2026-10-03"),
                                         new ConfirmationValueDTO("preparationNo", "2")))
                         .build();
         var snapshot =
@@ -74,14 +166,21 @@ class SessionResponseRendererTest {
                         .build();
         var renderer =
                 new SessionResponseRenderer(
-                        operations(fields),
-                        catalog("status.proposal", "Платёж №{0} от {1}"),
+                        operations(fields()),
+                        ResourceBundle.getBundle("session-responses", Locale.ROOT),
                         format);
         var view = renderer.render(snapshot);
-        assertThat(view.getResult().getMessage()).isEqualTo("Платёж №0042 от " + expectedDate);
+        assertThat(view.getResult().getMessage())
+                .isEqualTo(
+                        "Запрос статуса платежа\n\nНомер платежа: 0042\nОрганизация: Организация\nДата платежа: "
+                                + expectedDate
+                                + "\nПолучатель: Получатель\n\nОтправить запрос статуса этого платежа?");
+        assertThat(view).extracting("confirmationView").isNotNull();
+        var resumed = renderer.renderCurrent(snapshot, UUID.randomUUID());
+        assertThat(resumed.getResult().getMessage()).isEqualTo(view.getResult().getMessage());
         assertThat(view.getConfirmation())
                 .extracting(ConfirmationParameterDTO::getValue)
-                .containsExactly("0042", "2026-10-03", "2");
+                .containsExactly("0042", "2");
         assertThat(snapshot.getPreparation()).isSameAs(preparation);
         assertThat(snapshot.getProjectionVersion()).isEqualTo(4);
         assertThat(preparation.getConfirmedRequestId()).isNull();
@@ -110,6 +209,15 @@ class SessionResponseRendererTest {
                                         catalog("error.DEFAULT", null),
                                         "dd.MM.yyyy"))
                 .isInstanceOf(MissingResourceException.class);
+    }
+
+    private TrustedPaymentContextDTO context() {
+        return TrustedPaymentContextDTO.builder()
+                .paymentNumber("Не показывать")
+                .organizationName("Организация")
+                .recipientName("Получатель")
+                .paymentDate(java.time.LocalDate.of(2026, 10, 3))
+                .build();
     }
 
     /** Меняет один текст реального каталога для проверки валидации конфигурации. */

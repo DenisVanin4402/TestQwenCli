@@ -38,6 +38,99 @@ import ru.sberbank.pprb.agent.service.port.out.WorkflowManager;
         properties = "spring.datasource.url=jdbc:h2:mem:session-runtime;DB_CLOSE_DELAY=-1")
 @ActiveProfiles({"poc-local", "h2"})
 class SessionPersistenceTest {
+    @Autowired ru.sberbank.pprb.agent.service.port.in.SessionTurnUseCase turns;
+
+    @Test
+    void navigationReadsWithoutWritingAndResetInvalidatesOldConsent() throws Exception {
+        UUID id = UUID.randomUUID();
+        var navigation =
+                SessionTurnInDTO.builder()
+                        .sessionId(id)
+                        .requestId(UUID.randomUUID())
+                        .navigationAction(NavigationAction.RESET)
+                        .build();
+        assertThat(engine.cancelIfPresent(navigation)).isEmpty();
+        assertThat(
+                        turns.handle(
+                                        navigation.toBuilder()
+                                                .navigationAction(NavigationAction.RESUME)
+                                                .build(),
+                                        "key")
+                                .getResult()
+                                .getCode())
+                .isEqualTo(ResultCode.OPERATION_CHOICE_REQUIRED);
+        assertThat(sessions.existsById(id)).isFalse();
+        var proposal = prepare(id);
+        process(id, SessionEvent.SELECT);
+        byte[] before = nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext();
+        clearInvocations(persister);
+        var resumed =
+                turns.handle(
+                        navigation.toBuilder().navigationAction(NavigationAction.RESUME).build(),
+                        "key");
+        assertThat(resumed.getResult().getCode()).isEqualTo(ResultCode.CONFIRMATION_REQUIRED);
+        assertThat(resumed.getRequestId()).isEqualTo(navigation.getRequestId());
+        assertThat(nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext())
+                .isEqualTo(before);
+        verify(persister, never()).persist(any(), any());
+        var reset = engine.cancelIfPresent(navigation).orElseThrow();
+        assertThat(reset.getState()).isEqualTo(SessionState.CHOOSING_REQUEST_TYPE);
+        assertThat(reset.getPreparation()).isNull();
+        assertThat(reset.getContext()).usingRecursiveComparison().isEqualTo(proposal.getContext());
+        assertThat(reset.getLastPreparationNo()).isEqualTo(1);
+        before = nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext();
+        engine.cancelIfPresent(navigation);
+        assertThat(nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext())
+                .isEqualTo(before);
+        var next = prepare(id);
+        assertThat(next.getPreparation().getPreparationNo()).isEqualTo(2);
+        assertThatThrownBy(() -> confirm(id, proposal))
+                .isInstanceOfSatisfying(
+                        SessionPersistenceException.class,
+                        error ->
+                                assertThat(error.getCode())
+                                        .isEqualTo(ResultCode.STALE_PREPARATION));
+        var completed = confirm(id, next);
+        before = nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext();
+        assertThat(engine.cancelIfPresent(navigation).orElseThrow())
+                .usingRecursiveComparison()
+                .isEqualTo(completed);
+        assertThat(nativeStates.findById(id.toString()).orElseThrow().getStateMachineContext())
+                .isEqualTo(before);
+        verify(workflow, times(1)).callOperation(any(), any());
+    }
+
+    @Test
+    void navigationChecksContextAndResetRollsBackOnSaveFailure() throws Exception {
+        UUID id = UUID.randomUUID();
+        var proposal = prepare(id);
+        var supplied = new PaymentContextInDTO();
+        supplied.setPaymentNumber("other");
+        var input =
+                SessionTurnInDTO.builder()
+                        .sessionId(id)
+                        .requestId(UUID.randomUUID())
+                        .navigationAction(NavigationAction.RESET)
+                        .context(supplied)
+                        .build();
+        assertThatThrownBy(() -> engine.cancelIfPresent(input))
+                .isInstanceOfSatisfying(
+                        SessionPersistenceException.class,
+                        error ->
+                                assertThat(error.getCode()).isEqualTo(ResultCode.CONTEXT_MISMATCH));
+        var mismatch =
+                turns.handle(
+                        input.toBuilder().navigationAction(NavigationAction.RESUME).build(), "key");
+        assertThat(mismatch.getResult().getCode()).isEqualTo(ResultCode.CONTEXT_MISMATCH);
+        assertThat(mismatch.getSuggestions()).isEmpty();
+        assertThat(mismatch.getConfirmation()).isEmpty();
+        doThrow(new IllegalStateException("save failed")).when(persister).persist(any(), any());
+        assertThatThrownBy(() -> engine.cancelIfPresent(input.toBuilder().context(null).build()))
+                .isInstanceOf(SessionPersistenceException.class);
+        assertThat(engine.find(id).orElseThrow()).usingRecursiveComparison().isEqualTo(proposal);
+        verifyNoInteractions(workflow);
+    }
+
     /** Восстанавливает native-байты прежней реализации и подтверждает старое предложение. */
     @Test
     void restoresStatusV3FromBeforeRefactoring() throws Exception {
@@ -162,6 +255,8 @@ class SessionPersistenceTest {
                         null,
                         null,
                         proposal.getPreparation().getConfirmationSnapshot(),
+                        null,
+                        false,
                         null);
         clearInvocations(persister);
         assertThatThrownBy(() -> engine.process(input))
@@ -229,6 +324,8 @@ class SessionPersistenceTest {
                         null,
                         Operation.STATUS,
                         java.util.List.of(),
+                        null,
+                        false,
                         null));
         assertThat(engine.find(id).orElseThrow().getPreparation().getContext().getRecipientName())
                 .isEqualTo(recipient);
@@ -448,6 +545,8 @@ class SessionPersistenceTest {
                         null,
                         Operation.STATUS,
                         java.util.List.of(),
+                        null,
+                        false,
                         null));
     }
 
@@ -465,6 +564,8 @@ class SessionPersistenceTest {
                         null,
                         command == SessionEvent.SELECT ? Operation.STATUS : null,
                         java.util.List.of(),
+                        null,
+                        false,
                         null));
     }
 
@@ -479,6 +580,8 @@ class SessionPersistenceTest {
                         null,
                         null,
                         proposal.getPreparation().getConfirmationSnapshot(),
+                        null,
+                        false,
                         null));
     }
 

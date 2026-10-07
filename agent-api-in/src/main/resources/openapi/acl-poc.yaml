@@ -111,7 +111,7 @@ components:
       properties:
         user_input:
           type: string
-          description: Текущий текст клиента; разбирается только при отсутствии явного action_code. Не является подтверждением.
+          description: Текущий текст клиента, доступный и на confirmation. Вместе с action_code или управляющим performative означает конфликт источников без выполнения действий. Не является подтверждением.
         action_code:
           type: string
           description: status выбирает запрос статуса на шаге выбора операции; в ожидании подтверждения повторный выбор возвращает ошибку. Другие коды действий не поддерживаются.
@@ -230,16 +230,56 @@ components:
         status_code:
           type: string
           description: HTTP-код ответа в виде строки 200, 400 или 500; это уточнение локального ACL-профиля.
+        confirmation_view:
+          $ref: '#/components/schemas/AclConfirmationView'
+    AclConfirmationView:
+      type: object
+      description: Карточка подтверждения; не источник параметров согласия.
+      required: [title, fields, question]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        fields:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/AclConfirmationDisplayField'}
+        question:
+          type: string
+          minLength: 1
+    AclConfirmationDisplayField:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+          minLength: 1
+        value:
+          type: string
+          minLength: 1
     AclOutputMetadata:
       type: object
-      description: Признак того, что запрос статуса уже принят corr и новые действия в этой сессии запрещены.
+      description: Завершённость диалога и семантика информационного ответа локального ACL-профиля.
       properties:
         final_message:
           type: boolean
-          description: true только для сохранённого состояния COMPLETED, в том числе в ответе об ошибке; иначе false.
+          description: true закрывает диалог. Для информационного ответа false означает, что сам ответ не завершает диалог; состояние сессии при этом не читается и известное завершение не сбрасывается.
+        additional_info:
+          type: array
+          description: response_mode=information только добавляет текст или ошибку в ленту, сохраняя текущую подготовку и действия. Не восстанавливает отменённые действия; final_message=true всегда имеет приоритет.
+          items: {$ref: '#/components/schemas/AclOutputAdditionalInfo'}
+    AclOutputAdditionalInfo:
+      type: object
+      description: Пара дополнительной информации исходного ACL; локальный профиль использует информационный режим ответа.
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
     AclSuggestion:
       type: object
-      description: Саджест из исходного ACL-контракта; текущий профиль предлагает действие status.
+      description: Явный саджест. performative — расширение локального профиля, не контракт поверхности GA.
       required: [text]
       properties:
         guid:
@@ -252,6 +292,10 @@ components:
         action_code:
           type: string
           description: Код действия, отправляемый при клике.
+        performative:
+          type: string
+          enum: [request, accept_propose, reject_propose]
+          description: Тип сообщения по клику. Для request нужен action_code; согласие и отказ передаются без него. Отсутствие поля у саджеста с кодом означает request.
         display_mode:
           type: string
           description: BUTTON для кнопки, CLASSIC для саджеста.

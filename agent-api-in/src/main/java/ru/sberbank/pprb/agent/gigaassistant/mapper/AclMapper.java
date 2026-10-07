@@ -17,6 +17,7 @@ import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclCustomerInfo;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclInputMessage;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclMetadata;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclOrganization;
+import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclOutputAdditionalInfo;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclOutputContent;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclOutputMessage;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclOutputMetadata;
@@ -25,13 +26,13 @@ import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclResponse;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclState;
 import ru.sberbank.pprb.agent.gigaassistant.generated.model.AclSuggestion;
 import ru.sberbank.pprb.agent.model.dto.operation.*;
-import ru.sberbank.pprb.agent.model.dto.operation.OperationSpecDTO;
 import ru.sberbank.pprb.agent.model.dto.payment.*;
 import ru.sberbank.pprb.agent.model.dto.payment.ConfirmationValueDTO;
 import ru.sberbank.pprb.agent.model.dto.payment.PaymentContextInDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.ResultDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.SessionTurnInDTO;
 import ru.sberbank.pprb.agent.model.dto.turn.TurnOutDTO;
+import ru.sberbank.pprb.agent.model.dto.turn.TurnSuggestionDTO;
 import ru.sberbank.pprb.agent.model.enums.*;
 import ru.sberbank.pprb.agent.model.enums.Operation;
 import ru.sberbank.pprb.agent.model.enums.ResultCode;
@@ -64,16 +65,29 @@ public interface AclMapper {
             PaymentContextInDTO context = toContext(contextValues(request.getMetadata()));
             List<ConfirmationValueDTO> confirmation = confirmationValues(request.getState());
             SessionEvent event = event(request.getMessage(), operation);
-            String text = null;
-            if (event == null
-                    && "request".equals(request.getMessage().getPerformative())
-                    && request.getMessage().getContent() != null
-                    && request.getMessage().getContent().getActionCode() == null) {
-                text = request.getMessage().getContent().getUserInput();
-                if (text != null && text.isBlank()) text = null;
-            }
+            NavigationAction navigation =
+                    !"request".equals(request.getMessage().getPerformative())
+                                    || request.getMessage().getContent() == null
+                            ? null
+                            : NavigationAction.resolve(
+                                            request.getMessage().getContent().getActionCode())
+                                    .orElse(null);
+            String text =
+                    request.getMessage().getContent() == null
+                            ? null
+                            : request.getMessage().getContent().getUserInput();
+            if (text != null && text.isBlank()) text = null;
+            boolean control = event == SessionEvent.CONFIRM || event == SessionEvent.CANCEL;
+            boolean explicitCode =
+                    request.getMessage().getContent() != null
+                            && request.getMessage().getContent().getActionCode() != null;
+            boolean conflict =
+                    (control ? 1 : 0) + (explicitCode ? 1 : 0) + (text != null ? 1 : 0) > 1;
             ResultDTO error =
-                    event == null && text == null
+                    event == null
+                                    && navigation == null
+                                    && (!"request".equals(request.getMessage().getPerformative())
+                                            || (!conflict && (text == null || explicitCode)))
                             ? new ResultDTO(
                                     ResultKind.ERROR,
                                     ResultCode.UNSUPPORTED_COMMAND,
@@ -89,6 +103,8 @@ public interface AclMapper {
                             confirmation)
                     .toBuilder()
                     .userInput(text)
+                    .navigationAction(navigation)
+                    .inputSourceConflict(conflict)
                     .build();
         } catch (DateTimeException | NumberFormatException exception) {
             return toInputFields(
@@ -113,6 +129,8 @@ public interface AclMapper {
 
     /** Собирает прикладной вход из структурных значений без потери дефектов подтверждения. */
     @Mapping(target = "userInput", ignore = true)
+    @Mapping(target = "inputSourceConflict", ignore = true)
+    @Mapping(target = "navigationAction", ignore = true)
     SessionTurnInDTO toInputFields(
             UUID sessionId,
             UUID requestId,
@@ -178,7 +196,7 @@ public interface AclMapper {
     @Mapping(
             target = "message",
             expression = "java(toMessage(input, requestId, output, httpStatus))")
-    @Mapping(target = "metadata", expression = "java(toMetadata(output.isTerminal()))")
+    @Mapping(target = "metadata", expression = "java(toMetadata(output))")
     @Mapping(target = "suggestions", expression = "java(suggestions(output))")
     @Mapping(target = "state", expression = "java(confirmation(output))")
     AclResponse toResponse(
@@ -194,7 +212,7 @@ public interface AclMapper {
     @Mapping(target = "receiver", source = "input.sender")
     @Mapping(target = "conversationId", source = "input.conversationId")
     @Mapping(target = "inReplyTo", source = "requestId")
-    @Mapping(target = "content", expression = "java(toContent(output.getResult(), httpStatus))")
+    @Mapping(target = "content", expression = "java(toContent(output, httpStatus))")
     AclOutputMessage toMessage(
             AclInputMessage input, UUID requestId, TurnOutDTO output, int httpStatus);
 
@@ -202,8 +220,24 @@ public interface AclMapper {
      * Переносит установленную ядром завершённость в metadata, в том числе для отказа без полной
      * проекции. Преобразование не читает сессию повторно и не выводит состояние из наличия view.
      */
-    @Mapping(target = "finalMessage", source = "terminal")
-    AclOutputMetadata toMetadata(Boolean terminal);
+    default AclOutputMetadata toMetadata(TurnOutDTO output) {
+        AclOutputMetadata metadata = new AclOutputMetadata().finalMessage(output.isTerminal());
+        switch (output.getResult().getCode()) {
+            case INPUT_SOURCE_CONFLICT,
+                            MULTIPLE_ACTIONS,
+                            CLARIFICATION_REQUIRED,
+                            TEXT_ANALYSIS_FAILED,
+                            REFERENCE_ANSWER,
+                            REFERENCE_NOT_FOUND,
+                            REFERENCE_FAILED ->
+                    metadata.addAdditionalInfoItem(
+                            new AclOutputAdditionalInfo()
+                                    .key("response_mode")
+                                    .value("information"));
+            default -> {}
+        }
+        return metadata;
+    }
 
     /**
      * Размещает текст успешной обработки в result, а текст ошибки — в reason. Ошибка вызова corr
@@ -212,12 +246,14 @@ public interface AclMapper {
     @Mapping(
             target = "result",
             expression =
-                    "java(result.getKind() == ResultKind.SUCCESS ? result.getMessage() : null)")
+                    "java(output.getResult().getKind() == ResultKind.SUCCESS ? output.getResult().getMessage() : null)")
     @Mapping(
             target = "reason",
-            expression = "java(result.getKind() == ResultKind.ERROR ? result.getMessage() : null)")
+            expression =
+                    "java(output.getResult().getKind() == ResultKind.ERROR ? output.getResult().getMessage() : null)")
     @Mapping(target = "statusCode", expression = "java(Integer.toString(httpStatus))")
-    AclOutputContent toContent(ResultDTO result, int httpStatus);
+    @Mapping(target = "confirmationView", source = "output.confirmationView")
+    AclOutputContent toContent(TurnOutDTO output, int httpStatus);
 
     /** Выражает необходимость согласия через ACL, а не через локальные UI-команды. */
     default String performative(TurnOutDTO output) {
@@ -230,18 +266,28 @@ public interface AclMapper {
     }
 
     /** Структурное преобразование единого каталога в саджесты ACL. */
-    List<AclSuggestion> toSuggestions(List<OperationSpecDTO> operations);
+    List<AclSuggestion> toSuggestions(List<TurnSuggestionDTO> suggestions);
 
     @Mapping(target = "guid", expression = "java(java.util.UUID.randomUUID())")
-    @Mapping(target = "text", source = "title")
+    @Mapping(
+            target = "performative",
+            expression = "java(suggestionPerformative(suggestion.getKind()))")
+    @Mapping(target = "messageText", source = "text")
     @Mapping(target = "displayMode", constant = "BUTTON")
     @Mapping(target = "isPostedToChat", constant = "true")
-    AclSuggestion toSuggestion(OperationSpecDTO operation);
+    AclSuggestion toSuggestion(TurnSuggestionDTO suggestion);
+
+    /** Переводит внутреннее намерение кнопки в локальный ACL-профиль. */
+    default AclSuggestion.PerformativeEnum suggestionPerformative(SuggestionKind kind) {
+        return switch (kind) {
+            case COMMAND -> AclSuggestion.PerformativeEnum.REQUEST;
+            case CONFIRM -> AclSuggestion.PerformativeEnum.ACCEPT_PROPOSE;
+            case CANCEL -> AclSuggestion.PerformativeEnum.REJECT_PROPOSE;
+        };
+    }
 
     default List<AclSuggestion> suggestions(TurnOutDTO output) {
-        return output.getResult().getKind() == ResultKind.SUCCESS && !output.isTerminal()
-                ? toSuggestions(output.getAvailableOperations())
-                : List.of();
+        return !output.isTerminal() ? toSuggestions(output.getSuggestions()) : List.of();
     }
 
     /** Передаёт уже подготовленные параметры, не извлекая реквизиты из контекста. */

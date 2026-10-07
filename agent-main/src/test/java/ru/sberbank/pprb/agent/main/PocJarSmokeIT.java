@@ -39,6 +39,7 @@ class PocJarSmokeIT {
             assertThat(response.statusCode()).isEqualTo(200);
             proposal = http.body(response);
             assertThat(proposal.path("state")).hasSize(2);
+            assertThat(proposal.at("/message/content/confirmation_view/fields")).hasSize(4);
             originalSummary = proposal.at("/message/content/result").asText();
             assertThat(originalSummary).contains("42");
         } finally {
@@ -49,8 +50,23 @@ class PocJarSmokeIT {
         Process second = start(port, "second");
         try {
             awaitReady(second, http, "second");
-            // Подтверждение в новой JVM возможно только при восстановленной подготовке.
+            // Явное продолжение восстанавливает сводку без памяти браузера и повторной подготовки.
             UUID requestId = UUID.randomUUID();
+            var resumed =
+                    http.body(
+                            http.post(
+                                    sessionId,
+                                    requestId,
+                                    http.message(requestId, "request", "resume_operation", false)));
+            assertThat(resumed.at("/message/content/result").asText()).isEqualTo(originalSummary);
+            assertThat(resumed.at("/message/in_reply_to").asText()).isEqualTo(requestId.toString());
+            assertThat(resumed.path("state")).isEqualTo(proposal.path("state"));
+            assertThat(resumed.at("/message/content/confirmation_view"))
+                    .isEqualTo(proposal.at("/message/content/confirmation_view"));
+            assertThat(resumed.at("/suggestions/0/performative").asText())
+                    .isEqualTo("accept_propose");
+            proposal = resumed;
+            requestId = UUID.randomUUID();
             var response = http.post(sessionId, requestId, http.confirmation(requestId, proposal));
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(http.body(response).at("/metadata/final_message").asBoolean()).isTrue();

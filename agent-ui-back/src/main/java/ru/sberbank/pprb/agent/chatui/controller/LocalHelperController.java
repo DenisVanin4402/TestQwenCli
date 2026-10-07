@@ -11,7 +11,7 @@ import ru.sberbank.pprb.agent.chatui.mapper.FixtureMapper;
 import ru.sberbank.pprb.agent.chatui.service.FixtureCatalog;
 import ru.sberbank.pprb.agent.gigaassistant.mapper.AclMapper;
 import ru.sberbank.pprb.agent.model.enums.SessionState;
-import ru.sberbank.pprb.agent.service.port.in.OperationCatalog;
+import ru.sberbank.pprb.agent.service.turn.SessionResponseRenderer;
 
 /** Единственный вспомогательный API чата: загрузка синтетического платежа и начальных саджестов. */
 @RestController
@@ -20,7 +20,7 @@ public class LocalHelperController implements LocalHelperApi {
     private final FixtureCatalog catalog;
     private final FixtureMapper mapper;
     private final AclMapper aclMapper;
-    private final OperationCatalog operations;
+    private final SessionResponseRenderer renderer;
     private final String agentCode;
     private final String mode;
 
@@ -29,13 +29,13 @@ public class LocalHelperController implements LocalHelperApi {
             FixtureCatalog catalog,
             FixtureMapper mapper,
             AclMapper aclMapper,
-            OperationCatalog operations,
+            SessionResponseRenderer renderer,
             @Value("${poc.acl.agent-code}") String agentCode,
             @Value("${integrations.invest-corr.stub}") String stubMode) {
         this.catalog = catalog;
         this.mapper = mapper;
         this.aclMapper = aclMapper;
-        this.operations = operations;
+        this.renderer = renderer;
         this.agentCode = agentCode;
         this.mode = "enabled".equals(stubMode) ? "stub" : "real";
     }
@@ -50,7 +50,7 @@ public class LocalHelperController implements LocalHelperApi {
                         .suggestions(
                                 mapper.toSuggestions(
                                         aclMapper.toSuggestions(
-                                                operations.choices(
+                                                renderer.operationSuggestions(
                                                         SessionState.CHOOSING_REQUEST_TYPE))))
                         .fixtures(List.of(mapper.toFixture(catalog.payment(), "payment-42"))));
     }

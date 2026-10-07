@@ -14,19 +14,23 @@ export class TestSession {
     this.changed();
   }
 
-  /** Саджесты приходят от агента; клиент добавляет только тип входящего ACL-сообщения. */
+  /** Принимает только явные действия; старый саджест с кодом остаётся request. */
   suggestions(items = []) {
-    return items.filter(item => item.action_code && typeof item.text === 'string')
-      .map(item => ({ ...item, performative: 'request' }));
+    if (!Array.isArray(items)) return [];
+    return items.filter(item => item && typeof item.text === 'string' && item.text.trim())
+      .map(item => ({ ...item, performative: item.performative ?? 'request' }))
+      .filter(item => item.performative === 'request'
+        ? typeof item.action_code === 'string' && item.action_code.trim()
+        : ['accept_propose', 'reject_propose'].includes(item.performative) && item.action_code == null);
   }
 
   actions() {
     return this.state.busy || this.state.final ? [] : this.state.actions;
   }
 
-  /** На предложении требуется специальное подтверждение; текст доступен на выборе. */
+  /** Вопрос доступен и на подтверждении; текст не заменяет специальную кнопку согласия. */
   canSendText() {
-    return !!this.state && !this.state.busy && !this.state.final && !this.state.awaitingConfirmation;
+    return !!this.state && !this.state.busy && !this.state.final;
   }
 
   async sendText(text) {
@@ -45,7 +49,6 @@ export class TestSession {
     const state = this.state;
     state.busy = true;
     state.notice = '';
-    state.actions = [];
     state.requestId = crypto.randomUUID();
     if (action.is_posted_to_chat !== false) {
       state.messages.push({ role: 'user', text: action.message_text || action.text });
@@ -72,23 +75,30 @@ export class TestSession {
       }
       const text = message.content?.reason || message.content?.result;
       if (typeof text !== 'string' || !text.trim()) throw new Error('Ответ не содержит результата обработки.');
-      state.final = body.metadata?.final_message === true;
-      state.aclState = body.state ?? [];
-      state.messages.push({ role: 'agent', text, error: !response.ok || message.performative === 'failure' });
-      if (!response.ok || message.performative === 'failure') {
-        state.notice = text;
-      } else if (!state.final) {
-        state.awaitingConfirmation = message.performative === 'propose';
-        if (message.performative === 'propose') {
-          state.actions = [
-            { text: 'Подтвердить', performative: 'accept_propose', display_mode: 'BUTTON' },
-            { text: 'Отклонить', performative: 'reject_propose', display_mode: 'BUTTON' }
-          ];
-        } else {
-          state.actions = this.suggestions(body.suggestions);
-        }
+      state.final = state.final || body.metadata?.final_message === true;
+      const entry = { role: 'agent', text, error: !response.ok || message.performative === 'failure' };
+      const view = message.content?.confirmation_view;
+      const nonempty = value => typeof value === 'string' && value.trim();
+      if (response.ok && message.performative === 'propose' && view
+        && nonempty(view.title) && nonempty(view.question) && Array.isArray(view.fields)
+        && view.fields.length && view.fields.every(field => field && nonempty(field.label) && nonempty(field.value))) {
+        entry.confirmationView = view;
       }
+      state.messages.push(entry);
+      state.actions = []; state.aclState = []; state.awaitingConfirmation = false;
+      if (!state.final) {
+        const proposal = response.ok && message.performative === 'propose'
+          && Array.isArray(body.state) && body.state.some(item => item?.type === 'CONFIRMATION');
+        if (proposal) {
+          state.aclState = body.state;
+          state.awaitingConfirmation = true;
+        }
+        state.actions = this.suggestions(body.suggestions)
+          .filter(item => item.performative === 'request' || proposal);
+      }
+      return response.ok && message.performative !== 'failure';
     } catch (error) {
+      state.actions = []; state.aclState = []; state.awaitingConfirmation = false;
       if (state === this.state) state.notice = error instanceof TypeError
         ? 'Результат обработки не получен из-за сети. Запрос мог быть выполнен. Автоматической повторной отправки нет.'
         : error.message;

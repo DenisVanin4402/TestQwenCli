@@ -120,8 +120,6 @@ class PocEndToEndIT {
 
         UUID request = UUID.randomUUID();
         ObjectNode input = http.confirmation(request, proposals.get(session));
-        ((ObjectNode) input.path("message").path("content"))
-                .put("action_code", "unsupported_action");
         var response = http.post(session, request, input);
         JsonNode output = http.body(response);
         assertThat(response.statusCode()).isEqualTo(200);
@@ -228,7 +226,10 @@ class PocEndToEndIT {
         ObjectNode message = (ObjectNode) input.get("message");
         switch (variant) {
             case "missing-context" -> input.remove("metadata");
-            case "confirm-first" -> message.put("performative", "accept_propose");
+            case "confirm-first" -> {
+                message.put("performative", "accept_propose");
+                ((ObjectNode) message.get("content")).remove("action_code");
+            }
             case "removed-restart" ->
                     ((ObjectNode) message.get("content")).put("action_code", "restart_status");
             case "reply-mismatch" -> message.put("reply_with", UUID.randomUUID().toString());
